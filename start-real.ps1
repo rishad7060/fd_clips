@@ -29,7 +29,9 @@ $env:PIPELINE_REPO_ROOT = $root
 # Windows ("%1 is not a valid Win32 application"). Launch it via cmd.exe /c.
 Write-Host "Starting NestJS API (real pipeline) on :4000 ..." -ForegroundColor Cyan
 Push-Location "$root/app/api"
-if (-not (Test-Path "dist/main.js")) { & cmd.exe /c "npm run build" }
+# Always rebuild so the running API reflects the latest source (a stale dist/ is
+# a classic gotcha — e.g. a DTO change not taking effect). Skip only with -NoBuild.
+if (-not $env:SKIP_API_BUILD) { & cmd.exe /c "npm run build" }
 $api = Start-Process -FilePath "node" -ArgumentList "dist/main.js" -PassThru -NoNewWindow
 Pop-Location
 
