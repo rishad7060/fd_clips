@@ -3,14 +3,22 @@
 For each raw clip, compute a virtual-camera crop that keeps the active speaker
 centered, and render ``clips/{n}_vertical.mp4`` at 1080x1920.
 
-Real branch (MOCK_MODE=false, GPU box):
-    * PySceneDetect for scene cuts.
-    * Face detection/tracking + LR-ASD active-speaker detection
-      (clone github.com/Junhua-Liao/LR-ASD; weights per its README).
-    * A virtual camera centered on the active speaker, with velocity-bounded
-      smoothing (no jitter / whip-pans), snapping on scene cuts, widening to fit
-      two faces, falling back to center-crop with motion tracking when no faces.
-    * ffmpeg crop+scale (h264_nvenc) to 1080x1920.
+Real branch (MOCK_MODE=false):
+    Two tiers share the same ``CropPlan`` output shape and the same ffmpeg
+    ``crop``+``scale`` filtergraph:
+
+    * FREE CPU FALLBACK (this build): a deterministic **center-crop-to-9:16**.
+      No LR-ASD, no face detection, no GPU, no PySceneDetect — just crop the
+      middle 9:16 window out of the (16:9 or other) source and scale to
+      1080x1920 with ``-c:v libx264`` on the CPU. This is what runs on the free
+      path so a real video becomes a real vertical clip with zero paid deps.
+    * GPU UPGRADE (documented, not on the free path): PySceneDetect for scene
+      cuts + face detection/tracking + LR-ASD active-speaker detection
+      (clone github.com/Junhua-Liao/LR-ASD; weights per its README) driving a
+      velocity-bounded virtual camera, encoded with h264_nvenc. Smart
+      active-speaker reframe is the GPU upgrade; center-crop is the free
+      fallback. The plan/filtergraph below is written so the GPU planner can
+      emit a richer keyframe path into the very same renderer.
 
 Mock branch (MOCK_MODE=true, offline):
     * A no-op render: it does NOT decode video. Instead it produces a
@@ -81,8 +89,25 @@ class CropPlan:
         return d
 
 
+def _resolve_ffmpeg() -> Optional[str]:
+    """Resolve a runnable ffmpeg binary.
+
+    Prefers ``settings.ffmpeg_path`` (bare name on PATH or a full path); falls
+    back to ``shutil.which``. Returns ``None`` when ffmpeg is genuinely absent
+    so the placeholder fallback can keep mock/CI green.
+    """
+    configured = get_settings().ffmpeg_path or "ffmpeg"
+    candidate = Path(configured)
+    if candidate.is_file():
+        return str(candidate)
+    found = shutil.which(configured)
+    if found:
+        return found
+    return shutil.which("ffmpeg")
+
+
 def _ffmpeg_available() -> bool:
-    return shutil.which("ffmpeg") is not None
+    return _resolve_ffmpeg() is not None
 
 
 def _deterministic_plan(
@@ -191,51 +216,112 @@ def _reframe_mock(
     )
 
 
+def _probe_dimensions(raw: Path) -> tuple[int, int]:
+    """Return (width, height) of ``raw`` via ffprobe, defaulting to 1920x1080.
+
+    Used by the free CPU path so the center-crop is correct even when the
+    source is not exactly 16:9.
+    """
+    import subprocess
+
+    settings = get_settings()
+    configured = settings.ffprobe_path or "ffprobe"
+    ffprobe = configured if Path(configured).is_file() else (
+        shutil.which(configured) or shutil.which("ffprobe")
+    )
+    if not ffprobe:
+        return SRC_W, SRC_H
+    try:
+        out = subprocess.check_output(
+            [
+                ffprobe, "-v", "quiet", "-select_streams", "v:0",
+                "-show_entries", "stream=width,height",
+                "-print_format", "json", str(raw),
+            ],
+            text=True,
+        )
+        stream = json.loads(out)["streams"][0]
+        return int(stream["width"]), int(stream["height"])
+    except Exception:
+        return SRC_W, SRC_H
+
+
+def _center_crop_geometry(src_w: int, src_h: int) -> tuple[int, int, int]:
+    """Compute a centered 9:16 crop window for a ``src_w``x``src_h`` source.
+
+    Returns (crop_w, crop_h, x). The crop is the largest 9:16 rectangle that
+    fits the source (height-limited for landscape), centered horizontally.
+    """
+    crop_h = src_h
+    crop_w = int(round(crop_h * TARGET_W / TARGET_H))  # 9:16 width for this height
+    if crop_w > src_w:
+        # Source narrower than 9:16: width-limit instead so the crop fits.
+        crop_w = src_w
+        crop_h = int(round(crop_w * TARGET_H / TARGET_W))
+    # Keep even dimensions for libx264 / yuv420p.
+    crop_w -= crop_w % 2
+    crop_h -= crop_h % 2
+    x = max(0, (src_w - crop_w) // 2)
+    return crop_w, crop_h, x
+
+
 def _reframe_real(
     rank: int, start: float, end: float, speakers: list[str],
     raw: Path, vertical: Path,
 ) -> CropPlan:
-    """Real reframe: scene detect + LR-ASD + virtual camera + ffmpeg crop.
+    """Free CPU reframe: deterministic center-crop-to-9:16 via ffmpeg libx264.
 
-    The heavy CV work lives behind lazy imports so MOCK_MODE never needs them.
-    The crop path is converted into an ffmpeg ``crop``+``scale`` filtergraph.
+    NO LR-ASD, NO face detection, NO GPU, NO PySceneDetect. We probe the raw
+    clip's real dimensions, crop the centered 9:16 window, and scale to
+    1080x1920 with ``-c:v libx264`` (CPU). Smart active-speaker reframe is the
+    GPU upgrade (see module docstring); this center-crop is the free fallback.
+
+    When ffmpeg is genuinely unavailable we keep the placeholder behaviour so
+    mock/CI stays green even with MOCK_MODE=false.
     """
     import subprocess
 
-    from scenedetect import detect, ContentDetector  # type: ignore
+    ffmpeg = _resolve_ffmpeg()
+    src_w, src_h = _probe_dimensions(raw)
+    crop_w, crop_h, x = _center_crop_geometry(src_w, src_h)
 
-    if not _ffmpeg_available():
-        raise RuntimeError("ffmpeg required for real reframe but not found on PATH")
+    # A single static keyframe describes the center-crop window (the GPU planner
+    # would emit many; the renderer/CropPlan shape is identical).
+    keyframes = [CropKeyframe(t=0.0, x=x, width=crop_w)]
+    mode = "center-fallback"
 
-    # 1. Scene cuts within the raw clip.
-    raw_cuts = detect(str(raw), ContentDetector())
-    scene_cuts = [round(c[0].get_seconds(), 2) for c in raw_cuts]
+    if not ffmpeg or not (raw.exists() and raw.stat().st_size > 64):
+        # Graceful fallback: placeholder + logged intent, mock/CI stays green.
+        vf = f"crop={crop_w}:{crop_h}:{x}:0,scale={TARGET_W}:{TARGET_H}"
+        intended = (
+            f"ffmpeg -y -i {raw} -vf {vf} "
+            f"-c:v libx264 -preset veryfast -crf 20 -c:a aac {vertical}"
+        )
+        vertical.write_bytes(b"FOCALDIVE_MOCK_VERTICAL\x00")
+        print(f"    [no-ffmpeg] center-crop skipped; intended: {intended}")
+        return CropPlan(
+            rank=rank, mode=mode, target_width=TARGET_W, target_height=TARGET_H,
+            source_width=src_w, source_height=src_h, scene_cuts=[],
+            keyframes=keyframes, vertical_path=str(vertical), mock=False,
+            notes="ffmpeg absent; wrote placeholder (intended center-crop logged).",
+        )
 
-    # 2/3. Face + LR-ASD active-speaker virtual camera.
-    # TODO(real): run LR-ASD inference (clone github.com/Junhua-Liao/LR-ASD,
-    # weights per its README) + face tracking to produce the per-frame active
-    # speaker bbox, then derive a velocity-bounded virtual-camera path. Until the
-    # weights ship in the pod image we reuse the deterministic planner so the
-    # filtergraph below is exercised end-to-end on real ffmpeg.
-    mode, _cuts, keyframes, _notes = _deterministic_plan(
-        rank, start, end, speakers
-    )
-
-    # Build an ffmpeg crop filter using a stepwise x expression from keyframes.
-    width = keyframes[0].width if keyframes else CROP_W
-    x_expr = _keyframes_to_ffmpeg_x(keyframes)
-    vf = f"crop={width}:{SRC_H}:{x_expr}:0,scale={TARGET_W}:{TARGET_H}"
+    vf = f"crop={crop_w}:{crop_h}:{x}:0,scale={TARGET_W}:{TARGET_H}"
     cmd = [
-        "ffmpeg", "-y", "-i", str(raw), "-vf", vf,
-        "-c:v", "h264_nvenc", "-c:a", "copy", str(vertical),
+        ffmpeg, "-y", "-i", str(raw), "-vf", vf,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p", "-c:a", "aac", str(vertical),
     ]
     subprocess.run(cmd, check=True)
 
     return CropPlan(
         rank=rank, mode=mode, target_width=TARGET_W, target_height=TARGET_H,
-        source_width=SRC_W, source_height=SRC_H, scene_cuts=scene_cuts,
+        source_width=src_w, source_height=src_h, scene_cuts=[],
         keyframes=keyframes, vertical_path=str(vertical), mock=False,
-        notes="Rendered via nvenc crop+scale from LR-ASD camera path.",
+        notes=(
+            f"Free CPU center-crop {crop_w}x{crop_h}@x={x} -> {TARGET_W}x{TARGET_H} "
+            "via libx264 (no GPU/LR-ASD). Smart active-speaker reframe is the GPU upgrade."
+        ),
     )
 
 

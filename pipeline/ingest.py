@@ -173,13 +173,22 @@ def _ingest_real(
     # Normalize to H.264 yuv420p constant-fps mp4.
     if not _ffmpeg_available():
         raise RuntimeError("ffmpeg is required for real ingest but was not found on PATH")
+    # ffmpeg cannot read and write the same file in place (it would truncate the
+    # input mid-decode), so when the local source already lives at out_path we
+    # normalize into a temp file and atomically replace it afterwards.
+    norm_target = out_path
+    if downloaded.resolve() == out_path.resolve():
+        norm_target = out_path.with_name(out_path.stem + ".norm.mp4")
     norm_cmd = [
         "ffmpeg", "-y", "-i", str(downloaded),
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30",
         "-c:a", "aac", "-movflags", "+faststart",
-        str(out_path),
+        str(norm_target),
     ]
     subprocess.run(norm_cmd, check=True)
+    if norm_target != out_path:
+        out_path.unlink(missing_ok=True)
+        norm_target.replace(out_path)
 
     probe = _probe_real(out_path)
     vstream = next(s for s in probe["streams"] if s["codec_type"] == "video")

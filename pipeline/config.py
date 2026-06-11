@@ -39,18 +39,30 @@ def _env(name: str, default: str = "") -> str:
     return value.strip() if value is not None else default
 
 
-def _resolve_mock_mode(raw: str, openai_api_key: str) -> bool:
+def _resolve_mock_mode(
+    raw: str,
+    openai_api_key: str,
+    gemini_api_key: str = "",
+    scoring_provider: str = "auto",
+    transcribe_backend: str = "auto",
+) -> bool:
     """Resolve the tri-state MOCK_MODE setting into a concrete bool.
 
-    `auto` => mock when no OpenAI key is configured (the local-dev default).
+    `auto` => real (not mocked) as soon as ANY real capability is configured:
+    a scoring key (Gemini or OpenAI), or an explicit non-mock backend choice.
+    Otherwise mock — the keyless local-dev default. `true`/`false` are explicit.
     """
     raw = (raw or "auto").strip().lower()
     if raw in ("true", "1", "yes", "on"):
         return True
     if raw in ("false", "0", "no", "off"):
         return False
-    # "auto" (or anything unexpected): mock unless a real OpenAI key is present.
-    return openai_api_key == ""
+    # "auto": leave mock unless something real is configured.
+    has_scoring_key = bool(openai_api_key or gemini_api_key)
+    explicit_backend = transcribe_backend.lower() in ("whisperx", "faster-whisper")
+    explicit_provider = scoring_provider.lower() in ("gemini", "openai")
+    real_configured = has_scoring_key or explicit_backend or explicit_provider
+    return not real_configured
 
 
 class Settings(BaseModel):
@@ -66,14 +78,33 @@ class Settings(BaseModel):
     repo_root: Path = Field(..., description="Repository root directory")
     workspace_root: Path = Field(..., description="Root dir holding per-job artifact folders")
 
-    # ── Scoring (OpenAI / GPT-4o-mini) ──────────────────────────────────
-    openai_api_key: str = Field("", description="OpenAI key; empty => mock scoring")
-    scoring_model: str = Field("gpt-4o-mini", description="LLM used for clip scoring")
+    # ── Scoring (LLM brain — OpenAI or Gemini) ──────────────────────────
+    openai_api_key: str = Field("", description="OpenAI key; empty => no OpenAI scoring")
+    scoring_model: str = Field("gpt-4o-mini", description="OpenAI model for clip scoring")
+    gemini_api_key: str = Field("", description="Google AI Studio (Gemini) key; free tier")
+    gemini_model: str = Field("gemini-2.0-flash", description="Gemini model for clip scoring")
+    scoring_provider: str = Field(
+        "auto",
+        description="auto | gemini | openai | mock. 'auto' => gemini if its key is set, "
+        "else openai if its key is set, else mock heuristic.",
+    )
 
-    # ── Transcription (WhisperX + pyannote) ─────────────────────────────
-    huggingface_token: str = Field("", description="HF token for pyannote diarization")
-    whisperx_model: str = Field("large-v3", description="WhisperX model name")
-    whisperx_device: str = Field("cuda", description="cuda | cpu (mock is a no-op)")
+    # ── Transcription (WhisperX GPU, or faster-whisper CPU) ─────────────
+    huggingface_token: str = Field("", description="HF token for pyannote diarization (GPU path)")
+    whisperx_model: str = Field("large-v3", description="WhisperX model name (GPU path)")
+    whisperx_device: str = Field("cuda", description="cuda | cpu")
+    transcribe_backend: str = Field(
+        "auto",
+        description="auto | whisperx | faster-whisper | mock. 'auto' => faster-whisper "
+        "(CPU, free) when not in mock_mode and whisperx isn't installed, else mock.",
+    )
+    faster_whisper_model: str = Field(
+        "small", description="faster-whisper model (tiny|base|small|medium) — CPU, free"
+    )
+
+    # ── Tooling ──────────────────────────────────────────────────────────
+    ffmpeg_path: str = Field("ffmpeg", description="ffmpeg binary (name on PATH or full path)")
+    ffprobe_path: str = Field("ffprobe", description="ffprobe binary (name on PATH or full path)")
 
     # ── Storage (Cloudflare R2 / S3 API) ────────────────────────────────
     r2_account_id: str = Field("", description="Cloudflare R2 account id")
@@ -95,6 +126,44 @@ class Settings(BaseModel):
         path.mkdir(parents=True, exist_ok=True)
         return path
 
+    def resolved_scoring_provider(self) -> str:
+        """Resolve the scoring provider: 'gemini' | 'openai' | 'mock'.
+
+        Explicit SCORING_PROVIDER wins. 'auto' prefers Gemini (free tier) when its
+        key is set, then OpenAI, else the deterministic mock heuristic. mock_mode
+        forces 'mock' regardless, so a fully-mocked run never calls a paid API.
+        """
+        if self.mock_mode:
+            return "mock"
+        choice = (self.scoring_provider or "auto").lower()
+        if choice == "gemini":
+            return "gemini" if self.gemini_api_key else "mock"
+        if choice == "openai":
+            return "openai" if self.openai_api_key else "mock"
+        if choice == "mock":
+            return "mock"
+        # auto
+        if self.gemini_api_key:
+            return "gemini"
+        if self.openai_api_key:
+            return "openai"
+        return "mock"
+
+    def resolved_transcribe_backend(self) -> str:
+        """Resolve transcription backend: 'whisperx' | 'faster-whisper' | 'mock'.
+
+        Explicit TRANSCRIBE_BACKEND wins. 'auto' uses faster-whisper (CPU, free)
+        when not in mock_mode, except it prefers whisperx if WHISPERX_DEVICE=cuda.
+        mock_mode forces 'mock'.
+        """
+        if self.mock_mode:
+            return "mock"
+        choice = (self.transcribe_backend or "auto").lower()
+        if choice in ("whisperx", "faster-whisper", "mock"):
+            return choice
+        # auto: GPU box -> whisperx; otherwise the free CPU path.
+        return "whisperx" if self.whisperx_device == "cuda" else "faster-whisper"
+
     @property
     def r2_configured(self) -> bool:
         """True when all R2 credentials needed for uploads are present."""
@@ -111,6 +180,9 @@ class Settings(BaseModel):
 def get_settings() -> Settings:
     """Build the singleton Settings object from the current environment."""
     openai_api_key = _env("OPENAI_API_KEY")
+    gemini_api_key = _env("GEMINI_API_KEY")
+    scoring_provider = (_env("SCORING_PROVIDER", "auto") or "auto").lower()
+    transcribe_backend = (_env("TRANSCRIBE_BACKEND", "auto") or "auto").lower()
     raw_mock = (_env("MOCK_MODE", "auto") or "auto").lower()
     if raw_mock not in ("auto", "true", "false"):
         raw_mock = "auto"
@@ -118,15 +190,24 @@ def get_settings() -> Settings:
     workspace_root = Path(_env("WORKSPACE_DIR") or str(REPO_ROOT / "workspace")).resolve()
 
     return Settings(
-        mock_mode=_resolve_mock_mode(raw_mock, openai_api_key),
+        mock_mode=_resolve_mock_mode(
+            raw_mock, openai_api_key, gemini_api_key, scoring_provider, transcribe_backend
+        ),
         raw_mock_mode=raw_mock,  # type: ignore[arg-type]
         repo_root=REPO_ROOT,
         workspace_root=workspace_root,
         openai_api_key=openai_api_key,
         scoring_model=_env("SCORING_MODEL", "gpt-4o-mini") or "gpt-4o-mini",
+        gemini_api_key=_env("GEMINI_API_KEY"),
+        gemini_model=_env("GEMINI_MODEL", "gemini-2.0-flash") or "gemini-2.0-flash",
+        scoring_provider=(_env("SCORING_PROVIDER", "auto") or "auto").lower(),
         huggingface_token=_env("HUGGINGFACE_TOKEN"),
         whisperx_model=_env("WHISPERX_MODEL", "large-v3") or "large-v3",
         whisperx_device=_env("WHISPERX_DEVICE", "cuda") or "cuda",
+        transcribe_backend=(_env("TRANSCRIBE_BACKEND", "auto") or "auto").lower(),
+        faster_whisper_model=_env("FASTER_WHISPER_MODEL", "small") or "small",
+        ffmpeg_path=_env("FFMPEG_PATH", "ffmpeg") or "ffmpeg",
+        ffprobe_path=_env("FFPROBE_PATH", "ffprobe") or "ffprobe",
         r2_account_id=_env("R2_ACCOUNT_ID"),
         r2_access_key_id=_env("R2_ACCESS_KEY_ID"),
         r2_secret_access_key=_env("R2_SECRET_ACCESS_KEY"),
@@ -156,11 +237,14 @@ if __name__ == "__main__":
     print(f"  MOCK_MODE (resolved): {s.mock_mode}")
     print(f"  repo_root         : {s.repo_root}")
     print(f"  workspace_root    : {s.workspace_root}")
-    print(f"  scoring_model     : {s.scoring_model}")
-    print(f"  openai_api_key set: {bool(s.openai_api_key)}")
-    print(f"  whisperx_model    : {s.whisperx_model}")
-    print(f"  whisperx_device   : {s.whisperx_device}")
+    print(f"  scoring_provider  : {s.scoring_provider} -> resolved={s.resolved_scoring_provider()}")
+    print(f"  openai_api_key set: {bool(s.openai_api_key)}  (model {s.scoring_model})")
+    print(f"  gemini_api_key set: {bool(s.gemini_api_key)}  (model {s.gemini_model})")
+    print(f"  transcribe_backend: {s.transcribe_backend} -> resolved={s.resolved_transcribe_backend()}")
+    print(f"  faster_whisper    : {s.faster_whisper_model}")
+    print(f"  whisperx_model    : {s.whisperx_model}  device={s.whisperx_device}")
     print(f"  huggingface set   : {bool(s.huggingface_token)}")
+    print(f"  ffmpeg_path       : {s.ffmpeg_path}")
     print(f"  r2_bucket         : {s.r2_bucket}")
     print(f"  r2_configured     : {s.r2_configured}")
     print(f"  redis_url         : {s.redis_url}")

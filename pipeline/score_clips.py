@@ -6,9 +6,11 @@ Reads ``workspace/{job_id}/transcript.json`` and produces
 {start, end, hook_line, virality_score, reason, suggested_title}, sorted by
 virality_score desc and deduped (overlap > 50% drops the lower score).
 
-Real branch (MOCK_MODE=false):
-    * Send the transcript + prompts/virality_rubric.txt to GPT-4o-mini in JSON
-      mode (response_format={"type": "json_object"}) so parsing never fails.
+Real branches (MOCK_MODE=false), dispatched on settings.resolved_scoring_provider():
+    * 'openai': send the transcript + prompts/virality_rubric.txt to GPT-4o-mini
+      in JSON mode (response_format={"type": "json_object"}) so parsing never fails.
+    * 'gemini': same prompt (rubric as system instruction + compact transcript)
+      via the google-genai SDK with response_mime_type="application/json" (free tier).
 
 Mock branch (MOCK_MODE=true, offline):
     * A deterministic heuristic scorer over the transcript. It builds candidate
@@ -62,10 +64,13 @@ def score_clips(job_id: str, top_n: Optional[int] = None) -> dict[str, Any]:
     ws = settings.workspace(job_id)
     transcript = json.loads((ws / "transcript.json").read_text(encoding="utf-8"))
 
-    if settings.mock_mode:
-        result = _score_mock(job_id, transcript)
-    else:
+    provider = settings.resolved_scoring_provider()
+    if provider == "gemini":
+        result = _score_gemini(job_id, transcript)
+    elif provider == "openai":
         result = _score_real(job_id, transcript)
+    else:  # "mock"
+        result = _score_mock(job_id, transcript)
 
     # Dedupe overlapping candidates, then optionally trim to top_n.
     result["candidates"] = _dedupe_overlaps(result["candidates"])
@@ -253,6 +258,37 @@ def _score_mock(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
     return {"job_id": job_id, "model": MOCK_MODEL, "candidates": candidates}
 
 
+# ── Shared prompt + length-bound helpers (OpenAI + Gemini) ───────────────────
+
+def _load_rubric() -> str:
+    """Read the virality rubric used as the scoring system instruction."""
+    settings = get_settings()
+    return (settings.repo_root / "pipeline" / "prompts" / "virality_rubric.txt").read_text(
+        encoding="utf-8"
+    )
+
+
+def _build_transcript_prompt(transcript: dict[str, Any]) -> str:
+    """Compact transcript view for the prompt (segments with timing + speaker)."""
+    seg_lines = [
+        f"[{s['start']:.2f}-{s['end']:.2f}] {s['speaker']}: {s['text']}"
+        for s in transcript.get("segments", [])
+    ]
+    return (
+        f"Video duration: {transcript.get('duration')}s. "
+        f"Language: {transcript.get('language')}.\n\nTranscript:\n"
+        + "\n".join(seg_lines)
+    )
+
+
+def _enforce_length_bounds(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop candidates whose duration falls outside the rubric's 20-90s window."""
+    return [
+        c for c in candidates
+        if MIN_CLIP_SEC <= (float(c["end"]) - float(c["start"])) <= MAX_CLIP_SEC
+    ]
+
+
 # ── Real GPT-4o-mini scorer ──────────────────────────────────────────────────
 
 def _score_real(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
@@ -260,20 +296,8 @@ def _score_real(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
     from openai import OpenAI  # lazy import; never needed in MOCK_MODE
 
     settings = get_settings()
-    rubric = (settings.repo_root / "pipeline" / "prompts" / "virality_rubric.txt").read_text(
-        encoding="utf-8"
-    )
-
-    # Compact transcript view for the prompt (segments with timing + speaker).
-    seg_lines = [
-        f"[{s['start']:.2f}-{s['end']:.2f}] {s['speaker']}: {s['text']}"
-        for s in transcript.get("segments", [])
-    ]
-    user_payload = (
-        f"Video duration: {transcript.get('duration')}s. "
-        f"Language: {transcript.get('language')}.\n\nTranscript:\n"
-        + "\n".join(seg_lines)
-    )
+    rubric = _load_rubric()
+    user_payload = _build_transcript_prompt(transcript)
 
     client = OpenAI(api_key=settings.openai_api_key)
     resp = client.chat.completions.create(
@@ -289,11 +313,77 @@ def _score_real(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
     candidates = parsed.get("candidates", [])
 
     # Enforce length bounds defensively (the model is told but we double-check).
-    candidates = [
-        c for c in candidates
-        if MIN_CLIP_SEC <= (float(c["end"]) - float(c["start"])) <= MAX_CLIP_SEC
-    ]
+    candidates = _enforce_length_bounds(candidates)
     return {"job_id": job_id, "model": settings.scoring_model, "candidates": candidates}
+
+
+# ── Real Gemini scorer (free tier) ───────────────────────────────────────────
+
+def _score_gemini(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
+    """Score with Google Gemini in JSON mode against the rubric file.
+
+    Uses the new google-genai SDK. Builds the SAME prompt as ``_score_real``
+    (rubric as the system instruction + the compact transcript), asks for a JSON
+    response, parses it, and returns the same {job_id, model, candidates} shape.
+    """
+    import time
+
+    from google import genai  # lazy import; never needed in MOCK_MODE
+
+    settings = get_settings()
+    rubric = _load_rubric()
+    user_payload = _build_transcript_prompt(transcript)
+    client = genai.Client(api_key=settings.gemini_api_key)
+
+    config = {
+        "system_instruction": rubric,
+        "response_mime_type": "application/json",
+        "temperature": 0.4,
+    }
+
+    # The free tier returns transient 503 UNAVAILABLE ("high demand") and 429
+    # spikes. Retry with backoff, and fall back to lighter models that share a
+    # different capacity pool. The configured model is tried first.
+    fallback_models = [
+        settings.gemini_model,
+        "gemini-2.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-2.5-flash",
+    ]
+    # De-dupe while preserving order.
+    models: list[str] = list(dict.fromkeys(fallback_models))
+
+    last_err: Exception | None = None
+    used_model = settings.gemini_model
+    resp = None
+    for model in models:
+        for attempt in range(3):
+            try:
+                resp = client.models.generate_content(
+                    model=model, contents=user_payload, config=config
+                )
+                used_model = model
+                break
+            except Exception as e:  # noqa: BLE001 — inspect status to decide retry
+                last_err = e
+                msg = str(e)
+                transient = any(s in msg for s in ("503", "UNAVAILABLE", "429", "overloaded"))
+                if not transient:
+                    raise
+                time.sleep(2 * (attempt + 1))  # 2s, 4s, 6s
+        if resp is not None:
+            break
+    if resp is None:
+        raise RuntimeError(
+            f"Gemini scoring failed after retries across {models}: {last_err}"
+        )
+
+    parsed = json.loads(resp.text or "{}")
+    candidates = parsed.get("candidates", [])
+
+    # Enforce length bounds defensively (same 20-90s window as the OpenAI path).
+    candidates = _enforce_length_bounds(candidates)
+    return {"job_id": job_id, "model": used_model, "candidates": candidates}
 
 
 def _main() -> None:

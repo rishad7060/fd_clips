@@ -8,7 +8,8 @@ The ASS generation is pure text and fully tested offline (both modes). RTL text
 (Arabic/Urdu) is supported: we set the ASS WrapStyle and emit a Unicode RTL
 embedding so libass shapes it right-to-left.
 
-Real branch (MOCK_MODE=false): burn-in via ffmpeg h264_nvenc (libx264 fallback).
+Real branch (MOCK_MODE=false): burn-in via ffmpeg ``-c:v libx264`` (CPU, free,
+NO nvenc/GPU) using the ``subtitles`` (libass) filter.
 Mock branch (MOCK_MODE=true): always write the real .ass; burn-in only if ffmpeg
 is present, otherwise copy/placeholder the vertical clip as the final and log the
 intended ffmpeg command.
@@ -79,8 +80,25 @@ class CaptionResult:
     mock: bool
 
 
+def _resolve_ffmpeg() -> Optional[str]:
+    """Resolve a runnable ffmpeg binary.
+
+    Prefers ``settings.ffmpeg_path`` (bare name on PATH or a full path); falls
+    back to ``shutil.which``. Returns ``None`` when ffmpeg is genuinely absent
+    so the placeholder/copy fallback can keep mock/CI green.
+    """
+    configured = get_settings().ffmpeg_path or "ffmpeg"
+    candidate = Path(configured)
+    if candidate.is_file():
+        return str(candidate)
+    found = shutil.which(configured)
+    if found:
+        return found
+    return shutil.which("ffmpeg")
+
+
 def _ffmpeg_available() -> bool:
-    return shutil.which("ffmpeg") is not None
+    return _resolve_ffmpeg() is not None
 
 
 def _is_rtl(language: str) -> bool:
@@ -261,19 +279,41 @@ def caption_clips(job_id: str, top_n: Optional[int] = None) -> list[CaptionResul
     return results
 
 
+def _escape_subtitles_path(path: Path) -> str:
+    """Escape a path for ffmpeg's ``subtitles=`` filter argument.
+
+    The filtergraph parser eats backslashes and treats ``:`` as an option
+    separator, so on Windows ``C:\\x\\y.ass`` must become ``C\\:/x/y.ass``.
+    The result is meant to be wrapped in single quotes inside the filter.
+    """
+    s = str(path).replace("\\", "/")   # backslashes -> forward slashes
+    s = s.replace(":", "\\:")          # escape the drive-letter colon
+    return s
+
+
 def _burn_in(vertical: Path, ass_path: Path, final: Path, *, mock: bool) -> bool:
-    """Burn the .ass into the vertical clip. Returns True if ffmpeg actually ran."""
-    # libass subtitles filter needs the path escaped for the filtergraph.
-    ass_arg = str(ass_path).replace("\\", "/").replace(":", "\\:")
-    encoder = "h264_nvenc" if not mock else "libx264"  # nvenc on GPU; x264 fallback
+    """Burn the .ass into the vertical clip with libx264 (CPU, no nvenc).
+
+    Returns True if ffmpeg actually ran. The encoder is always ``libx264`` on
+    this free CPU path (h264_nvenc is the documented GPU upgrade). When ffmpeg
+    is genuinely absent we copy/placeholder the final and log the intent so
+    mock/CI stays green.
+    """
+    ffmpeg = _resolve_ffmpeg()
+    # libass subtitles filter needs the path escaped for the filtergraph; point
+    # fontsdir at the .ass directory so any bundled fonts resolve.
+    ass_arg = _escape_subtitles_path(ass_path)
+    fonts_arg = _escape_subtitles_path(ass_path.parent)
+    vf = f"subtitles='{ass_arg}':fontsdir='{fonts_arg}'"
     cmd = [
-        "ffmpeg", "-y", "-i", str(vertical),
-        "-vf", f"subtitles='{ass_arg}'",
-        "-c:v", encoder, "-c:a", "copy", str(final),
+        (ffmpeg or "ffmpeg"), "-y", "-i", str(vertical),
+        "-vf", vf,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p", "-c:a", "copy", str(final),
     ]
     cmd_str = " ".join(cmd)
 
-    if _ffmpeg_available() and vertical.exists() and vertical.stat().st_size > 64:
+    if ffmpeg and vertical.exists() and vertical.stat().st_size > 64:
         try:
             subprocess.run(cmd, check=True, capture_output=True)
             return True

@@ -52,11 +52,15 @@ def transcribe(job_id: str, source_path: Optional[Path] = None) -> dict[str, Any
     settings = get_settings()
     ws = settings.workspace(job_id)
 
-    if settings.mock_mode:
+    backend = settings.resolved_transcribe_backend()
+    if backend == "mock":
         transcript = _transcribe_mock(job_id)
     else:
         src = source_path or (ws / "source.mp4")
-        transcript = _transcribe_real(job_id, Path(src))
+        if backend == "faster-whisper":
+            transcript = _transcribe_faster_whisper(job_id, Path(src))
+        else:  # 'whisperx'
+            transcript = _transcribe_real(job_id, Path(src))
 
     (ws / "transcript.json").write_text(
         json.dumps(transcript, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -146,6 +150,65 @@ def _transcribe_real(job_id: str, source_path: Path) -> dict[str, Any]:
         )
 
     duration = segments[-1]["end"] if segments else 0.0
+    return {
+        "job_id": job_id,
+        "language": language,
+        "duration": duration,
+        "source": str(source_path),
+        "segments": segments,
+    }
+
+
+def _transcribe_faster_whisper(job_id: str, source_path: Path) -> dict[str, Any]:
+    """Free CPU transcription via faster-whisper.
+
+    No GPU and no paid API: loads ``settings.faster_whisper_model`` on CPU with
+    int8 quantization and transcribes with word-level timestamps. Accepts either
+    an audio or video file (faster-whisper decodes via ffmpeg/PyAV). No
+    diarization on the free path, so every segment gets ``SPEAKER_00``.
+
+    Maps to the CONTRACTS.md §2 transcript shape.
+    """
+    from faster_whisper import WhisperModel  # lazy; never needed in MOCK_MODE
+
+    settings = get_settings()
+    model = WhisperModel(
+        settings.faster_whisper_model, device="cpu", compute_type="int8"
+    )
+    segment_iter, info = model.transcribe(
+        str(source_path), word_timestamps=True
+    )
+
+    language = info.language or "en"
+    segments: list[dict[str, Any]] = []
+    for seg in segment_iter:
+        words: list[dict[str, Any]] = []
+        for w in seg.words or []:
+            token = (w.word or "").strip()
+            if not token:
+                continue
+            words.append(
+                {
+                    "word": token,
+                    "start": float(w.start if w.start is not None else seg.start),
+                    "end": float(w.end if w.end is not None else seg.end),
+                }
+            )
+        segments.append(
+            {
+                "text": (seg.text or "").strip(),
+                "start": float(seg.start),
+                "end": float(seg.end),
+                "speaker": "SPEAKER_00",
+                "words": words,
+            }
+        )
+
+    # info.duration is the decoded source length; fall back to last segment end.
+    duration = float(getattr(info, "duration", 0.0) or 0.0)
+    if not duration and segments:
+        duration = segments[-1]["end"]
+
     return {
         "job_id": job_id,
         "language": language,
