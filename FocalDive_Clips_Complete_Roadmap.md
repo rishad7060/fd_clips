@@ -11,7 +11,7 @@ You don't need new hires. Map your 4-person tech team like this:
 |---|---|---|---|
 | **Python** | The AI pipeline (transcribe, score, crop, render) | 1 person (pipeline owner) | Intermediate — Claude Code writes most of it; you review and debug |
 | **FFmpeg basics** | Cutting, cropping, caption burn-in, encoding | Pipeline owner | Just concepts: filters, codecs, NVENC. Claude writes the commands |
-| **Prompt engineering** | The clip-scoring rubric — your core IP | You (Abdul) + whoever has best content taste | Deep. This is the skill that decides if clips are good |
+| **Prompt engineering** | The clip-scoring rubric — your core IP | You  + whoever has best content taste | Deep. This is the skill that decides if clips are good |
 | **NestJS + Postgres + BullMQ** | API, jobs, billing | Backend dev | You already have this from BookMyPlay/Weels |
 | **Next.js + Tailwind** | Dashboard, clip gallery, editor | Frontend dev | You already have this |
 | **Docker + basic Linux** | Packaging the pipeline for GPU workers | Pipeline owner / DevOps | You already have this (VPS work) |

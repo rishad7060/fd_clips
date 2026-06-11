@@ -1,0 +1,233 @@
+"""Pipeline orchestrator — ingest -> transcribe -> score -> extract -> reframe -> captions.
+
+Runs the full FocalDive Clips pipeline for one source (URL or local file) and a
+requested clip count. Features:
+
+* Resumable: each stage writes a marker; completed stages are skipped on re-run
+  unless ``--force`` is given.
+* Per-stage timing, captured in ``workspace/{job_id}/run_state.json``.
+* A rich summary table (clip rank, score, hook, duration, final path).
+
+Everything runs offline in MOCK_MODE (the default when no OpenAI key is set).
+
+Usage:
+    python pipeline/run.py --clips 5 --mock
+    python pipeline/run.py --source https://youtu.be/XXXX --clips 8 --job-id job1
+    python pipeline/run.py --clips 5 --mock --force        # ignore resume markers
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import time
+from pathlib import Path
+from typing import Any, Callable, Optional
+
+try:
+    from . import ingest, transcribe, score_clips, extract, reframe, captions
+    from .config import get_settings
+except ImportError:  # script invocation: python pipeline/run.py
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import ingest, transcribe, score_clips, extract, reframe, captions  # type: ignore
+    from config import get_settings  # type: ignore
+
+# Ordered stages (matches CONTRACTS.md JobStage, minus terminal "done").
+STAGES = ["ingest", "transcribe", "score", "extract", "reframe", "captions"]
+
+
+def _load_state(ws: Path) -> dict[str, Any]:
+    f = ws / "run_state.json"
+    if f.exists():
+        return json.loads(f.read_text(encoding="utf-8"))
+    return {"completed": {}, "timings": {}}
+
+
+def _save_state(ws: Path, state: dict[str, Any]) -> None:
+    (ws / "run_state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+def _run_stage(
+    name: str, fn: Callable[[], Any], ws: Path, state: dict[str, Any], force: bool
+) -> Any:
+    """Run one stage with resume + timing. Returns the stage's result (or None
+    when skipped)."""
+    if not force and state["completed"].get(name):
+        elapsed = state["timings"].get(name, 0.0)
+        print(f"[skip ] {name:<10} (already completed, {elapsed:.2f}s previously)")
+        return None
+
+    print(f"[run  ] {name} ...")
+    t0 = time.perf_counter()
+    result = fn()
+    elapsed = time.perf_counter() - t0
+    state["completed"][name] = True
+    state["timings"][name] = round(elapsed, 3)
+    _save_state(ws, state)
+    print(f"[done ] {name:<10} {elapsed:.2f}s")
+    return result
+
+
+def run_pipeline(
+    source: str,
+    job_id: str,
+    clip_count: int,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Execute all stages and return a summary dict."""
+    settings = get_settings()
+    ws = settings.workspace(job_id)
+    state = _load_state(ws)
+    if force:
+        state = {"completed": {}, "timings": {}}
+        _save_state(ws, state)
+
+    print("=" * 70)
+    print(f"FocalDive Clips pipeline  job={job_id}  clips={clip_count}  "
+          f"mock={settings.mock_mode}")
+    print(f"source: {source}")
+    print(f"workspace: {ws}")
+    print("=" * 70)
+
+    _run_stage("ingest", lambda: ingest.ingest(source, job_id), ws, state, force)
+    _run_stage("transcribe", lambda: transcribe.transcribe(job_id), ws, state, force)
+    _run_stage(
+        "score", lambda: score_clips.score_clips(job_id, top_n=clip_count),
+        ws, state, force,
+    )
+    _run_stage(
+        "extract", lambda: extract.extract_clips(job_id, top_n=clip_count),
+        ws, state, force,
+    )
+    _run_stage(
+        "reframe", lambda: reframe.reframe_clips(job_id, top_n=clip_count),
+        ws, state, force,
+    )
+    _run_stage(
+        "captions", lambda: captions.caption_clips(job_id, top_n=clip_count),
+        ws, state, force,
+    )
+
+    state["completed"]["done"] = True
+    _save_state(ws, state)
+
+    summary = _build_summary(job_id, ws, clip_count, state)
+    _print_summary(summary, state)
+    return summary
+
+
+def _build_summary(
+    job_id: str, ws: Path, clip_count: int, state: dict[str, Any]
+) -> dict[str, Any]:
+    clips_doc = json.loads((ws / "clips.json").read_text(encoding="utf-8"))
+    candidates = clips_doc.get("candidates", [])[:clip_count]
+    rows = []
+    for rank, c in enumerate(candidates, start=1):
+        final = ws / "clips" / f"{rank}_final.mp4"
+        rows.append(
+            {
+                "rank": rank,
+                "score": c["virality_score"],
+                "hook": c["hook_line"],
+                "title": c.get("suggested_title", ""),
+                "start": c["start"],
+                "end": c["end"],
+                "duration": round(c["end"] - c["start"], 2),
+                "final_path": str(final),
+                "final_exists": final.exists(),
+            }
+        )
+    return {
+        "job_id": job_id,
+        "model": clips_doc.get("model"),
+        "clip_count": len(rows),
+        "rows": rows,
+        "total_seconds": round(sum(state.get("timings", {}).values()), 3),
+    }
+
+
+def _print_summary(summary: dict[str, Any], state: dict[str, Any]) -> None:
+    rows = summary["rows"]
+    print()
+    try:
+        import sys
+
+        from rich.console import Console
+        from rich.table import Table
+
+        # Reconfigure the existing stdout to UTF-8 (Python 3.7+) so the box-
+        # drawing glyphs render on a Windows console whose code page is cp1252,
+        # without creating a second, separately-buffered stream (which would
+        # reorder output).
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+        except (AttributeError, ValueError):
+            pass
+        console = Console()
+        table = Table(
+            title=f"FocalDive Clips - {summary['job_id']} "
+                  f"({summary['clip_count']} clips, model={summary['model']})"
+        )
+        table.add_column("#", justify="right", style="bold")
+        table.add_column("Score", justify="right")
+        table.add_column("Dur", justify="right")
+        table.add_column("Hook", overflow="fold", max_width=42)
+        table.add_column("Final clip")
+        table.add_column("OK", justify="center")
+        for r in rows:
+            table.add_row(
+                str(r["rank"]), str(r["score"]), f"{r['duration']:.1f}s",
+                r["hook"], Path(r["final_path"]).name,
+                "ok" if r["final_exists"] else "--",
+            )
+        console.print(table)
+
+        timing = Table(title="Per-stage timing")
+        timing.add_column("Stage")
+        timing.add_column("Seconds", justify="right")
+        for st in STAGES:
+            timing.add_row(st, f"{state['timings'].get(st, 0.0):.3f}")
+        timing.add_row("[bold]total[/bold]", f"[bold]{summary['total_seconds']:.3f}[/bold]")
+        console.print(timing)
+    except Exception:  # rich missing or non-UTF console: plain fallback
+        print(f"Summary - {summary['job_id']} ({summary['clip_count']} clips, "
+              f"model={summary['model']})")
+        print(f"{'#':>2} {'Score':>5} {'Dur':>6}  Hook")
+        for r in rows:
+            print(f"{r['rank']:>2} {r['score']:>5} {r['duration']:>5.1f}s  "
+                  f"{r['hook'][:50]}")
+        print("Per-stage timing:")
+        for st in STAGES:
+            print(f"  {st:<10} {state['timings'].get(st, 0.0):.3f}s")
+        print(f"  {'total':<10} {summary['total_seconds']:.3f}s")
+
+
+def _main() -> None:
+    parser = argparse.ArgumentParser(description="FocalDive Clips full pipeline")
+    parser.add_argument("source", nargs="?", default="mock://fixture-podcast",
+                        help="YouTube/remote URL or local file path")
+    parser.add_argument("--source", dest="source_opt", default=None,
+                        help="Alternative to the positional source argument")
+    parser.add_argument("--clips", type=int, default=5, help="Number of clips (1-10)")
+    parser.add_argument("--job-id", default="demo-job-0001")
+    parser.add_argument("--mock", action="store_true",
+                        help="Force MOCK_MODE for this run (no GPU/APIs)")
+    parser.add_argument("--force", action="store_true",
+                        help="Ignore resume markers and re-run every stage")
+    args = parser.parse_args()
+
+    if args.mock:
+        os.environ["MOCK_MODE"] = "true"
+        get_settings.cache_clear()  # rebuild Settings with the forced flag
+
+    source = args.source_opt or args.source
+    clip_count = max(1, min(10, args.clips))
+    run_pipeline(source, args.job_id, clip_count, force=args.force)
+
+
+if __name__ == "__main__":
+    _main()

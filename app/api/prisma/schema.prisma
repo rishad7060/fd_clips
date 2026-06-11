@@ -1,0 +1,138 @@
+// FocalDive Clips — Prisma schema (Postgres)
+// Every table carries organization_id for tenant scoping + RLS (PROMPT 9b).
+// Shapes mirror CONTRACTS.md §1 (Job), §3 (Clip), and §9d (Credit/billing).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum JobStatus {
+  queued
+  running
+  completed
+  failed
+  canceled
+}
+
+enum JobStage {
+  ingest
+  transcribe
+  score
+  extract
+  reframe
+  captions
+  done
+}
+
+enum SourceType {
+  url
+  upload
+}
+
+enum PlanTier {
+  free
+  starter
+  pro
+}
+
+enum CreditReason {
+  grant // subscription / signup grant
+  debit // charged on job submit
+  refund // returned on job failure
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  // Clerk organization id (or a synthetic id in MOCK_AUTH mode).
+  clerkOrgId String  @unique @map("clerk_org_id")
+  name      String
+  plan      PlanTier @default(free)
+  // Cached running balance in credits (1 credit = 1 source-minute).
+  creditBalance Int   @default(30) @map("credit_balance")
+  stripeCustomerId String? @unique @map("stripe_customer_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  jobs        Job[]
+  clips       Clip[]
+  credits     CreditLedger[]
+
+  @@map("organizations")
+}
+
+model Job {
+  id             String     @id @default(cuid())
+  organizationId String     @map("organization_id")
+  sourceType     SourceType @map("source_type")
+  sourceUrl      String?    @map("source_url")
+  sourceKey      String?    @map("source_key")
+  clipCount      Int        @map("clip_count")
+  // JSON caption/template style (CONTRACTS.md §1 style).
+  style          Json?
+  status         JobStatus  @default(queued)
+  progress       Int        @default(0)
+  stage          JobStage   @default(ingest)
+  // Source minutes charged for this job (for refund on failure).
+  creditsCharged Int        @default(0) @map("credits_charged")
+  error          String?
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  clips        Clip[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("jobs")
+}
+
+model Clip {
+  id             String  @id @default(cuid())
+  organizationId String  @map("organization_id")
+  jobId          String  @map("job_id")
+  // 1-based clip rank (matches order in clips.json.candidates).
+  rank           Int
+  start          Float
+  end            Float
+  hookLine       String  @map("hook_line")
+  viralityScore  Int     @map("virality_score")
+  reason         String
+  suggestedTitle String  @map("suggested_title")
+  // R2 keys (never exposed raw to the browser — see CONTRACTS.md §5).
+  finalKey       String? @map("final_key")
+  thumbKey       String? @map("thumb_key")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  job          Job          @relation(fields: [jobId], references: [id])
+
+  @@index([organizationId])
+  @@index([jobId])
+  @@map("clips")
+}
+
+// Credit ledger — append-only record of grants/debits/refunds.
+// Organization.creditBalance is the materialized running total.
+model CreditLedger {
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  // Positive for grant/refund, negative for debit.
+  amount         Int
+  reason         CreditReason
+  // Optional links for traceability.
+  jobId          String?      @map("job_id")
+  stripeEventId  String?      @map("stripe_event_id")
+  note           String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("credit_ledger")
+}

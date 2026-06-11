@@ -1,0 +1,265 @@
+import type {
+  Clip,
+  ClipsResponse,
+  CreateJobInput,
+  Job,
+  JobProgressEvent,
+  JobStage,
+  RenderClipInput,
+} from "../types";
+import { DEFAULT_STYLE } from "../templates";
+import { SAMPLE_CLIPS, captionsFor } from "./fixtures";
+import { posterDataUri } from "./posters";
+
+/**
+ * In-memory mock backend that simulates the worker advancing a job through the
+ * CONTRACTS §1 stages. Lives module-level so it persists for the lifetime of a
+ * browser session (this module is imported only on the client by the mock API
+ * client). Deterministic and offline — no network, no backend required.
+ */
+
+const ORG_ID = "org_demo_focaldive";
+const MOCK_PUBLIC_VIDEO =
+  "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4";
+
+// Per-stage overall-progress ceilings, per CONTRACTS §4 weights.
+const STAGE_CEIL: Record<JobStage, number> = {
+  ingest: 10,
+  transcribe: 35,
+  score: 45,
+  extract: 55,
+  reframe: 80,
+  captions: 100,
+  done: 100,
+};
+
+const STAGE_MESSAGE: Record<JobStage, string> = {
+  ingest: "Downloading and normalizing source",
+  transcribe: "Transcribing audio (WhisperX)",
+  score: "Scoring viral moments",
+  extract: "Cutting clips",
+  reframe: "Reframing to vertical 9:16",
+  captions: "Burning animated captions",
+  done: "Clips ready",
+};
+
+const ORDER: JobStage[] = [
+  "ingest",
+  "transcribe",
+  "score",
+  "extract",
+  "reframe",
+  "captions",
+  "done",
+];
+
+interface MockJobRecord {
+  job: Job;
+  clips: Clip[];
+  /** wall-clock ms when the job started progressing. */
+  startedAt: number;
+  /** total simulated duration in ms. */
+  durationMs: number;
+  caption_overrides: Record<number, Clip["caption_lines"]>;
+}
+
+const records = new Map<string, MockJobRecord>();
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function uid(): string {
+  return "demo-job-" + Math.random().toString(36).slice(2, 8);
+}
+
+function buildClips(jobId: string): Clip[] {
+  return SAMPLE_CLIPS.candidates.map((c, i) => {
+    const rank = i + 1;
+    return {
+      ...c,
+      rank,
+      job_id: jobId,
+      final_url: MOCK_PUBLIC_VIDEO,
+      thumb_url: posterDataUri(rank, c.hook_line, c.virality_score),
+      caption_lines: captionsFor(c),
+    };
+  });
+}
+
+/** Seed a couple of finished demo jobs so the dashboard isn't empty. */
+function seed(): void {
+  if (records.size > 0) return;
+  const seededIds = ["demo-job-seed01", "demo-job-seed02"];
+  const titles = [
+    "Why Most Startups Fail — Founder Podcast Ep. 42",
+    "The Build-Trap: A Product Strategy Rant",
+  ];
+  seededIds.forEach((id, idx) => {
+    const clips = buildClips(id).slice(0, idx === 0 ? 5 : 6);
+    const created = new Date(Date.now() - (idx + 1) * 3600_000).toISOString();
+    records.set(id, {
+      job: {
+        job_id: id,
+        organization_id: ORG_ID,
+        source_type: "url",
+        source_url: "https://www.youtube.com/watch?v=EXAMPLE" + idx,
+        source_key: null,
+        clip_count: clips.length,
+        style: DEFAULT_STYLE,
+        status: "completed",
+        progress: 100,
+        stage: "done",
+        error: null,
+        created_at: created,
+        updated_at: created,
+        title: titles[idx],
+      },
+      clips,
+      startedAt: Date.now() - 60_000,
+      durationMs: 1,
+      caption_overrides: {},
+    });
+  });
+}
+
+/** Advance a running job's derived status/progress based on elapsed time. */
+function tick(rec: MockJobRecord): void {
+  const job = rec.job;
+  if (job.status === "completed" || job.status === "failed" || job.status === "canceled") {
+    return;
+  }
+  const elapsed = Date.now() - rec.startedAt;
+  const frac = Math.min(1, elapsed / rec.durationMs);
+  const overall = Math.round(frac * 100);
+
+  // Map overall progress to the current stage.
+  let stage: JobStage = "ingest";
+  for (const s of ORDER) {
+    stage = s;
+    if (overall <= STAGE_CEIL[s]) break;
+  }
+  if (overall >= 100) stage = "done";
+
+  job.progress = overall;
+  job.stage = stage;
+  job.status = overall >= 100 ? "completed" : "running";
+  job.updated_at = nowIso();
+}
+
+function clipsReady(rec: MockJobRecord): number {
+  // Clips become "ready" through the captions stage (80→100).
+  const p = rec.job.progress;
+  if (p < 80) return 0;
+  const total = rec.clips.length;
+  return Math.min(total, Math.round(((p - 80) / 20) * total));
+}
+
+export const mockStore = {
+  orgId: ORG_ID,
+
+  createJob(input: CreateJobInput): Job {
+    seed();
+    const jobId = uid();
+    const created = nowIso();
+    const title =
+      input.source_type === "url"
+        ? (input.source_url ?? "Pasted URL")
+        : (input.source_filename ?? "Uploaded video");
+    const clips = buildClips(jobId).slice(0, input.clip_count);
+    const job: Job = {
+      job_id: jobId,
+      organization_id: ORG_ID,
+      source_type: input.source_type,
+      source_url: input.source_url ?? null,
+      source_key: input.source_key ?? null,
+      clip_count: input.clip_count,
+      style: input.style ?? DEFAULT_STYLE,
+      status: "queued",
+      progress: 0,
+      stage: "ingest",
+      error: null,
+      created_at: created,
+      updated_at: created,
+      title,
+    };
+    records.set(jobId, {
+      job,
+      clips,
+      startedAt: Date.now(),
+      // ~14s simulated pipeline so the progress view is satisfying but quick.
+      durationMs: 14_000,
+      caption_overrides: {},
+    });
+    return job;
+  },
+
+  getJob(jobId: string): Job | null {
+    seed();
+    const rec = records.get(jobId);
+    if (!rec) return null;
+    tick(rec);
+    return { ...rec.job };
+  },
+
+  listJobs(): Job[] {
+    seed();
+    const all = [...records.values()];
+    all.forEach(tick);
+    return all
+      .map((r) => ({ ...r.job }))
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  },
+
+  progressEvent(jobId: string): JobProgressEvent | null {
+    const rec = records.get(jobId);
+    if (!rec) return null;
+    tick(rec);
+    const ready = clipsReady(rec);
+    return {
+      job_id: jobId,
+      organization_id: ORG_ID,
+      status: rec.job.status,
+      stage: rec.job.stage,
+      progress: rec.job.progress,
+      message:
+        rec.job.status === "completed"
+          ? `${rec.clips.length} clips ready`
+          : `${STAGE_MESSAGE[rec.job.stage]}${
+              rec.job.stage === "captions" ? ` (${ready}/${rec.clips.length})` : ""
+            }`,
+      clips_ready: ready,
+      error: rec.job.error ?? null,
+      ts: nowIso(),
+    };
+  },
+
+  getClips(jobId: string): ClipsResponse | null {
+    seed();
+    const rec = records.get(jobId);
+    if (!rec) return null;
+    tick(rec);
+    const clips = rec.clips.map((c) => ({
+      ...c,
+      caption_lines: rec.caption_overrides[c.rank] ?? c.caption_lines,
+    }));
+    return { job_id: jobId, model: SAMPLE_CLIPS.model, clips };
+  },
+
+  /** Apply a single-clip edit + re-render (10c). Returns the updated clip. */
+  renderClip(input: RenderClipInput): Clip | null {
+    const rec = records.get(input.job_id);
+    if (!rec) return null;
+    const clip = rec.clips.find((c) => c.rank === input.rank);
+    if (!clip) return null;
+    clip.start = input.start;
+    clip.end = input.end;
+    clip.caption_lines = input.caption_lines;
+    rec.caption_overrides[input.rank] = input.caption_lines;
+    // Re-render bumps the poster (new style highlight could change it) and url stays.
+    clip.thumb_url = posterDataUri(clip.rank, clip.hook_line, clip.virality_score);
+    rec.job.style = input.style;
+    rec.job.updated_at = nowIso();
+    return { ...clip };
+  },
+};
