@@ -38,6 +38,35 @@ except ImportError:  # script invocation: python pipeline/run.py
 # Ordered stages (matches CONTRACTS.md JobStage, minus terminal "done").
 STAGES = ["ingest", "transcribe", "score", "extract", "reframe", "captions"]
 
+# Cumulative progress (0-100) reached at the END of each stage. Matches
+# CONTRACTS.md §4 weights so the API/worker and the web progress ring agree.
+STAGE_PROGRESS = {
+    "ingest": 10,
+    "transcribe": 35,
+    "score": 45,
+    "extract": 55,
+    "reframe": 80,
+    "captions": 100,
+}
+
+# When --json-progress is set, run.py prints one JSON object per line to stdout
+# so a parent process (the NestJS worker) can forward them as WebSocket events.
+_JSON_PROGRESS = False
+
+
+def _emit_progress(stage: str, status: str, message: str) -> None:
+    """Emit one machine-readable progress line (only in --json-progress mode)."""
+    if not _JSON_PROGRESS:
+        return
+    event = {
+        "type": "progress",
+        "stage": stage,
+        "status": status,
+        "progress": STAGE_PROGRESS.get(stage, 0),
+        "message": message,
+    }
+    print("@@PROGRESS@@ " + json.dumps(event), flush=True)
+
 
 def _load_state(ws: Path) -> dict[str, Any]:
     f = ws / "run_state.json"
@@ -58,9 +87,11 @@ def _run_stage(
     if not force and state["completed"].get(name):
         elapsed = state["timings"].get(name, 0.0)
         print(f"[skip ] {name:<10} (already completed, {elapsed:.2f}s previously)")
+        _emit_progress(name, "running", f"{name} (cached)")
         return None
 
     print(f"[run  ] {name} ...")
+    _emit_progress(name, "running", f"Running {name}")
     t0 = time.perf_counter()
     result = fn()
     elapsed = time.perf_counter() - t0
@@ -68,6 +99,7 @@ def _run_stage(
     state["timings"][name] = round(elapsed, 3)
     _save_state(ws, state)
     print(f"[done ] {name:<10} {elapsed:.2f}s")
+    _emit_progress(name, "running", f"{name} done")
     return result
 
 
@@ -117,6 +149,9 @@ def run_pipeline(
 
     summary = _build_summary(job_id, ws, clip_count, state)
     _print_summary(summary, state)
+    if _JSON_PROGRESS:
+        # Final machine-readable result line: the full summary for the parent.
+        print("@@RESULT@@ " + json.dumps(summary), flush=True)
     return summary
 
 
@@ -218,7 +253,12 @@ def _main() -> None:
                         help="Force MOCK_MODE for this run (no GPU/APIs)")
     parser.add_argument("--force", action="store_true",
                         help="Ignore resume markers and re-run every stage")
+    parser.add_argument("--json-progress", action="store_true",
+                        help="Emit machine-readable @@PROGRESS@@/@@RESULT@@ lines for a parent process")
     args = parser.parse_args()
+
+    global _JSON_PROGRESS
+    _JSON_PROGRESS = args.json_progress
 
     if args.mock:
         os.environ["MOCK_MODE"] = "true"
