@@ -1,0 +1,25 @@
+# Core pipeline
+yt-dlp>=2024.0.0
+ffmpeg-python>=0.2.0
+python-dotenv>=1.0.0
+
+# Transcription / diarization (GPU on real runs)
+whisperx>=3.1.1
+pyannote.audio>=3.1.0
+
+# Active speaker detection deps (LR-ASD cloned separately)
+torch>=2.1.0
+torchvision>=0.16.0
+scenedetect>=0.6.3
+opencv-python>=4.9.0
+numpy>=1.26.0
+
+# Scoring
+openai>=1.30.0
+
+# Utilities
+pydantic>=2.6.0
+rich>=13.7.0
+
+# Dev / test
+pytest>=8.0.0

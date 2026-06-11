@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+*.tsbuildinfo
+
+# Env & secrets
+.env
+.env.local
+*.local
+
+# Workspace / media artifacts
+workspace/
+*.mp4
+*.wav
+*.mkv
+*.webm
+!tests/fixtures/**/*.mp4
+
+# Models / weights
+*.pt
+*.pth
+*.onnx
+weights/
+models/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
