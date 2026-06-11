@@ -25,18 +25,19 @@ $env:API_PORT           = "4000"
 $env:API_PUBLIC_URL     = "http://localhost:4000"
 $env:PIPELINE_REPO_ROOT = $root
 
+# npm is npm.cmd (a batch script); Start-Process can't launch it directly on
+# Windows ("%1 is not a valid Win32 application"). Launch it via cmd.exe /c.
 Write-Host "Starting NestJS API (real pipeline) on :4000 ..." -ForegroundColor Cyan
 Push-Location "$root/app/api"
-if (-not (Test-Path "dist/main.js")) { npm run build }
+if (-not (Test-Path "dist/main.js")) { & cmd.exe /c "npm run build" }
 $api = Start-Process -FilePath "node" -ArgumentList "dist/main.js" -PassThru -NoNewWindow
 Pop-Location
 
 Start-Sleep -Seconds 3
 Write-Host "Starting Next.js web on :3000 (points at the real API) ..." -ForegroundColor Cyan
-Push-Location "$root/app/web"
 $env:NEXT_PUBLIC_API_URL = "http://localhost:4000"
-$web = Start-Process -FilePath "npm" -ArgumentList "run","dev" -PassThru -NoNewWindow
-Pop-Location
+$web = Start-Process -FilePath "cmd.exe" -ArgumentList "/c","npm run dev" `
+  -WorkingDirectory "$root/app/web" -PassThru -NoNewWindow
 
 Write-Host ""
 Write-Host "  Web : http://localhost:3000   (paste a YouTube URL on /new)" -ForegroundColor Green

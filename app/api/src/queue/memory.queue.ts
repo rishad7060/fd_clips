@@ -14,7 +14,9 @@ export class MemoryQueue implements JobQueue {
   constructor(private readonly worker: JobWorker) {}
 
   async init(): Promise<void> {
-    this.logger.log('In-memory job queue ready (no Redis); jobs run via the mock worker.');
+    this.logger.log(
+      `In-memory job queue ready (no Redis); jobs run via ${this.worker.constructor.name}.`,
+    );
   }
 
   async shutdown(): Promise<void> {
