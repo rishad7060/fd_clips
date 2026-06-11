@@ -128,9 +128,23 @@ export const api = {
 
   async createJob(input: CreateJobInput): Promise<Job> {
     if (USING_MOCK_API) return delay(mockStore.createJob(input));
+    // The API boundary is camelCase (CreateJobDto) with whitelist validation —
+    // map the snake_case wire input to it, and only send fields it accepts.
+    const body: Record<string, unknown> = {
+      sourceType: input.source_type,
+      clipCount: input.clip_count,
+    };
+    if (input.source_url) body.sourceUrl = input.source_url;
+    if (input.source_key) body.sourceKey = input.source_key;
+    // The DTO requires style to be an object; the picker sends a string id, so
+    // wrap it (or omit). Omit empty styles entirely to satisfy whitelisting.
+    if (input.style) {
+      body.style =
+        typeof input.style === "object" ? input.style : { template: input.style };
+    }
     const v = await http<ApiJobView>("/jobs", {
       method: "POST",
-      body: JSON.stringify(input),
+      body: JSON.stringify(body),
     });
     return toJob(v);
   },
