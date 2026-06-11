@@ -43,16 +43,55 @@ export default function JobProgressPage({
   const redirected = useRef(false);
 
   useEffect(() => {
-    const unsub = api.subscribeProgress(jobId, (e) => {
-      setEvent(e);
-      if (e.status === "failed") setError(e.error ?? "Job failed");
-      if (e.status === "completed" && !redirected.current) {
+    let cancelled = false;
+
+    const apply = (
+      status: string,
+      stage: JobStage,
+      progress: number,
+      message: string,
+      jobError?: string | null,
+    ) => {
+      if (cancelled) return;
+      setEvent({
+        job_id: jobId,
+        status: status as JobProgressEvent["status"],
+        stage,
+        progress,
+        message,
+        error: jobError ?? null,
+      } as JobProgressEvent);
+      if (status === "failed") setError(jobError || "Job failed");
+      if (status === "completed" && !redirected.current) {
         redirected.current = true;
-        // Brief pause so the user sees the 100% state, then go to the gallery.
         setTimeout(() => router.push(`/jobs/${jobId}/clips`), 900);
       }
+    };
+
+    // 1) Fetch the current job state immediately. A job can fail fast at ingest
+    //    (e.g. a YouTube download blocked by bot-check) BEFORE the progress
+    //    WebSocket connects — in that case the socket never delivers the
+    //    'failed' event and the page would otherwise hang on "Queued…". This
+    //    one-shot fetch reflects an already-terminal job right away.
+    api
+      .getJob(jobId)
+      .then((j) => {
+        if (j.status === "failed" || j.status === "completed") {
+          apply(j.status, j.stage, j.progress, j.error || `Job ${j.status}`, j.error);
+        }
+      })
+      .catch(() => {
+        /* job not found yet / transient — the socket below will catch up */
+      });
+
+    // 2) Subscribe to live progress for the normal running case.
+    const unsub = api.subscribeProgress(jobId, (e) => {
+      apply(e.status, e.stage, e.progress, e.message ?? "", e.error);
     });
-    return unsub;
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [jobId, router]);
 
   const progress = event?.progress ?? 0;
@@ -124,8 +163,15 @@ export default function JobProgressPage({
       </ol>
 
       {error && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">
-          {error}
+        <div className="space-y-3 rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
+          <p className="font-semibold text-red-300">This job couldn&apos;t finish</p>
+          <p className="break-words text-red-200/90">{error}</p>
+          <a
+            href="/new"
+            className="inline-block rounded-lg bg-red-500/20 px-4 py-2 font-medium text-red-100 hover:bg-red-500/30"
+          >
+            ← Try another video
+          </a>
         </div>
       )}
     </div>

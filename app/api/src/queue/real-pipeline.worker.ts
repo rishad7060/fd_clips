@@ -261,10 +261,15 @@ export class RealPipelineWorker implements JobWorker {
     const doc = JSON.parse(raw) as ClipsDoc;
     const candidates = Array.isArray(doc.candidates) ? doc.candidates : [];
 
-    const wanted = Math.max(1, Math.min(payload.clip_count, candidates.length));
+    // Take up to clip_count candidates — but DON'T floor at 1: the scorer can
+    // legitimately return 0 (e.g. a short video with no 20-60s complete-thought
+    // segment). Flooring at 1 here previously indexed candidates[0]===undefined
+    // and crashed with "Cannot read properties of undefined (reading 'start')".
+    const wanted = Math.min(payload.clip_count, candidates.length);
     let clipsReady = 0;
     for (let i = 0; i < wanted; i++) {
       const c = candidates[i];
+      if (!c) break; // defensive: never index past the real candidate list
       const rank = i + 1;
       await store.createClip({
         organizationId: orgId,
@@ -286,7 +291,11 @@ export class RealPipelineWorker implements JobWorker {
     }
 
     await store.updateJob(orgId, jobId, { status: 'completed', stage: 'done', progress: 100 });
-    this.emit(payload, 'completed', 'done', 100, `${clipsReady} clips ready`, clipsReady);
+    const doneMsg =
+      clipsReady > 0
+        ? `${clipsReady} clip${clipsReady === 1 ? '' : 's'} ready`
+        : 'No clips found — the video had no 20-60s standout moment. Try a longer/more substantive video.';
+    this.emit(payload, 'completed', 'done', 100, doneMsg, clipsReady);
     this.logger.log(
       `Real pipeline job ${jobId} completed with ${clipsReady} clips` +
         (result ? ` (${result.rows.length} rows reported).` : '.'),

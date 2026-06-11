@@ -68,7 +68,23 @@ export default function ClipGalleryPage({
         </div>
       )}
 
-      {data && (
+      {data && data.clips.length === 0 && (
+        <div className="rounded-2xl border border-ink-700 bg-ink-900/60 p-8 text-center">
+          <p className="text-lg font-semibold text-white">No clips found</p>
+          <p className="mt-2 text-sm text-white/60">
+            The scorer didn&apos;t find a 20–60s standout moment in this video. Try a
+            longer or more substantive talking-head video.
+          </p>
+          <a
+            href="/new"
+            className="mt-4 inline-block rounded-lg border border-ink-600 px-4 py-2 text-sm font-medium text-white/80 hover:border-brand hover:text-white"
+          >
+            ← Try another video
+          </a>
+        </div>
+      )}
+
+      {data && data.clips.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {data.clips.map((clip) => (
             <ClipCard key={clip.rank} clip={clip} />
