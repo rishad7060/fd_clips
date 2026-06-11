@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import asdict, dataclass
@@ -189,25 +190,57 @@ def _ingest_real(
         ffmpeg_dir = str(Path(ffmpeg).parent) if ffmpeg else None
         download_target = ws / "download.%(ext)s"
         ydl_opts = {
-            # Prefer a ready-made <=1080p mp4 (no merge); fall back to merge.
-            "format": "best[ext=mp4][height<=1080]/bestvideo[height<=1080]+bestaudio/best",
+            # Prefer a ready-made <=720p mp4 (no merge needed, smaller/faster for CPU);
+            # then a merge of separate streams; then anything.
+            "format": "best[ext=mp4][height<=720]/best[height<=720]/bestvideo[height<=1080]+bestaudio/best",
             "outtmpl": str(download_target),
             "merge_output_format": "mp4",
             "quiet": True,
             "noprogress": True,
             "socket_timeout": 30,
             "retries": 2,
+            # Modern YouTube needs a JS runtime to compute the signature/nsig for the
+            # default web player. The mobile player clients ('android'/'ios') serve
+            # pre-signed progressive URLs that DON'T need JS — so prefer them, which
+            # is what makes downloads work on a box with no deno/node JS runtime.
+            "extractor_args": {"youtube": {"player_client": ["android", "ios", "web"]}},
         }
         if ffmpeg_dir:
             ydl_opts["ffmpeg_location"] = ffmpeg_dir
+        # YouTube increasingly requires cookies ("Sign in to confirm you're not a
+        # bot") for downloads from clean/datacenter IPs. Two ways to supply them:
+        #   YTDLP_COOKIES=/path/cookies.txt        — an exported cookies file, or
+        #   YTDLP_COOKIES_FROM_BROWSER=chrome      — read cookies straight from an
+        #                                            installed, logged-in browser
+        #                                            (chrome|edge|firefox|brave|...).
+        # The browser route needs no manual export and is the easiest reliable fix.
+        cookie_file = (os.environ.get("YTDLP_COOKIES") or "").strip()
+        cookie_browser = (os.environ.get("YTDLP_COOKIES_FROM_BROWSER") or "").strip()
+        if cookie_file and Path(cookie_file).is_file():
+            ydl_opts["cookiefile"] = cookie_file
+        elif cookie_browser:
+            # yt-dlp expects a tuple: (browser, profile?, keyring?, container?)
+            ydl_opts["cookiesfrombrowser"] = (cookie_browser,)
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([source])
         except Exception as e:  # noqa: BLE001 — surface a clear, actionable error
-            raise RuntimeError(
-                f"yt-dlp could not download {source}: {e}. Tip: some sites need a "
-                f"JS runtime or cookies; try a local file, or a different/shorter video."
-            ) from e
+            msg = str(e)
+            if "JavaScript" in msg or "nsig" in msg or "player" in msg.lower():
+                hint = (
+                    "YouTube extraction needs a JS runtime for this video. Install deno "
+                    "(winget install DenoLand.Deno) so yt-dlp can extract it, or try a "
+                    "different video / a local file."
+                )
+            elif "Sign in" in msg or "bot" in msg.lower() or "age" in msg.lower() or "private" in msg.lower():
+                hint = (
+                    "YouTube is asking to confirm you're not a bot. Easiest fix: set "
+                    "YTDLP_COOKIES_FROM_BROWSER=chrome (or edge/firefox) in .env to reuse "
+                    "your logged-in browser's cookies; or set YTDLP_COOKIES to a cookies.txt."
+                )
+            else:
+                hint = "Try a different/shorter public video, or pass a local file path instead of a URL."
+            raise RuntimeError(f"yt-dlp could not download {source}: {msg}. {hint}") from e
         downloaded = next(ws.glob("download.*"))
     else:
         downloaded = Path(source)
