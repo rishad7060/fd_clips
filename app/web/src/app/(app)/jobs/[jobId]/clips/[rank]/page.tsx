@@ -1,5 +1,19 @@
 "use client";
 
+/**
+ * PHASE 2 FEATURE — NOT part of the v2 MVP.
+ *
+ * Per fd_clips_v2.md (Part 1: "Dashboard/editor: CUT — simple submit form +
+ * results page. No editing"; Part 5 upgrade trigger: "Users ask to tweak clips
+ * → Add trim + caption-edit + re-render page"), the per-clip editor (trim,
+ * caption editing, style swap, re-render) is CUT from the MVP.
+ *
+ * This component is intentionally PRESERVED for when editing is turned back on,
+ * but it is NOT a promoted path: it is not in the sidebar nav, and the gallery
+ * cards no longer link to it (see ClipCard.tsx). The route still resolves if hit
+ * directly. Do not delete — re-link from ClipCard to re-enable.
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

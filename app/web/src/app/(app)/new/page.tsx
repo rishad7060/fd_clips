@@ -1,50 +1,117 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/lib/api";
-import { STYLE_TEMPLATES, templateById } from "@/lib/templates";
-import type { CreateJobInput, SourceType } from "@/lib/types";
+import { templateById } from "@/lib/templates";
+import type { CreateJobInput, Job } from "@/lib/types";
+import { DEV_USER } from "@/lib/auth";
+
+/**
+ * v2 MVP submit form (fd_clips_v2.md Prompt 6).
+ *
+ * The MVP flow is intentionally narrow: paste a YouTube URL + an email, submit,
+ * and see a confirmation ("your 3 clips arrive by email in ~30 min"). We do NOT
+ * route into the live editor/progress flow on submit — that matches the MVP
+ * promise of an async, emailed delivery.
+ *
+ * PHASE 2 (see fd_clips_v2.md Part 1 / Part 5):
+ *   - File UPLOAD source is cut from the MVP (YouTube URL only = no storage cost,
+ *     no big-file handling). The CreateJobInput "upload" branch + R2 staging are
+ *     preserved in the types/API for when uploads are turned back on.
+ *   - Caption STYLE templates picker is cut from the MVP UI (one clean style
+ *     ships by default). templateById("default") is sent so the contract shape
+ *     is unchanged; re-expose STYLE_TEMPLATES here to bring the picker back.
+ *   - Clip COUNT is fixed at 3 for the MVP. The Phase-2 range is 5–10; raise the
+ *     slider max below and re-enable the control when that ships.
+ */
+
+// MVP clip count: top 3 only (fd_clips_v2.md Part 1). PHASE 2: 5–10 ranked clips.
+const MVP_CLIP_COUNT = 3;
 
 export default function NewClipsPage() {
-  const router = useRouter();
-  const [tab, setTab] = useState<SourceType>("url");
   const [url, setUrl] = useState("");
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [clipCount, setClipCount] = useState(5);
-  const [templateId, setTemplateId] = useState("default");
+  // Prefill with the dev-mode user's email; with real Clerk wired the user can
+  // still override the delivery address.
+  const [email, setEmail] = useState(DEV_USER.email);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState<Job | null>(null);
 
-  const canSubmit =
-    !submitting && (tab === "url" ? url.trim().length > 4 : !!fileName);
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const canSubmit = !submitting && url.trim().length > 4 && emailOk;
 
   async function submit() {
     setError(null);
     setSubmitting(true);
     try {
-      const input: CreateJobInput =
-        tab === "url"
-          ? {
-              source_type: "url",
-              source_url: url.trim(),
-              clip_count: clipCount,
-              style: templateById(templateId).style,
-            }
-          : {
-              source_type: "upload",
-              // In real mode the file is uploaded to R2 first; mock just needs a name.
-              source_key: `org/uploads/${Date.now()}/source.mp4`,
-              source_filename: fileName ?? "upload.mp4",
-              clip_count: clipCount,
-              style: templateById(templateId).style,
-            };
+      const input: CreateJobInput = {
+        source_type: "url",
+        source_url: url.trim(),
+        clip_count: MVP_CLIP_COUNT,
+        // One clean default caption style ships in the MVP (Phase-2 = picker).
+        style: templateById("default").style,
+        email: email.trim(),
+      };
       const job = await api.createJob(input);
-      router.push(`/jobs/${job.job_id}`);
+      // MVP: show the "arriving by email" confirmation instead of opening the
+      // progress/editor flow. The job still runs server-side and lands on /clips.
+      setSubmitted(job);
     } catch (e) {
       setError(String(e));
+    } finally {
       setSubmitting(false);
     }
+  }
+
+  if (submitted) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <div className="rounded-2xl border border-ink-700 bg-ink-900/60 p-8 text-center">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-500/15 text-emerald-300">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-7 w-7"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </span>
+          <h1 className="mt-5 text-2xl font-bold text-white">
+            You&apos;re all set
+          </h1>
+          <p className="mx-auto mt-3 max-w-md text-white/70">
+            Your {MVP_CLIP_COUNT} clips will arrive by email in ~30 minutes. We
+            sent the confirmation to{" "}
+            <span className="font-medium text-white">{email.trim()}</span>.
+          </p>
+          <p className="mt-2 font-mono text-xs text-ink-500">
+            Job {submitted.job_id}
+          </p>
+          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href={`/jobs/${submitted.job_id}/clips`}
+              className="w-full rounded-xl bg-brand px-6 py-3 text-center text-sm font-semibold text-white shadow-glow hover:bg-brand-600 sm:w-auto"
+            >
+              View results page
+            </Link>
+            <button
+              onClick={() => {
+                setSubmitted(null);
+                setUrl("");
+              }}
+              className="w-full rounded-xl border border-ink-600 px-6 py-3 text-center text-sm font-medium text-white/80 hover:border-brand hover:text-white sm:w-auto"
+            >
+              Submit another video
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -52,120 +119,56 @@ export default function NewClipsPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Create clips</h1>
         <p className="text-sm text-white/60">
-          Paste a video link or upload a file. We will find your best moments.
+          Paste a YouTube link and we&apos;ll email you your{" "}
+          {MVP_CLIP_COUNT} best moments as captioned vertical clips.
         </p>
       </div>
 
       <div className="rounded-2xl border border-ink-700 bg-ink-900/60 p-6">
-        {/* Source tabs */}
-        <div className="mb-5 inline-flex rounded-lg border border-ink-700 bg-ink-850 p-1">
-          {(["url", "upload"] as SourceType[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
-                tab === t
-                  ? "bg-brand text-white"
-                  : "text-white/70 hover:text-white"
-              }`}
-            >
-              {t === "url" ? "Paste URL" : "Upload file"}
-            </button>
-          ))}
+        {/* YouTube URL */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-white/80">
+            YouTube URL
+          </label>
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=…"
+            className="w-full rounded-lg border border-ink-600 bg-ink-950 px-3 py-2.5 text-sm text-white placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+          />
+          <p className="mt-1.5 text-xs text-ink-500">
+            Single-speaker / talking-head videos work best in the MVP.
+          </p>
         </div>
 
-        {tab === "url" ? (
+        {/* Delivery email */}
+        <div className="mt-6">
+          <label className="mb-1.5 block text-sm font-medium text-white/80">
+            Email for delivery
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            className="w-full rounded-lg border border-ink-600 bg-ink-950 px-3 py-2.5 text-sm text-white placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+          />
+          <p className="mt-1.5 text-xs text-ink-500">
+            We&apos;ll send your finished clips here in ~30 minutes.
+          </p>
+        </div>
+
+        {/* Clip count — fixed at 3 for the MVP. */}
+        <div className="mt-6 flex items-center justify-between rounded-lg border border-ink-700 bg-ink-850 px-4 py-3">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-white/80">
-              Video URL
-            </label>
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=…"
-              className="w-full rounded-lg border border-ink-600 bg-ink-950 px-3 py-2.5 text-sm text-white placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
-            />
-            <p className="mt-1.5 text-xs text-ink-500">
-              YouTube, Vimeo, or any direct video link.
+            <p className="text-sm font-medium text-white/80">Number of clips</p>
+            <p className="text-xs text-ink-500">
+              The MVP delivers your top 3 moments.
             </p>
           </div>
-        ) : (
-          <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-ink-600 bg-ink-950/60 px-6 py-10 text-center transition hover:border-brand">
-            <svg
-              viewBox="0 0 24 24"
-              className="h-8 w-8 text-ink-500"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 16V4M5 11l7-7 7 7M5 20h14" />
-            </svg>
-            <span className="mt-3 text-sm font-medium text-white">
-              {fileName ?? "Click to choose a video file"}
-            </span>
-            <span className="mt-1 text-xs text-ink-500">MP4, MOV up to 4 GB</span>
-            <input
-              type="file"
-              accept="video/*"
-              className="hidden"
-              onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
-            />
-          </label>
-        )}
-
-        {/* Clip count */}
-        <div className="mt-6">
-          <div className="mb-1.5 flex items-center justify-between">
-            <label className="text-sm font-medium text-white/80">
-              Number of clips
-            </label>
-            <span className="text-sm font-semibold text-brand-400">
-              {clipCount}
-            </span>
-          </div>
-          <input
-            type="range"
-            min={1}
-            max={10}
-            value={clipCount}
-            onChange={(e) => setClipCount(Number(e.target.value))}
-            className="w-full"
-          />
-        </div>
-
-        {/* Template picker */}
-        <div className="mt-6">
-          <label className="mb-2 block text-sm font-medium text-white/80">
-            Caption style
-          </label>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {STYLE_TEMPLATES.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTemplateId(t.id)}
-                className={`rounded-lg border p-3 text-left transition ${
-                  templateId === t.id
-                    ? "border-brand bg-brand/10 ring-1 ring-brand/40"
-                    : "border-ink-700 bg-ink-850 hover:border-ink-500"
-                }`}
-              >
-                <span
-                  className="block rounded px-2 py-1 text-center text-[11px] font-bold"
-                  style={{
-                    background: "#000",
-                    color: t.style.highlight_color,
-                  }}
-                >
-                  ABC
-                </span>
-                <span className="mt-2 block text-xs font-medium text-white">
-                  {t.name}
-                </span>
-              </button>
-            ))}
-          </div>
+          <span className="text-lg font-bold text-brand-400">
+            {MVP_CLIP_COUNT}
+          </span>
         </div>
 
         {error && (
@@ -179,7 +182,7 @@ export default function NewClipsPage() {
           onClick={submit}
           className="mt-6 w-full rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white shadow-glow transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {submitting ? "Submitting…" : `Generate ${clipCount} clips`}
+          {submitting ? "Submitting…" : `Generate ${MVP_CLIP_COUNT} clips`}
         </button>
       </div>
     </div>

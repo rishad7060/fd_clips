@@ -9,8 +9,10 @@ const FEATURES = [
     icon: "M13 2L3 14h7l-1 8 10-12h-7z",
   },
   {
+    // MVP: MediaPipe face-detect center crop (good for single-speaker/talking-head).
+    // PHASE 2: LR-ASD active-speaker tracking for multi-speaker podcasts.
     title: "Smart vertical reframe",
-    body: "Active-speaker tracking and scene-aware cropping turn 16:9 into clean 1080×1920 — no jitter, no whip-pans.",
+    body: "Face-aware cropping turns 16:9 into clean 1080×1920 verticals — tuned for single-speaker, talking-head videos.",
     icon: "M9 3v18M15 3v18M3 9h18M3 15h18",
   },
   {
@@ -20,10 +22,12 @@ const FEATURES = [
   },
 ];
 
+// v2 MVP copy (fd_clips_v2.md): YouTube URL only, top 3 clips, emailed in ~30 min.
+// PHASE 2: re-add file upload + "watch it live" progress + 5–10 clips messaging.
 const STEPS = [
-  ["Paste a link or upload", "YouTube URL or a file. Pick how many clips you want."],
-  ["We do the work", "Transcribe, score, cut, reframe, caption — watch it live."],
-  ["Download & post", "Ranked vertical clips with hooks and titles, ready to ship."],
+  ["Paste a YouTube link", "Drop the URL and the email to deliver to."],
+  ["We do the work", "Transcribe, score, cut, reframe and caption — automatically."],
+  ["Get them by email", "Your 3 best moments as captioned vertical clips in ~30 min."],
 ];
 
 export default function LandingPage() {
@@ -52,13 +56,13 @@ export default function LandingPage() {
           One long video.
           <br />
           <span className="bg-gradient-to-r from-brand-400 via-cyan-300 to-brand-400 bg-clip-text text-transparent">
-            Ten viral clips.
+            Three viral clips.
           </span>
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-base text-white/70 sm:text-lg">
-          FocalDive Clips finds your best moments and turns them into ranked,
-          captioned, vertical shorts — automatically. Built for creators,
-          podcasters and agencies.
+          Paste a YouTube link and FocalDive Clips emails you your 3 best
+          moments as ranked, captioned, vertical shorts — automatically. Built
+          for creators, podcasters and coaches.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
@@ -75,7 +79,7 @@ export default function LandingPage() {
           </Link>
         </div>
         <p className="mt-3 text-xs text-ink-500">
-          30 free source-minutes / month · no credit card
+          2 free videos · no credit card · clips by email in ~30 min
         </p>
       </section>
 

@@ -136,6 +136,9 @@ export const api = {
     };
     if (input.source_url) body.sourceUrl = input.source_url;
     if (input.source_key) body.sourceKey = input.source_key;
+    // MVP: forward the delivery email so the worker can email finished clips
+    // (Resend). Omitted when absent so DTO whitelist validation stays happy.
+    if (input.email) body.email = input.email;
     // The DTO requires style to be an object; the picker sends a string id, so
     // wrap it (or omit). Omit empty styles entirely to satisfy whitelisting.
     if (input.style) {

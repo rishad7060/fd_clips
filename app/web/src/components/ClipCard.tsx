@@ -1,8 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import type { Clip } from "@/lib/types";
 import { formatDuration, scoreColor } from "@/lib/format";
+
+// PHASE 2: the per-clip editor (trim / caption-edit / re-render) is cut from the
+// MVP per fd_clips_v2.md (Part 1 "Dashboard/editor: CUT" and Part 5 upgrade
+// trigger "Users ask to tweak clips"). The gallery card therefore shows ONLY a
+// Download action. To bring editing back, re-add a Link to
+// `/jobs/${clip.job_id}/clips/${clip.rank}` (that route component is preserved).
 
 export function ClipCard({ clip }: { clip: Clip }) {
   const duration = clip.end - clip.start;
@@ -59,12 +64,8 @@ export function ClipCard({ clip }: { clip: Clip }) {
             </svg>
             Download
           </a>
-          <Link
-            href={`/jobs/${clip.job_id}/clips/${clip.rank}`}
-            className="rounded-lg border border-ink-600 px-3 py-2 text-sm font-medium text-white/80 hover:border-brand hover:text-white"
-          >
-            Edit
-          </Link>
+          {/* PHASE 2: an "Edit" link to the per-clip editor route lived here.
+              Removed for the MVP (editor is cut). See the note at the top. */}
         </div>
       </div>
     </div>

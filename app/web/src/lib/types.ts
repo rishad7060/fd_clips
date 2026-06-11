@@ -130,6 +130,13 @@ export interface CreateJobInput {
   source_filename?: string;
   clip_count: number;
   style?: ClipStyle;
+  /**
+   * MVP: the email the finished clips are delivered to (Resend). The v2 MVP
+   * promise is "clips arrive by email in ~30 min", so the submit form collects
+   * an email up front. Optional here because the real API may instead derive
+   * the recipient from the authenticated Clerk user.
+   */
+  email?: string;
 }
 
 /** Body for a re-render of a single clip (10c). */
