@@ -35,8 +35,15 @@ export class FilesController {
   // <name>: word chars / digits / underscore / dot, ending in an allowed ext.
   private static readonly NAME_RE = /^[\w.]+\.(mp4|jpg)$/;
 
-  /** Repo-root workspace dir. Server is started from C:/Projects/Opus_clip_clone. */
-  private readonly workspaceRoot = resolve(process.cwd(), 'workspace');
+  /**
+   * Repo-root workspace dir, where the pipeline writes workspace/<jobId>/clips/.
+   * Resolved independently of the server's CWD: prefer PIPELINE_REPO_ROOT (set by
+   * start-real.ps1), else climb from dist/files/ up to the repo root, else CWD.
+   */
+  private readonly workspaceRoot = resolve(
+    process.env.PIPELINE_REPO_ROOT || resolve(__dirname, '..', '..', '..', '..'),
+    'workspace',
+  );
 
   @Get(':jobId/:name')
   stream(

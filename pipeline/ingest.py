@@ -71,12 +71,37 @@ class SourceMetadata:
         return asdict(self)
 
 
+def _resolve_tool(configured: str, default_name: str) -> Optional[str]:
+    """Resolve an ffmpeg/ffprobe binary.
+
+    Honors the configured path from settings (FFMPEG_PATH/FFPROBE_PATH) first —
+    a full path is used as-is if it exists, a bare name is looked up on PATH.
+    Falls back to the default name on PATH. Returns None when unavailable.
+    """
+    if configured:
+        p = Path(configured)
+        if p.is_file():
+            return str(p)
+        found = shutil.which(configured)
+        if found:
+            return found
+    return shutil.which(default_name)
+
+
+def _ffprobe_bin() -> Optional[str]:
+    return _resolve_tool(get_settings().ffprobe_path, "ffprobe")
+
+
+def _ffmpeg_bin() -> Optional[str]:
+    return _resolve_tool(get_settings().ffmpeg_path, "ffmpeg")
+
+
 def _ffprobe_available() -> bool:
-    return shutil.which("ffprobe") is not None
+    return _ffprobe_bin() is not None
 
 
 def _ffmpeg_available() -> bool:
-    return shutil.which("ffmpeg") is not None
+    return _ffmpeg_bin() is not None
 
 
 def _is_url(source: str) -> bool:
@@ -85,8 +110,9 @@ def _is_url(source: str) -> bool:
 
 def _probe_real(path: Path) -> dict:
     """Run ffprobe on a real file and return parsed stream/format info."""
+    ffprobe = _ffprobe_bin() or "ffprobe"
     cmd = [
-        "ffprobe", "-v", "quiet", "-print_format", "json",
+        ffprobe, "-v", "quiet", "-print_format", "json",
         "-show_format", "-show_streams", str(path),
     ]
     out = subprocess.check_output(cmd, text=True)
@@ -171,8 +197,12 @@ def _ingest_real(
             raise FileNotFoundError(f"Local source not found: {source}")
 
     # Normalize to H.264 yuv420p constant-fps mp4.
-    if not _ffmpeg_available():
-        raise RuntimeError("ffmpeg is required for real ingest but was not found on PATH")
+    ffmpeg = _ffmpeg_bin()
+    if not ffmpeg:
+        raise RuntimeError(
+            "ffmpeg is required for real ingest but was not found. Set FFMPEG_PATH "
+            "in .env to the ffmpeg binary, or put it on PATH."
+        )
     # ffmpeg cannot read and write the same file in place (it would truncate the
     # input mid-decode), so when the local source already lives at out_path we
     # normalize into a temp file and atomically replace it afterwards.
@@ -180,7 +210,7 @@ def _ingest_real(
     if downloaded.resolve() == out_path.resolve():
         norm_target = out_path.with_name(out_path.stem + ".norm.mp4")
     norm_cmd = [
-        "ffmpeg", "-y", "-i", str(downloaded),
+        ffmpeg, "-y", "-i", str(downloaded),
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30",
         "-c:a", "aac", "-movflags", "+faststart",
         str(norm_target),

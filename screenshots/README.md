@@ -12,5 +12,11 @@ via headless Edge. These verify the UI renders end-to-end on this machine.
 | `05-clip-editor.png` | `/jobs/{id}/clips/{rank}` | Editor: 9:16 preview w/ burned caption, Trim sliders, per-line caption edit, 4-template style picker, Re-render. |
 | `06-job-progress.png` | `/jobs/{id}` | Live progress: circular % ring + 6-stage timeline (Ingest→Transcribe→Score→Extract→Reframe→Captions). |
 
+| `07-real-gallery.png` | `/jobs/{id}/clips` (REAL) | The full stack working: a REAL job through the live API + real pipeline. Header reads "scored with gemini", "Live API connected", and the card shows the real video poster frame with a burned-in caption, Gemini score (75) and AI title. Not mock data. |
+
 Note: dynamic pages were captured with `--headless=new --virtual-time-budget` so the client-side
 mock fetch (≈150ms) resolves before the frame is taken; a first-paint capture shows the loading skeleton.
+
+`07-real-gallery.png` is the real-pipeline proof: web (NEXT_PUBLIC_API_URL=:4000) → NestJS
+(USE_REAL_PIPELINE=true) → `python pipeline/run.py` (faster-whisper + Gemini + FFmpeg). Start the
+whole stack with `pwsh ./start-real.ps1`.

@@ -233,6 +233,30 @@ def _words_in_range(segments: list[dict], start: float, end: float) -> list[dict
     return out
 
 
+def _make_thumbnail(final: Path, thumb: Path, *, mock: bool) -> bool:
+    """Grab a poster frame ~1s into the final clip via ffmpeg -> {n}_thumb.jpg.
+
+    Returns True if a real jpg was written. In mock mode (or when ffmpeg/the
+    final clip is unavailable) writes a tiny placeholder so the file exists and
+    the gallery has something to request.
+    """
+    ffmpeg = _resolve_ffmpeg()
+    if not mock and ffmpeg and final.exists() and final.stat().st_size > 1024:
+        cmd = [
+            ffmpeg, "-y", "-ss", "1", "-i", str(final),
+            "-frames:v", "1", "-q:v", "3", str(thumb),
+        ]
+        try:
+            subprocess.run(cmd, check=True, capture_output=True)
+            if thumb.exists() and thumb.stat().st_size > 0:
+                return True
+        except (subprocess.CalledProcessError, OSError):
+            pass
+    # Placeholder so /files/<n>_thumb.jpg resolves (1x1-ish marker, not a real jpg).
+    thumb.write_bytes(b"\xff\xd8\xff\xe0FOCALDIVE_MOCK_THUMB")
+    return False
+
+
 def caption_clips(job_id: str, top_n: Optional[int] = None) -> list[CaptionResult]:
     """Build .ass + (burn-in) final clip for each candidate."""
     settings = get_settings()
@@ -265,6 +289,9 @@ def caption_clips(job_id: str, top_n: Optional[int] = None) -> list[CaptionResul
         vertical = clips_dir / f"{rank}_vertical.mp4"
         final = clips_dir / f"{rank}_final.mp4"
         burned = _burn_in(vertical, ass_path, final, mock=settings.mock_mode)
+
+        # Poster frame for the gallery card (CONTRACTS §5 {n}_thumb.jpg).
+        _make_thumbnail(final, clips_dir / f"{rank}_thumb.jpg", mock=settings.mock_mode)
 
         results.append(
             CaptionResult(
