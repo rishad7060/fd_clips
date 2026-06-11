@@ -8,7 +8,8 @@ import { PROGRESS_BUS, ProgressBus } from '../progress/progress.types';
 import { BullmqQueue } from './bullmq.queue';
 import { MemoryQueue } from './memory.queue';
 import { MockWorker } from './mock-worker';
-import { JobQueue, JOB_QUEUE } from './queue.types';
+import { RealPipelineWorker } from './real-pipeline.worker';
+import { JobQueue, JobWorker, JOB_QUEUE } from './queue.types';
 
 /**
  * Provides the JobQueue. With Redis configured (and MOCK_MODE not forced) it is
@@ -39,16 +40,21 @@ import { JobQueue, JOB_QUEUE } from './queue.types';
             );
           }
         }
-        const worker = new MockWorker({
-          store,
-          bus,
-          onFailure: async (orgId, jobId, credits) => {
-            await store.addCredits(orgId, credits, 'refund', {
-              jobId,
-              note: 'Refund for failed job',
-            });
-          },
-        });
+        const onFailure = async (orgId: string, jobId: string, credits: number): Promise<void> => {
+          await store.addCredits(orgId, credits, 'refund', {
+            jobId,
+            note: 'Refund for failed job',
+          });
+        };
+        // Opt-in real pipeline (USE_REAL_PIPELINE=true) spawns pipeline/run.py;
+        // otherwise the default MockWorker simulates the pipeline. Both satisfy
+        // the JobWorker contract the MemoryQueue drives.
+        const worker: JobWorker = config.flags.useRealPipeline
+          ? new RealPipelineWorker({ store, bus, onFailure })
+          : new MockWorker({ store, bus, onFailure });
+        logger.log(
+          `In-memory queue using ${config.flags.useRealPipeline ? 'RealPipelineWorker' : 'MockWorker'}.`,
+        );
         const mem = new MemoryQueue(worker);
         await mem.init();
         return mem;

@@ -3,6 +3,7 @@ import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
 import { ClipsModule } from './clips/clips.module';
 import { ConfigModule } from './config/config.module';
+import { FilesModule } from './files/files.module';
 import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 import { PersistenceModule } from './persistence/persistence.module';
@@ -21,6 +22,7 @@ import { StorageModule } from './storage/storage.module';
     BillingModule,
     JobsModule,
     ClipsModule,
+    FilesModule,
     HealthModule,
   ],
 })

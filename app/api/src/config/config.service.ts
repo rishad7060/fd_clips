@@ -17,6 +17,19 @@ export interface ResolvedFlags {
   /** When true, signed URLs are faked and Stripe is stubbed. */
   mockStorage: boolean;
   mockBilling: boolean;
+  /**
+   * When true, clip keys are served as local-disk files over HTTP via the
+   * /files controller instead of (mock-)R2 signed URLs. Defaults true when the
+   * real pipeline is enabled (USE_REAL_PIPELINE=true) so locally produced
+   * clips are reachable by the browser.
+   */
+  localFiles: boolean;
+  /**
+   * When true (env USE_REAL_PIPELINE=true), the in-memory queue drives the
+   * RealPipelineWorker (spawns pipeline/run.py) instead of the MockWorker.
+   * Opt-in only; defaults to false so the mock path stays the default.
+   */
+  useRealPipeline: boolean;
 }
 
 @Injectable()
@@ -70,6 +83,17 @@ export class AppConfigService {
     return this.get<string>('R2_ENDPOINT', undefined);
   }
 
+  /**
+   * Public base URL the browser uses to reach this API (no trailing slash).
+   * Derived from API_PUBLIC_URL, else built from API_PORT, default
+   * http://localhost:4000. Used by StorageService to build /files/... URLs.
+   */
+  get apiPublicUrl(): string {
+    const explicit = this.get<string>('API_PUBLIC_URL', undefined);
+    const base = explicit && explicit.trim() !== '' ? explicit : `http://localhost:${this.apiPort}`;
+    return base.replace(/\/$/, '');
+  }
+
   private hasValue(key: string): boolean {
     const v = this.config.get<string>(key);
     return v !== undefined && v.trim() !== '';
@@ -97,6 +121,13 @@ export class AppConfigService {
     const mockAuthRaw = (this.config.get<string>('MOCK_AUTH') ?? '').toLowerCase();
     const mockAuth = mockAuthRaw === 'true' ? true : mockAuthRaw === 'false' ? false : !hasClerk;
 
+    // LOCAL_FILES explicit flag wins; otherwise default true when the real
+    // pipeline is enabled (its clips live on local disk, not R2).
+    const useRealPipeline = (this.config.get<string>('USE_REAL_PIPELINE') ?? '').toLowerCase() === 'true';
+    const localFilesRaw = (this.config.get<string>('LOCAL_FILES') ?? '').toLowerCase();
+    const localFiles =
+      localFilesRaw === 'true' ? true : localFilesRaw === 'false' ? false : useRealPipeline;
+
     return {
       mockMode,
       mockAuth,
@@ -104,6 +135,8 @@ export class AppConfigService {
       mockDb: forced === true ? true : !hasDb,
       mockStorage: forced === true ? true : !hasR2,
       mockBilling: forced === true ? true : !hasStripe,
+      localFiles,
+      useRealPipeline,
     };
   }
 
@@ -115,7 +148,9 @@ export class AppConfigService {
     this.logger.log(`  database    = ${f.mockDb ? 'IN-MEMORY (no Postgres)' : 'Postgres via Prisma'}`);
     this.logger.log(`  queue       = ${f.mockQueue ? 'IN-MEMORY (no Redis)' : 'BullMQ/Redis'}`);
     this.logger.log(`  storage     = ${f.mockStorage ? 'MOCK signed URLs' : 'Cloudflare R2'}`);
+    this.logger.log(`  localFiles  = ${f.localFiles ? `LOCAL disk via ${this.apiPublicUrl}/files` : 'off'}`);
     this.logger.log(`  billing     = ${f.mockBilling ? 'STUBBED (no Stripe)' : 'Stripe'}`);
+    this.logger.log(`  pipeline    = ${f.useRealPipeline ? 'REAL (spawns pipeline/run.py)' : 'MOCK worker'}`);
     if (f.mockMode) {
       this.logger.warn('Running in MOCK MODE — no external services required.');
     }

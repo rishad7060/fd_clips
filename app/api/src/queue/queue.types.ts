@@ -13,6 +13,16 @@ export interface JobQueuePayload {
 }
 
 /**
+ * A worker the in-memory queue can drive. Both MockWorker (local simulation)
+ * and RealPipelineWorker (spawns the Python pipeline) implement this so the
+ * MemoryQueue stays agnostic to which one it runs. process() takes one payload
+ * and runs the job to completion (fire-and-forget from the queue's POV).
+ */
+export interface JobWorker {
+  process(payload: JobQueuePayload): Promise<void>;
+}
+
+/**
  * Queue abstraction. The real impl is BullMQ on Redis; the mock impl is an
  * in-process queue that drives a fake worker so local dev produces progress
  * events and clips end-to-end. Callers only ever see this interface.

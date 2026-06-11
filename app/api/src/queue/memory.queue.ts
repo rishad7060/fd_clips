@@ -1,17 +1,17 @@
 import { Logger } from '@nestjs/common';
-import { MockWorker } from './mock-worker';
-import { JobQueue, JobQueuePayload } from './queue.types';
+import { JobQueue, JobQueuePayload, JobWorker } from './queue.types';
 
 /**
- * In-memory queue for local dev (no Redis). Enqueued jobs are handed to the
- * MockWorker which drives the full pipeline simulation. Processing is async
- * (next tick) so POST /jobs returns immediately, just like BullMQ.
+ * In-memory queue for local dev (no Redis). Enqueued jobs are handed to a
+ * JobWorker — the MockWorker (full simulation) or the RealPipelineWorker
+ * (spawns the Python pipeline). Processing is async (next tick) so POST /jobs
+ * returns immediately, just like BullMQ.
  */
 export class MemoryQueue implements JobQueue {
   readonly backend = 'in-memory' as const;
   private readonly logger = new Logger(MemoryQueue.name);
 
-  constructor(private readonly worker: MockWorker) {}
+  constructor(private readonly worker: JobWorker) {}
 
   async init(): Promise<void> {
     this.logger.log('In-memory job queue ready (no Redis); jobs run via the mock worker.');
