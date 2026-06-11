@@ -181,15 +181,33 @@ def _ingest_real(
     if source_type == "url":
         import yt_dlp  # imported lazily so MOCK_MODE never needs it
 
+        # yt-dlp needs ffmpeg to MERGE separate video+audio streams. Point it at
+        # our resolved binary (FFMPEG_PATH) and prefer a progressive single-file
+        # format so a merge isn't even required when one is available. Bounded
+        # timeouts/retries so a bad URL fails fast instead of hanging the worker.
+        ffmpeg = _ffmpeg_bin()
+        ffmpeg_dir = str(Path(ffmpeg).parent) if ffmpeg else None
         download_target = ws / "download.%(ext)s"
         ydl_opts = {
-            "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            # Prefer a ready-made <=1080p mp4 (no merge); fall back to merge.
+            "format": "best[ext=mp4][height<=1080]/bestvideo[height<=1080]+bestaudio/best",
             "outtmpl": str(download_target),
             "merge_output_format": "mp4",
             "quiet": True,
+            "noprogress": True,
+            "socket_timeout": 30,
+            "retries": 2,
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([source])
+        if ffmpeg_dir:
+            ydl_opts["ffmpeg_location"] = ffmpeg_dir
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([source])
+        except Exception as e:  # noqa: BLE001 — surface a clear, actionable error
+            raise RuntimeError(
+                f"yt-dlp could not download {source}: {e}. Tip: some sites need a "
+                f"JS runtime or cookies; try a local file, or a different/shorter video."
+            ) from e
         downloaded = next(ws.glob("download.*"))
     else:
         downloaded = Path(source)
@@ -209,12 +227,32 @@ def _ingest_real(
     norm_target = out_path
     if downloaded.resolve() == out_path.resolve():
         norm_target = out_path.with_name(out_path.stem + ".norm.mp4")
-    norm_cmd = [
-        ffmpeg, "-y", "-i", str(downloaded),
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30",
-        "-c:a", "aac", "-movflags", "+faststart",
-        str(norm_target),
-    ]
+
+    # Re-encoding a whole (possibly hour-long) source on CPU is slow and usually
+    # unnecessary — we only cut small segments later. If the download is already
+    # H.264 / yuv420p, just remux (stream-copy: near-instant). Only re-encode
+    # when the codec/pixfmt actually needs it (e.g. AV1/VP9 from YouTube).
+    needs_reencode = True
+    try:
+        probe = _probe_real(downloaded)
+        vstream = next(s for s in probe["streams"] if s["codec_type"] == "video")
+        if vstream.get("codec_name") == "h264" and vstream.get("pix_fmt") == "yuv420p":
+            needs_reencode = False
+    except (subprocess.CalledProcessError, StopIteration, KeyError, OSError):
+        needs_reencode = True  # if we can't probe, be safe and re-encode
+
+    if needs_reencode:
+        norm_cmd = [
+            ffmpeg, "-y", "-i", str(downloaded),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30",
+            "-c:a", "aac", "-movflags", "+faststart",
+            str(norm_target),
+        ]
+    else:
+        norm_cmd = [
+            ffmpeg, "-y", "-i", str(downloaded),
+            "-c", "copy", "-movflags", "+faststart", str(norm_target),
+        ]
     subprocess.run(norm_cmd, check=True)
     if norm_target != out_path:
         out_path.unlink(missing_ok=True)
