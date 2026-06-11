@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsEmail,
   IsIn,
   IsInt,
   IsObject,
@@ -32,6 +33,14 @@ export class CreateJobDto {
   @Min(1)
   @Max(10)
   clipCount!: number;
+
+  /**
+   * Delivery email (MVP): the worker emails the finished clips here (Resend).
+   * Optional so existing/mock-auth callers without an email still validate.
+   */
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 
   @IsOptional()
   @IsObject()

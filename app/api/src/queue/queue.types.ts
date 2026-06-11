@@ -10,6 +10,8 @@ export interface JobQueuePayload {
   source_key: string | null;
   clip_count: number;
   style: Record<string, unknown> | null;
+  /** MVP: delivery email so the worker can email finished clips (Resend). */
+  email?: string | null;
 }
 
 /**

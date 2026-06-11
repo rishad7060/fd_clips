@@ -54,6 +54,8 @@ export class JobsService {
       source_key: job.sourceKey,
       clip_count: job.clipCount,
       style: job.style,
+      // MVP: carry the delivery email so the worker can email finished clips.
+      email: dto.email ?? null,
     };
     try {
       await this.queue.enqueue(payload);
