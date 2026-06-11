@@ -16,6 +16,12 @@ numpy>=1.26.0
 
 # Scoring
 openai>=1.30.0
+google-genai>=0.3.0
+
+# MVP ($0) path
+groq>=1.4.0            # free-tier whisper-large-v3 transcription (no GPU)
+mediapipe>=0.10.0      # CPU face-detect smart crop
+resend>=2.0.0          # email delivery of finished clips
 
 # Utilities
 pydantic>=2.6.0

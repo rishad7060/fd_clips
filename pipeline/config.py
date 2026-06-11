@@ -45,6 +45,7 @@ def _resolve_mock_mode(
     gemini_api_key: str = "",
     scoring_provider: str = "auto",
     transcribe_backend: str = "auto",
+    groq_api_key: str = "",
 ) -> bool:
     """Resolve the tri-state MOCK_MODE setting into a concrete bool.
 
@@ -59,9 +60,12 @@ def _resolve_mock_mode(
         return False
     # "auto": leave mock unless something real is configured.
     has_scoring_key = bool(openai_api_key or gemini_api_key)
-    explicit_backend = transcribe_backend.lower() in ("whisperx", "faster-whisper")
+    has_transcribe_key = bool(groq_api_key)
+    explicit_backend = transcribe_backend.lower() in ("groq", "whisperx", "faster-whisper")
     explicit_provider = scoring_provider.lower() in ("gemini", "openai")
-    real_configured = has_scoring_key or explicit_backend or explicit_provider
+    real_configured = (
+        has_scoring_key or has_transcribe_key or explicit_backend or explicit_provider
+    )
     return not real_configured
 
 
@@ -89,14 +93,20 @@ class Settings(BaseModel):
         "else openai if its key is set, else mock heuristic.",
     )
 
-    # ── Transcription (WhisperX GPU, or faster-whisper CPU) ─────────────
+    # ── Transcription ───────────────────────────────────────────────────
+    # MVP (v2): Groq's free Whisper API — no GPU, fast. Falls back to
+    # faster-whisper (CPU) or WhisperX (GPU) when configured.
+    groq_api_key: str = Field("", description="Groq API key (free tier); the MVP transcription path")
+    groq_model: str = Field(
+        "whisper-large-v3", description="Groq Whisper model (whisper-large-v3 | whisper-large-v3-turbo)"
+    )
     huggingface_token: str = Field("", description="HF token for pyannote diarization (GPU path)")
     whisperx_model: str = Field("large-v3", description="WhisperX model name (GPU path)")
     whisperx_device: str = Field("cuda", description="cuda | cpu")
     transcribe_backend: str = Field(
         "auto",
-        description="auto | whisperx | faster-whisper | mock. 'auto' => faster-whisper "
-        "(CPU, free) when not in mock_mode and whisperx isn't installed, else mock.",
+        description="auto | groq | whisperx | faster-whisper | mock. 'auto' => groq when "
+        "GROQ_API_KEY is set (MVP default); else whisperx on a CUDA box; else faster-whisper.",
     )
     faster_whisper_model: str = Field(
         "small", description="faster-whisper model (tiny|base|small|medium) — CPU, free"
@@ -112,6 +122,12 @@ class Settings(BaseModel):
     r2_secret_access_key: str = Field("", description="R2 secret access key")
     r2_bucket: str = Field("focaldive-clips", description="R2 bucket name")
     r2_endpoint: str = Field("", description="R2 S3-compatible endpoint URL")
+
+    # ── Email delivery (Resend — MVP clip delivery) ─────────────────────
+    resend_api_key: str = Field("", description="Resend API key (free 3k/mo); empty => log instead of send")
+    email_from: str = Field(
+        "FocalDive Clips <clips@focaldive.com>", description="From address for delivery emails"
+    )
 
     # ── Queue / DB (shared with API + worker) ───────────────────────────
     database_url: str = Field("", description="Postgres connection URL")
@@ -150,18 +166,23 @@ class Settings(BaseModel):
         return "mock"
 
     def resolved_transcribe_backend(self) -> str:
-        """Resolve transcription backend: 'whisperx' | 'faster-whisper' | 'mock'.
+        """Resolve transcription backend: 'groq' | 'whisperx' | 'faster-whisper' | 'mock'.
 
-        Explicit TRANSCRIBE_BACKEND wins. 'auto' uses faster-whisper (CPU, free)
-        when not in mock_mode, except it prefers whisperx if WHISPERX_DEVICE=cuda.
-        mock_mode forces 'mock'.
+        Explicit TRANSCRIBE_BACKEND wins (a 'groq' choice falls back to mock when
+        no key is set). 'auto' prefers Groq's free API (the MVP default) when a key
+        is present — no GPU, fast — then whisperx on a CUDA box, else faster-whisper
+        (CPU, slow). mock_mode forces 'mock'.
         """
         if self.mock_mode:
             return "mock"
         choice = (self.transcribe_backend or "auto").lower()
+        if choice == "groq":
+            return "groq" if self.groq_api_key else "mock"
         if choice in ("whisperx", "faster-whisper", "mock"):
             return choice
-        # auto: GPU box -> whisperx; otherwise the free CPU path.
+        # auto: Groq API (free, no GPU) first — this is the MVP path.
+        if self.groq_api_key:
+            return "groq"
         return "whisperx" if self.whisperx_device == "cuda" else "faster-whisper"
 
     @property
@@ -183,6 +204,7 @@ def get_settings() -> Settings:
     gemini_api_key = _env("GEMINI_API_KEY")
     scoring_provider = (_env("SCORING_PROVIDER", "auto") or "auto").lower()
     transcribe_backend = (_env("TRANSCRIBE_BACKEND", "auto") or "auto").lower()
+    groq_api_key = _env("GROQ_API_KEY")
     raw_mock = (_env("MOCK_MODE", "auto") or "auto").lower()
     if raw_mock not in ("auto", "true", "false"):
         raw_mock = "auto"
@@ -191,7 +213,8 @@ def get_settings() -> Settings:
 
     return Settings(
         mock_mode=_resolve_mock_mode(
-            raw_mock, openai_api_key, gemini_api_key, scoring_provider, transcribe_backend
+            raw_mock, openai_api_key, gemini_api_key, scoring_provider,
+            transcribe_backend, groq_api_key,
         ),
         raw_mock_mode=raw_mock,  # type: ignore[arg-type]
         repo_root=REPO_ROOT,
@@ -201,6 +224,8 @@ def get_settings() -> Settings:
         gemini_api_key=_env("GEMINI_API_KEY"),
         gemini_model=_env("GEMINI_MODEL", "gemini-2.0-flash") or "gemini-2.0-flash",
         scoring_provider=(_env("SCORING_PROVIDER", "auto") or "auto").lower(),
+        groq_api_key=groq_api_key,
+        groq_model=_env("GROQ_MODEL", "whisper-large-v3") or "whisper-large-v3",
         huggingface_token=_env("HUGGINGFACE_TOKEN"),
         whisperx_model=_env("WHISPERX_MODEL", "large-v3") or "large-v3",
         whisperx_device=_env("WHISPERX_DEVICE", "cuda") or "cuda",
@@ -213,6 +238,9 @@ def get_settings() -> Settings:
         r2_secret_access_key=_env("R2_SECRET_ACCESS_KEY"),
         r2_bucket=_env("R2_BUCKET", "focaldive-clips") or "focaldive-clips",
         r2_endpoint=_env("R2_ENDPOINT"),
+        resend_api_key=_env("RESEND_API_KEY"),
+        email_from=_env("EMAIL_FROM", "FocalDive Clips <clips@focaldive.com>")
+        or "FocalDive Clips <clips@focaldive.com>",
         database_url=_env("DATABASE_URL"),
         redis_url=_env("REDIS_URL", "redis://localhost:6379") or "redis://localhost:6379",
     )
