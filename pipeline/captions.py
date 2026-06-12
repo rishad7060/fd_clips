@@ -423,15 +423,29 @@ def build_ass(
         fitted_size = _fit_font_size(line_text, base_size)
         size_tag = f"{{\\fs{fitted_size}}}" if fitted_size != base_size else ""
 
+        # Karaoke timing: ASS \k durations are CUMULATIVE from the line's Start
+        # time and have NO concept of gaps. If we only emit each word's own
+        # duration, any silence BETWEEN words is dropped and every later word
+        # highlights too early — the sweep races ahead of the speech. So we add
+        # the gap before each word into the timing: a leading unhighlighted
+        # spacer ({\k<gap>}) holds the highlight until the word is actually
+        # spoken, keeping the colour locked to the audio.
         tokens: list[str] = []
+        prev_end = line_start  # line Start == first word start, so gap 0 there
         for i, w in enumerate(line_words):
             ws = max(0.0, float(w["start"]) - clip_start)
             we = max(ws, float(w["end"]) - clip_start)
-            k_cs = max(1, int(round((we - ws) * 100)))  # \k unit = centiseconds
+            gap_cs = int(round(max(0.0, ws - prev_end) * 100))
+            dur_cs = max(1, int(round((we - ws) * 100)))  # \k unit = centiseconds
             display = _ass_escape(_display(w, with_emoji=(i == emoji_idx)))
-            tokens.append(f"{{\\k{k_cs}}}{display}")
+            spacer = f"{{\\k{gap_cs}}}" if gap_cs > 0 else ""
+            # Separator space carries the prior word's trailing context; emit the
+            # gap spacer (unhighlighted) then the highlighted word.
+            sep = " " if i > 0 else ""
+            tokens.append(f"{sep}{spacer}{{\\kf{dur_cs}}}{display}")
+            prev_end = we
 
-        text = size_tag + " ".join(tokens)
+        text = size_tag + "".join(tokens)
         if rtl:
             # Explicit RTL embedding so libass shapes the line right-to-left.
             text = f"{_RLE}{text}{_PDF}"
