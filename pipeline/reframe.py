@@ -50,7 +50,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
@@ -72,7 +72,9 @@ CROP_W = int(round(SRC_H * TARGET_W / TARGET_H))  # 1080 * 1080/1920 = 607.5 -> 
 # ── MediaPipe smart-crop tuning (real branch only) ──────────────────────────
 FRAME_SAMPLE_STRIDE = 5     # run face detection on every Nth decoded frame
 EMA_ALPHA = 0.25            # crop-center smoothing weight (0.2-0.3 = calm camera)
-FACE_MIN_CONFIDENCE = 0.5   # MediaPipe min detection confidence
+# Lower confidence so distant / profile / turned-away faces (the off-camera
+# speaker on a zoomed-out two-shot) still register — they're what we widen for.
+FACE_MIN_CONFIDENCE = 0.3   # MediaPipe min detection confidence
 
 # ── Per-shot framing (opus.pro-style) ───────────────────────────────────────
 # A new "shot" begins when the frame-to-frame mean-abs difference exceeds this
@@ -84,6 +86,22 @@ SCENE_MIN_SHOT_SEC = 0.8    # ignore cuts that would make a shot shorter than th
 # of the 9:16 window (upper third = ~0.33 → short-form-native composition with
 # headroom above and caption space below).
 FACE_VERTICAL_ANCHOR = 0.36
+
+# ── Time-windowed follow + two-shot widen ───────────────────────────────────
+# The crop is recomputed per short time window (not per whole shot) so it can
+# follow a face as the camera zooms/pans within one continuous angle.
+WINDOW_SEC = 1.2            # length of each framing window in seconds
+# When two faces in a window are separated by more than this fraction of frame
+# width, widen the crop to include BOTH (so the off-centre speaker isn't cut on
+# a zoomed-out two-shot). Below it, tight-frame the dominant face.
+TWO_SHOT_SPREAD = 0.22
+TWO_SHOT_MARGIN = 0.10     # extra width padding around the two faces (frac of W)
+# EMA smoothing of the window-to-window crop center & width (calm pan/zoom, no
+# whip). Reset on a scene cut so a real angle change snaps instantly.
+PATH_EMA_ALPHA = 0.4
+# Min fraction of frames in a window that must contain >=2 faces before we treat
+# it as a genuine two-shot (debounces a single stray second detection).
+TWO_SHOT_MIN_FRAC = 0.4
 
 
 @dataclass
@@ -297,6 +315,8 @@ def _center_crop_geometry(src_w: int, src_h: int) -> tuple[int, int, int]:
 # MediaPipe Face Detector (Tasks API) model — small (~224 KB), public, CPU-only.
 # Cached under the repo so the one-time fetch happens once per machine. We only
 # need it on the newer "Tasks-only" mediapipe builds that drop ``mp.solutions``.
+# (Only short_range is reliably hosted; the off-centre/distant speaker is instead
+# recovered by upscaling frames before detection — see ``_sample_faces``.)
 _FACE_MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/face_detector/"
     "blaze_face_short_range/float16/1/blaze_face_short_range.tflite"
@@ -397,12 +417,19 @@ def _make_face_detector(mp: Any) -> Optional[tuple[Any, Any]]:
 
 @dataclass
 class FaceSample:
-    """One sampled frame's dominant-face position (fractions 0..1 of frame)."""
+    """One sampled frame's faces (fractions 0..1 of frame).
+
+    ``cx``/``cy`` are the *dominant* face center (largest box) for backward-compat
+    and tight framing; ``faces`` holds *every* detected face center so a window
+    can widen to keep two far-apart speakers in frame. Empty ``faces`` (cx<0)
+    means no face this frame.
+    """
 
     t: float            # seconds, relative to clip start
-    cx: float           # face center x as fraction of width
-    cy: float           # face center y as fraction of height
+    cx: float           # dominant face center x as fraction of width (-1 = none)
+    cy: float           # dominant face center y as fraction of height (-1 = none)
     is_cut: bool        # True if a scene cut was detected at/just before this frame
+    faces: list[tuple[float, float]] = field(default_factory=list)  # (cx,cy) all faces
 
 
 def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
@@ -485,12 +512,18 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
 
             # Dominant face = largest box area; tie-break on detection score.
             cx, cy = _dominant_face_xy(faces)
+            # Keep every face center (clamped) so a window can widen to two-shot.
+            all_centers = [
+                (min(1.0, max(0.0, fx)), min(1.0, max(0.0, fy)))
+                for (fx, fy, _a, _s) in faces
+            ]
             samples.append(
                 FaceSample(
                     t=t,
                     cx=min(1.0, max(0.0, cx)),
                     cy=min(1.0, max(0.0, cy)),
                     is_cut=is_cut,
+                    faces=all_centers,
                 )
             )
     finally:
@@ -519,20 +552,150 @@ def _dominant_face_xy(
     return cx, cy
 
 
-def _crop_window_for_face(
-    cx_frac: float, cy_frac: float, src_w: int, src_h: int
-) -> tuple[int, int, int, int]:
-    """Build a 9:16 crop window framing a face, clamped to the frame.
+def _median(vals: list[float]) -> float:
+    """Median of a non-empty list."""
+    s = sorted(vals)
+    mid = len(s) // 2
+    return s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2.0
 
-    ``cx_frac``/``cy_frac`` are the face center as fractions 0..1 of source
-    width/height. The window is the largest 9:16 rectangle that fits the source;
-    it is positioned so the face is centered horizontally and sits at
-    ``FACE_VERTICAL_ANCHOR`` down from the top (upper-third short-form framing).
-    Both offsets are clamped so the window stays inside the frame.
 
-    Returns (crop_w, crop_h, x, y).
+def _window_target(
+    win: list["FaceSample"],
+) -> Optional[tuple[float, float, float]]:
+    """Compute a window's desired framing as (center_x, center_y, width) fractions.
+
+    Looks at every face in the window (not just the dominant one). If two or more
+    faces are spread horizontally by more than ``TWO_SHOT_SPREAD`` in a sufficient
+    share of frames, returns a WIDER window spanning both (so a zoomed-out
+    two-shot keeps the off-centre speaker). Otherwise returns a tight window on
+    the dominant (median) face. ``None`` when the window has no faces at all.
     """
-    crop_w, crop_h, _ = _center_crop_geometry(src_w, src_h)
+    framed = [s for s in win if s.cx >= 0.0]
+    if not framed:
+        return None
+
+    # Horizontal extent of all faces per frame; a frame is "two-shot" when its
+    # faces span more than TWO_SHOT_SPREAD of the width.
+    two_shot_frames = 0
+    all_left: list[float] = []
+    all_right: list[float] = []
+    for s in framed:
+        xs = [fx for (fx, _fy) in s.faces] or [s.cx]
+        lo, hi = min(xs), max(xs)
+        all_left.append(lo)
+        all_right.append(hi)
+        if len(xs) >= 2 and (hi - lo) > TWO_SHOT_SPREAD:
+            two_shot_frames += 1
+
+    is_two_shot = two_shot_frames >= max(1, int(TWO_SHOT_MIN_FRAC * len(framed)))
+    cy = _median([s.cy for s in framed])
+
+    if is_two_shot:
+        # Span both extremes (median of per-frame extremes = robust to a stray).
+        left = _median(all_left)
+        right = _median(all_right)
+        center_x = (left + right) / 2.0
+        width = min(1.0, (right - left) + 2 * TWO_SHOT_MARGIN)
+        return center_x, cy, width
+
+    # Tight single-face framing on the dominant (median) center.
+    center_x = _median([s.cx for s in framed])
+    return center_x, cy, 0.0  # width 0 → caller uses the base 9:16 width
+
+
+def _build_keyframes(
+    samples: list["FaceSample"], clip_duration: float, src_w: int, src_h: int
+) -> list[CropKeyframe]:
+    """Turn per-frame samples into a smoothed, time-windowed crop path.
+
+    Bins samples into ``WINDOW_SEC`` windows; each window gets a desired
+    (center_x, center_y, width) from :func:`_window_target` (which widens for
+    two-shots). The path's center and width are EMA-smoothed window-to-window so
+    pans/zooms are calm, and the smoothing RESETS on a scene cut so a real angle
+    change snaps. Each window becomes one ``CropKeyframe`` (x, y, width, height),
+    9:16-correct and clamped to the frame.
+
+    Returns ``[]`` when no window has a face (caller centers the crop).
+    """
+    if not samples:
+        return []
+
+    base_w, base_h, _ = _center_crop_geometry(src_w, src_h)
+    aspect = base_w / base_h  # 9:16 width/height ratio for this source
+
+    n_windows = max(1, int(round(clip_duration / WINDOW_SEC)))
+    win_len = clip_duration / n_windows
+
+    keyframes: list[CropKeyframe] = []
+    last_cx: Optional[float] = None
+    last_w: Optional[float] = None  # smoothed width fraction (of src_w)
+
+    for i in range(n_windows):
+        w0 = i * win_len
+        w1 = (i + 1) * win_len if i < n_windows - 1 else clip_duration + 1e-3
+        win = [s for s in samples if w0 <= s.t < w1]
+        cut_in_window = any(s.is_cut for s in win if s.t > 1e-6)
+
+        target = _window_target(win)
+        if target is None:
+            # No face this window: hold last framing, else center.
+            if last_cx is None:
+                continue
+            cx_frac, cy_frac, want_w = last_cx, FACE_VERTICAL_ANCHOR, last_w or (base_w / src_w)
+        else:
+            cx_frac, cy_frac, want_w_frac = target
+            want_w = want_w_frac if want_w_frac > 0 else (base_w / src_w)
+
+        # Reset smoothing on a hard cut so the camera snaps to the new angle.
+        if cut_in_window:
+            last_cx, last_w = None, None
+
+        if last_cx is None:
+            sm_cx, sm_w = cx_frac, want_w
+        else:
+            sm_cx = PATH_EMA_ALPHA * cx_frac + (1 - PATH_EMA_ALPHA) * last_cx
+            sm_w = PATH_EMA_ALPHA * want_w + (1 - PATH_EMA_ALPHA) * last_w
+        last_cx, last_w = sm_cx, sm_w
+
+        crop_w, crop_h, x, y = _window_to_window_px(
+            sm_cx, cy_frac, sm_w, aspect, src_w, src_h
+        )
+        keyframes.append(
+            CropKeyframe(t=round(w0, 3), x=x, y=y, width=crop_w, height=crop_h)
+        )
+
+    # Collapse consecutive identical windows so the ffmpeg expr stays small.
+    collapsed: list[CropKeyframe] = []
+    for kf in keyframes:
+        if collapsed and (kf.x, kf.y, kf.width, kf.height) == (
+            collapsed[-1].x, collapsed[-1].y, collapsed[-1].width, collapsed[-1].height
+        ):
+            continue
+        collapsed.append(kf)
+    return collapsed
+
+
+def _window_to_window_px(
+    cx_frac: float, cy_frac: float, w_frac: float, aspect: float,
+    src_w: int, src_h: int,
+) -> tuple[int, int, int, int]:
+    """Resolve a window's (center_x, center_y, width-frac) into a px crop window.
+
+    Width is the requested fraction of source width (≥ the base 9:16 width),
+    capped at the source; height = width/aspect keeps 9:16, capped at source
+    height (which then re-caps width to stay 9:16). Centered horizontally on the
+    face(s); face anchored to the upper third vertically. Even dims for libx264.
+    """
+    base_w, _bh, _ = _center_crop_geometry(src_w, src_h)
+    crop_w = max(base_w, int(round(w_frac * src_w)))
+    crop_w = min(crop_w, src_w)
+    crop_h = int(round(crop_w / aspect))
+    if crop_h > src_h:
+        crop_h = src_h
+        crop_w = int(round(crop_h * aspect))
+    crop_w -= crop_w % 2
+    crop_h -= crop_h % 2
+
     face_x = cx_frac * src_w
     face_y = cy_frac * src_h
     x = int(round(face_x - crop_w / 2.0))
@@ -542,80 +705,29 @@ def _crop_window_for_face(
     return crop_w, crop_h, x, y
 
 
-def _segment_shots(
-    samples: list["FaceSample"], clip_duration: float
-) -> list[tuple[float, float, list["FaceSample"]]]:
-    """Group face samples into shots delimited by scene cuts.
-
-    Returns a list of ``(shot_start, shot_end, shot_samples)`` in seconds
-    relative to the clip. Cuts that would create a shot shorter than
-    ``SCENE_MIN_SHOT_SEC`` are merged into the previous shot (debounces rapid
-    cuts and detection noise). Samples with no face (cx < 0) stay attached to
-    their shot so a shot's median is computed only from its real detections.
-    """
-    if not samples:
-        return [(0.0, clip_duration, [])]
-
-    # Build raw shot boundaries from cut flags.
-    boundaries = [s.t for s in samples if s.is_cut and s.t > 1e-6]
-    # Always include clip start; dedupe and sort.
-    bounds = sorted({0.0, *boundaries})
-
-    # Merge boundaries that are too close together (min shot length).
-    merged: list[float] = [bounds[0]]
-    for b in bounds[1:]:
-        if b - merged[-1] >= SCENE_MIN_SHOT_SEC:
-            merged.append(b)
-    merged.append(clip_duration)
-
-    shots: list[tuple[float, float, list[FaceSample]]] = []
-    for i in range(len(merged) - 1):
-        s0, s1 = merged[i], merged[i + 1]
-        in_shot = [s for s in samples if s0 <= s.t < s1]
-        shots.append((s0, s1, in_shot))
-    return shots
-
-
-def _shot_face_center(shot_samples: list["FaceSample"]) -> Optional[tuple[float, float]]:
-    """Median (cx, cy) of the faces detected within a shot, or None if no face.
-
-    Median (not mean) so a couple of stray detections on the wrong person don't
-    drag the framing; within a single shot the dominant face is stable.
-    """
-    xs = sorted(s.cx for s in shot_samples if s.cx >= 0.0)
-    ys = sorted(s.cy for s in shot_samples if s.cy >= 0.0)
-    if not xs:
-        return None
-    mid = len(xs) // 2
-    cx = xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2.0
-    cy = ys[mid] if len(ys) % 2 else (ys[mid - 1] + ys[mid]) / 2.0
-    return cx, cy
-
-
 def _reframe_real(
     rank: int, start: float, end: float, speakers: list[str],
     raw: Path, vertical: Path,
 ) -> CropPlan:
-    """v2 MVP reframe: per-shot MediaPipe face framing -> 9:16 via libx264.
+    """v2 MVP reframe: time-windowed face-follow (+ two-shot widen) -> 9:16.
 
     Opus.pro-style composition on the free CPU path:
-      1. Sample the raw clip (~every 5th frame) with MediaPipe face detection,
-         recording each dominant face's (x, y) center *and* detecting scene cuts
-         by frame-difference.
-      2. Segment the clip into shots at those cuts and, per shot, compute a 9:16
-         crop window centered horizontally on that shot's median face and
-         positioned so the face sits in the upper third (FACE_VERTICAL_ANCHOR) —
-         so every camera angle is well-framed and heads aren't cut off.
-      3. Render one ffmpeg pass with a time-switched ``crop`` (piecewise-constant
-         x/y per shot) -> ``scale=1080:1920`` on ``-c:v libx264`` (CPU, no nvenc).
+      1. Sample the raw clip (~every 5th frame) with MediaPipe, recording EVERY
+         face's center per frame + detecting scene cuts by frame-difference.
+      2. Bin samples into short time windows (WINDOW_SEC). Per window: if two
+         faces are spread far apart (a zoomed-out two-shot), WIDEN the window to
+         keep both; else tight-frame the dominant face. Centers/widths are
+         EMA-smoothed window-to-window (calm pan/zoom) and reset on scene cuts.
+      3. Because ffmpeg's ``crop`` evaluates w/h only once, we render at a FIXED
+         window sized to the widest moment (so a two-shot is never cut) and
+         animate x/y to follow the action, then ``scale=1080:1920`` on libx264.
 
-    Fallbacks: a shot with no detected face inherits the nearest framed shot's
-    window (or center crop if none); when OpenCV/MediaPipe can't run we center
-    crop the whole clip; when ffmpeg is absent we write a placeholder so mock/CI
-    stays green.
+    Fallbacks: faceless windows hold the last framing; when OpenCV/MediaPipe
+    can't run we center-crop; when ffmpeg is absent we write a placeholder so
+    mock/CI stays green.
 
     # PHASE 2: smooth per-frame virtual camera (sendcmd) + LR-ASD active-speaker
-    # tracking + h264_nvenc — see module docstring and fd_clips_v2.md Part 5.
+    # (follow the *talker*, not the biggest face) + h264_nvenc — see fd_clips_v2.
     """
     import subprocess
 
@@ -628,41 +740,58 @@ def _reframe_real(
 
     samples = _sample_faces(raw) if have_clip else None
 
-    keyframes: list[CropKeyframe] = []
     mode = "center-fallback"
     geom_note = f"center crop {crop_w}x{crop_h}@x={center_x} (no face / no pixels)"
 
-    if samples:
-        shots = _segment_shots(samples, clip_duration)
-        # First pass: framed window per shot (None where no face in that shot).
-        windows: list[Optional[tuple[int, int]]] = []  # (x, y) per shot
-        for _s0, _s1, shot_samples in shots:
-            face = _shot_face_center(shot_samples)
-            if face is None:
-                windows.append(None)
-            else:
-                _w, _h, x, y = _crop_window_for_face(face[0], face[1], src_w, src_h)
-                windows.append((x, y))
-        # Second pass: fill faceless shots from the nearest framed neighbour.
-        if any(w is not None for w in windows):
-            _fill_missing_windows(windows, (center_x, center_y))
-            for (s0, _s1, _ss), win in zip(shots, windows):
-                x, y = win  # type: ignore[misc]
-                keyframes.append(CropKeyframe(t=round(s0, 3), x=x, y=y,
-                                              width=crop_w, height=crop_h))
-            distinct = len({(kf.x, kf.y) for kf in keyframes})
-            mode = "per-shot-face" if len(keyframes) > 1 else "active-speaker"
-            geom_note = (
-                f"{len(keyframes)} shot(s), {distinct} distinct frame(s); "
-                f"face crop {crop_w}x{crop_h}, upper-third vertical anchor"
-            )
+    # Time-windowed follow + two-shot widen → a smoothed crop path.
+    keyframes = _build_keyframes(samples, clip_duration, src_w, src_h) if samples else []
 
     if not keyframes:
         # No usable face data anywhere → single centered window.
         keyframes = [CropKeyframe(t=0.0, x=center_x, y=center_y,
                                   width=crop_w, height=crop_h)]
+        mode = "center-fallback"
+    else:
+        widened = any(kf.width > crop_w for kf in keyframes)
+        if len(keyframes) == 1:
+            mode = "two-shot" if widened else "active-speaker"
+        else:
+            mode = "two-shot-follow" if widened else "face-follow"
+
+    # ffmpeg's crop evaluates w/h ONCE at init but x/y PER FRAME. So we use a
+    # FIXED crop window = the widest any keyframe needs (guarantees a two-shot is
+    # never cut), and animate only x/y to follow the action. Height tracks that
+    # fixed width to stay 9:16. The (smaller) per-window widths still drive the
+    # path's x so single-face moments stay centered within the wider window.
+    fixed_w = max(kf.width for kf in keyframes)
+    fixed_w = min(fixed_w, src_w)
+    fixed_w -= fixed_w % 2
+    fixed_h = min(src_h, int(round(fixed_w * TARGET_H / TARGET_W)))
+    fixed_h -= fixed_h % 2
+    # Re-clamp each keyframe's x/y to the fixed window so it always fits.
+    fixed_kfs: list[CropKeyframe] = []
+    for kf in keyframes:
+        # Re-center the fixed window on this keyframe's window center.
+        kf_cx = kf.x + kf.width / 2.0
+        kf_cy = kf.y + kf.height / 2.0
+        nx = int(round(kf_cx - fixed_w / 2.0))
+        ny = int(round(kf_cy - fixed_h / 2.0))
+        nx = max(0, min(src_w - fixed_w, nx))
+        ny = max(0, min(src_h - fixed_h, ny))
+        fixed_kfs.append(CropKeyframe(t=kf.t, x=nx, y=ny, width=fixed_w, height=fixed_h))
+    # Collapse identical consecutive frames after re-clamping.
+    keyframes = []
+    for kf in fixed_kfs:
+        if keyframes and (kf.x, kf.y) == (keyframes[-1].x, keyframes[-1].y):
+            continue
+        keyframes.append(kf)
+    crop_w, crop_h = fixed_w, fixed_h
 
     scene_cuts = [kf.t for kf in keyframes if kf.t > 1e-6]
+    geom_note = (
+        f"{len(keyframes)} keyframe(s); fixed {crop_w}x{crop_h} window "
+        f"follows face(s), upper-third anchor ({mode})"
+    )
     x_expr = _keyframes_to_ffmpeg_expr(keyframes, "x")
     y_expr = _keyframes_to_ffmpeg_expr(keyframes, "y")
     if len(keyframes) == 1:
@@ -670,7 +799,7 @@ def _reframe_real(
         vf = (f"crop={crop_w}:{crop_h}:{kf.x}:{kf.y},"
               f"scale={TARGET_W}:{TARGET_H}")
     else:
-        # Time-switched crop: x/y change at shot boundaries (piecewise-constant).
+        # Time-switched crop: x/y change at window boundaries (piecewise-constant).
         vf = (f"crop={crop_w}:{crop_h}:x='{x_expr}':y='{y_expr}',"
               f"scale={TARGET_W}:{TARGET_H}")
 
@@ -705,31 +834,6 @@ def _reframe_real(
             "LR-ASD active-speaker + smooth pan are the Phase-2 upgrade."
         ),
     )
-
-
-def _fill_missing_windows(
-    windows: list[Optional[tuple[int, int]]], default: tuple[int, int]
-) -> None:
-    """In-place fill ``None`` windows from the nearest non-None neighbour.
-
-    Forward-fill then backward-fill; any still-empty (no framed shot at all on
-    one side) takes ``default`` (the centered window).
-    """
-    last: Optional[tuple[int, int]] = None
-    for i, w in enumerate(windows):
-        if w is not None:
-            last = w
-        elif last is not None:
-            windows[i] = last
-    nxt: Optional[tuple[int, int]] = None
-    for i in range(len(windows) - 1, -1, -1):
-        if windows[i] is not None:
-            nxt = windows[i]
-        elif nxt is not None:
-            windows[i] = nxt
-    for i, w in enumerate(windows):
-        if w is None:
-            windows[i] = default
 
 
 def _keyframes_to_ffmpeg_expr(keyframes: list[CropKeyframe], axis: str) -> str:
