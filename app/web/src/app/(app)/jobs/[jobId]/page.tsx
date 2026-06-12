@@ -162,18 +162,43 @@ export default function JobProgressPage({
         })}
       </ol>
 
-      {error && (
-        <div className="space-y-3 rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
-          <p className="font-semibold text-red-300">This job couldn&apos;t finish</p>
-          <p className="break-words text-red-200/90">{error}</p>
-          <a
-            href="/new"
-            className="inline-block rounded-lg bg-red-500/20 px-4 py-2 font-medium text-red-100 hover:bg-red-500/30"
-          >
-            ← Try another video
-          </a>
-        </div>
-      )}
+      {error && (() => {
+        const needsUpgrade = /upgrade|plan|too long|longer videos/i.test(error);
+        return needsUpgrade ? (
+          <div className="space-y-3 rounded-2xl border border-brand/40 bg-brand/10 p-5 text-sm">
+            <p className="text-base font-semibold text-white">Video too long for the Free plan</p>
+            <p className="break-words text-white/80">{error}</p>
+            <p className="text-xs text-white/50">
+              Your credit was refunded. Longer videos need a paid plan.
+            </p>
+            <div className="flex flex-wrap gap-3 pt-1">
+              <a
+                href="/billing"
+                className="inline-block rounded-lg bg-brand px-4 py-2 font-semibold text-white shadow-glow hover:bg-brand-600"
+              >
+                ✦ Upgrade plan
+              </a>
+              <a
+                href="/new"
+                className="inline-block rounded-lg border border-ink-600 px-4 py-2 font-medium text-white/80 hover:border-brand hover:text-white"
+              >
+                Try a shorter video
+              </a>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3 rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
+            <p className="font-semibold text-red-300">This job couldn&apos;t finish</p>
+            <p className="break-words text-red-200/90">{error}</p>
+            <a
+              href="/new"
+              className="inline-block rounded-lg bg-red-500/20 px-4 py-2 font-medium text-red-100 hover:bg-red-500/30"
+            >
+              ← Try another video
+            </a>
+          </div>
+        );
+      })()}
     </div>
   );
 }

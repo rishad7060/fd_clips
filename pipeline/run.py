@@ -54,6 +54,33 @@ STAGE_PROGRESS = {
 _JSON_PROGRESS = False
 
 
+# Free-plan source-length cap. Groq's ~25MB upload at 64 kbps mono mp3 is ~52
+# min of audio; we cap a little under that so the gate fires BEFORE the upload
+# fails, and present it as a plan limit (longer videos = paid, like Opus/Vizard).
+FREE_MAX_SOURCE_SEC = 45 * 60  # 45 minutes
+
+
+class PipelineUserError(Exception):
+    """An error meant to be shown to the END USER (not a stack trace).
+
+    ``code`` is a stable machine string the UI can switch on (e.g. to show an
+    'Upgrade' button); ``message`` is the human-friendly text.
+    """
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.user_message = message
+
+
+def _emit_error(code: str, message: str) -> None:
+    """Emit one machine-readable error line (only in --json-progress mode)."""
+    if not _JSON_PROGRESS:
+        return
+    print("@@ERROR@@ " + json.dumps({"type": "error", "code": code,
+                                     "message": message}), flush=True)
+
+
 def _emit_progress(stage: str, status: str, message: str) -> None:
     """Emit one machine-readable progress line (only in --json-progress mode)."""
     if not _JSON_PROGRESS:
@@ -77,6 +104,29 @@ def _load_state(ws: Path) -> dict[str, Any]:
 
 def _save_state(ws: Path, state: dict[str, Any]) -> None:
     (ws / "run_state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+def _enforce_length_limit(ws: Path) -> None:
+    """Raise PipelineUserError('video_too_long') when the source is over the
+    free-plan length cap. No-op in MOCK_MODE or when duration is unknown."""
+    settings = get_settings()
+    if settings.mock_mode:
+        return
+    meta_file = ws / "source.meta.json"
+    if not meta_file.exists():
+        return
+    try:
+        duration = float(json.loads(meta_file.read_text(encoding="utf-8")).get("duration", 0.0))
+    except (json.JSONDecodeError, OSError, ValueError, TypeError):
+        return
+    if duration > FREE_MAX_SOURCE_SEC:
+        mins = int(duration // 60)
+        cap_mins = FREE_MAX_SOURCE_SEC // 60
+        raise PipelineUserError(
+            "video_too_long",
+            f"This video is {mins} min long. The Free plan handles videos up to "
+            f"{cap_mins} min. Upgrade your plan to process longer videos.",
+        )
 
 
 def _run_stage(
@@ -126,6 +176,13 @@ def run_pipeline(
     print("=" * 70)
 
     _run_stage("ingest", lambda: ingest.ingest(source, job_id), ws, state, force)
+
+    # Free-plan length gate: long videos exceed the free transcription upload
+    # limit. Fail early (right after ingest, before the slow audio extract +
+    # upload) with a clear UPGRADE message instead of a raw 25MB error deep in
+    # transcribe. MOCK_MODE skips the gate (fixtures are short).
+    _enforce_length_limit(ws)
+
     _run_stage("transcribe", lambda: transcribe.transcribe(job_id), ws, state, force)
     _run_stage(
         "score", lambda: score_clips.score_clips(job_id, top_n=clip_count),
@@ -284,7 +341,14 @@ def _main() -> None:
         except (json.JSONDecodeError, OSError) as exc:
             print(f"[run] ignoring --style-json ({exc})")
 
-    run_pipeline(source, args.job_id, clip_count, force=args.force)
+    try:
+        run_pipeline(source, args.job_id, clip_count, force=args.force)
+    except PipelineUserError as exc:
+        # A clean, user-facing failure (e.g. video too long). Emit a structured
+        # @@ERROR@@ line the worker forwards to the UI, then exit non-zero.
+        _emit_error(exc.code, exc.user_message)
+        print(f"[error] {exc.code}: {exc.user_message}")
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":

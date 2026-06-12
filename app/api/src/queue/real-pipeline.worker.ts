@@ -177,11 +177,22 @@ export class RealPipelineWorker implements JobWorker {
       let result: { rows: PipelineResultRow[] } | null = null;
       let clipsReady = 0;
       let settled = false;
+      // A clean, user-facing error emitted by the pipeline (e.g. video too long).
+      let userError: { code: string; message: string } | null = null;
 
       const handleLine = (line: string): void => {
         const trimmed = line.trim();
         if (!trimmed) return;
-        if (trimmed.startsWith('@@PROGRESS@@ ')) {
+        if (trimmed.startsWith('@@ERROR@@ ')) {
+          try {
+            userError = JSON.parse(trimmed.slice('@@ERROR@@ '.length)) as {
+              code: string;
+              message: string;
+            };
+          } catch {
+            /* ignore malformed error line */
+          }
+        } else if (trimmed.startsWith('@@PROGRESS@@ ')) {
           const json = trimmed.slice('@@PROGRESS@@ '.length);
           try {
             const p = JSON.parse(json) as PipelineProgress;
@@ -237,6 +248,13 @@ export class RealPipelineWorker implements JobWorker {
         if (stdoutBuf.trim()) handleLine(stdoutBuf);
         if (code === 0) {
           resolve(result);
+        } else if (userError) {
+          // Clean user-facing failure (e.g. video too long → upgrade). Surface
+          // the friendly message to the UI instead of a raw exit code/trace.
+          this.logger.warn(`Pipeline user error for ${jobId}: ${userError.code} — ${userError.message}`);
+          const err = new Error(userError.message) as Error & { code?: string };
+          err.code = userError.code;
+          reject(err);
         } else {
           if (stderrTail.trim()) {
             this.logger.error(`Pipeline stderr for ${jobId}:\n${stderrTail.trim()}`);
