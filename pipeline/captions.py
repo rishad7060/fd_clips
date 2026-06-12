@@ -299,6 +299,74 @@ def _ass_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
 
 
+# ── Auto-fit caption sizing (keep big text on-screen) ───────────────────────
+PLAY_W = 1080  # ASS PlayResX (matches _ass_header)
+# Horizontal safe area: leave a margin each side so text never kisses the edge.
+SAFE_W = int(PLAY_W * 0.92)  # ~994 px usable
+# Average glyph advance as a fraction of font size. Bold sans caps run wide;
+# 0.62 is a deliberately CONSERVATIVE over-estimate so we never under-shrink and
+# clip. (Real per-glyph metrics would need a font lib; this is dependency-free.)
+_CHAR_W_FACTOR = 0.62
+# Don't shrink below this many px or captions get unreadable; instead the text
+# just gets the smallest allowed size (extreme single words are rare).
+_MIN_FONT = 40
+
+
+def _est_text_width(text: str, font_size: int) -> float:
+    """Conservatively estimate rendered width (px) of ``text`` at ``font_size``.
+
+    No font metrics: width ≈ chars × font_size × factor. Over-estimates so the
+    fit check errs toward shrinking rather than clipping.
+    """
+    return len(text) * font_size * _CHAR_W_FACTOR
+
+
+def _fit_font_size(text: str, base_size: int) -> int:
+    """Largest font size ≤ ``base_size`` at which ``text`` fits ``SAFE_W``.
+
+    Used per line so a long single word (e.g. NECESSARILY / COMPLICATED) shrinks
+    just enough to fit instead of running off both edges. Floored at ``_MIN_FONT``.
+    """
+    if not text:
+        return base_size
+    if _est_text_width(text, base_size) <= SAFE_W:
+        return base_size
+    fitted = int(SAFE_W / (len(text) * _CHAR_W_FACTOR))
+    return max(_MIN_FONT, min(base_size, fitted))
+
+
+def _wrap_words_to_width(
+    words: list[dict[str, Any]],
+    render: "Any",
+    base_size: int,
+    max_words: int,
+) -> list[list[dict[str, Any]]]:
+    """Group words into lines that fit ``SAFE_W`` at ``base_size``.
+
+    ``render(word)`` returns the displayed string for width measurement (caps +
+    emoji applied). A line breaks when adding the next word would exceed the safe
+    width OR ``max_words``. A single word wider than the safe area still gets its
+    own line (it will be shrunk later by :func:`_fit_font_size`).
+    """
+    lines: list[list[dict[str, Any]]] = []
+    cur: list[dict[str, Any]] = []
+    cur_text = ""
+    for w in words:
+        disp = render(w)
+        candidate = disp if not cur_text else f"{cur_text} {disp}"
+        too_wide = _est_text_width(candidate, base_size) > SAFE_W
+        too_many = len(cur) >= max_words
+        if cur and (too_wide or too_many):
+            lines.append(cur)
+            cur, cur_text = [w], disp
+        else:
+            cur.append(w)
+            cur_text = candidate
+    if cur:
+        lines.append(cur)
+    return lines
+
+
 def build_ass(
     words: list[dict[str, Any]],
     *,
@@ -317,10 +385,20 @@ def build_ass(
     st = _resolve_style(style) if style is not None else dict(DEFAULT_STYLE)
     header = _ass_header(st, rtl)
     max_words = int(st.get("max_words_per_line", 5))
+    base_size = int(st.get("font_size", 84))
     emoji_on = bool(st.get("emoji")) and not rtl  # keep RTL lines clean
 
+    def _display(w: dict[str, Any], with_emoji: bool = False) -> str:
+        """Displayed text for a word (caps applied; emoji only if asked)."""
+        d = _style_word(str(w["word"]).strip(), st)
+        if with_emoji and _bare(str(w["word"])) in _EMOJI_KEYWORDS:
+            d = f"{d} {_EMOJI_KEYWORDS[_bare(str(w['word']))]}"
+        return d
+
+    # Wrap on WIDTH (not a fixed word count) so big text never runs off-screen.
+    lines = _wrap_words_to_width(words, _display, base_size, max_words)
+
     events: list[str] = []
-    lines = [words[i:i + max_words] for i in range(0, len(words), max_words)]
     for line_words in lines:
         if not line_words:
             continue
@@ -335,18 +413,25 @@ def build_ass(
                     emoji_idx = i
                     break
 
+        # Per-line auto-shrink: measure the full rendered line (with its emoji)
+        # and drop the font size if even this line is too wide (e.g. one very
+        # long word). Applied as an inline {\fsNN} override so other lines stay big.
+        line_text = " ".join(
+            _display(w, with_emoji=(i == emoji_idx))
+            for i, w in enumerate(line_words)
+        )
+        fitted_size = _fit_font_size(line_text, base_size)
+        size_tag = f"{{\\fs{fitted_size}}}" if fitted_size != base_size else ""
+
         tokens: list[str] = []
         for i, w in enumerate(line_words):
             ws = max(0.0, float(w["start"]) - clip_start)
             we = max(ws, float(w["end"]) - clip_start)
             k_cs = max(1, int(round((we - ws) * 100)))  # \k unit = centiseconds
-            display = _style_word(str(w["word"]).strip(), st)
-            display = _ass_escape(display)
-            if i == emoji_idx:
-                display = f"{display} {_EMOJI_KEYWORDS[_bare(str(w['word']))]}"
+            display = _ass_escape(_display(w, with_emoji=(i == emoji_idx)))
             tokens.append(f"{{\\k{k_cs}}}{display}")
 
-        text = " ".join(tokens)
+        text = size_tag + " ".join(tokens)
         if rtl:
             # Explicit RTL embedding so libass shapes the line right-to-left.
             text = f"{_RLE}{text}{_PDF}"
