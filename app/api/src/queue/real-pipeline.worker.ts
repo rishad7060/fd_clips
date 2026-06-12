@@ -163,6 +163,11 @@ export class RealPipelineWorker implements JobWorker {
         jobId,
         '--json-progress',
       ];
+      // Forward the user-chosen caption style (template/font/colour/alignment)
+      // so the captions stage renders it. run.py writes it to captions_style.json.
+      if (payload.style) {
+        args.push('--style-json', JSON.stringify(payload.style));
+      }
       this.logger.log(`Spawning ${this.pythonBin} ${args.join(' ')} (cwd=${this.repoRoot})`);
 
       const child = spawn(this.pythonBin, args, { cwd: this.repoRoot });

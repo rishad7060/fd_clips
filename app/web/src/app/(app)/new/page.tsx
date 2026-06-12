@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/lib/api";
-import { templateById } from "@/lib/templates";
-import type { CreateJobInput, Job } from "@/lib/types";
+import { STYLE_TEMPLATES, ALIGNMENT_OPTIONS, templateById } from "@/lib/templates";
+import type { ClipStyle, CreateJobInput, Job } from "@/lib/types";
 import { DEV_USER } from "@/lib/auth";
 
 /**
@@ -37,6 +37,10 @@ export default function NewClipsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<Job | null>(null);
+  // Caption look: template (default Hype/Hormozi) + vertical placement.
+  const [templateId, setTemplateId] = useState<string>(STYLE_TEMPLATES[0]!.id);
+  const [alignment, setAlignment] =
+    useState<NonNullable<ClipStyle["alignment"]>>("center");
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const canSubmit = !submitting && url.trim().length > 4 && emailOk;
@@ -49,8 +53,8 @@ export default function NewClipsPage() {
         source_type: "url",
         source_url: url.trim(),
         clip_count: MVP_CLIP_COUNT,
-        // One clean default caption style ships in the MVP (Phase-2 = picker).
-        style: templateById("default").style,
+        // User-chosen caption template + placement.
+        style: { ...templateById(templateId).style, alignment },
         email: email.trim(),
       };
       const job = await api.createJob(input);
@@ -169,6 +173,65 @@ export default function NewClipsPage() {
           <span className="text-lg font-bold text-brand-400">
             {MVP_CLIP_COUNT}
           </span>
+        </div>
+
+        {/* Caption style picker */}
+        <div className="mt-6">
+          <label className="mb-2 block text-sm font-medium text-white/80">
+            Caption style
+          </label>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {STYLE_TEMPLATES.map((t) => {
+              const active = t.id === templateId;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTemplateId(t.id)}
+                  title={t.description}
+                  className={`rounded-lg border p-2 text-left transition ${
+                    active
+                      ? "border-brand ring-1 ring-brand"
+                      : "border-ink-600 hover:border-ink-500"
+                  }`}
+                >
+                  <div
+                    className={`grid h-12 place-items-center rounded ${t.previewClass}`}
+                  >
+                    <span className="text-[11px] leading-none">
+                      Aa<span style={{ color: t.style.highlight_color }}>Bb</span>
+                    </span>
+                  </div>
+                  <p className="mt-1.5 truncate text-xs font-medium text-white/80">
+                    {t.name}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Caption placement */}
+        <div className="mt-5">
+          <label className="mb-2 block text-sm font-medium text-white/80">
+            Caption position
+          </label>
+          <div className="inline-flex rounded-lg border border-ink-600 bg-ink-950 p-1">
+            {ALIGNMENT_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setAlignment(opt.id)}
+                className={`rounded-md px-4 py-1.5 text-xs font-medium transition ${
+                  alignment === opt.id
+                    ? "bg-brand text-white"
+                    : "text-white/60 hover:text-white"
+                }`}
+              >
+                {opt.name}
+              </button>
+            ))}
+          </div>
         </div>
 
         {error && (

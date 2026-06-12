@@ -15,33 +15,40 @@ export interface StyleTemplate {
 
 export const STYLE_TEMPLATES: StyleTemplate[] = [
   {
-    id: "default",
-    name: "Bold Yellow",
-    description: "High-contrast karaoke pop. The FocalDive default.",
-    style: { template: "default", font: "Inter", highlight_color: "#FFE600" },
-    previewClass: "bg-black text-white",
-  },
-  {
     id: "hormozi",
-    name: "Hype",
-    description: "Chunky uppercase words with a punchy green highlight.",
-    style: { template: "hormozi", font: "Montserrat", highlight_color: "#22d3ee" },
-    previewClass: "bg-black text-white uppercase",
+    name: "Hype (Bold)",
+    description: "Big bold UPPERCASE words, 1–3 at a time, yellow active-word pop. The viral default.",
+    style: { template: "hormozi", font: "Arial", highlight_color: "#FFE600", alignment: "center" },
+    previewClass: "bg-black text-white uppercase font-extrabold",
   },
   {
-    id: "minimal",
-    name: "Clean Minimal",
-    description: "Lowercase, no shout. For talking-head explainers.",
-    style: { template: "minimal", font: "Inter", highlight_color: "#ffffff" },
-    previewClass: "bg-neutral-900 text-neutral-100",
+    id: "default",
+    name: "Clean Karaoke",
+    description: "Sentence-case, ~5 words per line, white text + colored sweep. Less shouty.",
+    style: { template: "default", font: "Arial", highlight_color: "#FFE600", alignment: "center" },
+    previewClass: "bg-black text-white font-bold",
   },
   {
     id: "neon",
     name: "Neon Pulse",
-    description: "Purple glow highlight for product / tech content.",
-    style: { template: "neon", font: "Poppins", highlight_color: "#a855f7" },
-    previewClass: "bg-[#0b0f1a] text-white",
+    description: "Bold uppercase with a purple glow highlight. For product / tech content.",
+    style: { template: "neon", font: "Arial", highlight_color: "#a855f7", alignment: "center" },
+    previewClass: "bg-[#0b0f1a] text-white uppercase font-extrabold",
   },
+  {
+    id: "minimal",
+    name: "Clean Minimal",
+    description: "Lowercase, thin, bottom-placed, no shout. For talking-head explainers.",
+    style: { template: "minimal", font: "Arial", highlight_color: "#ffffff", alignment: "bottom" },
+    previewClass: "bg-neutral-900 text-neutral-100",
+  },
+];
+
+/** Caption position options the user can pick in the app. */
+export const ALIGNMENT_OPTIONS: { id: "top" | "center" | "bottom"; name: string }[] = [
+  { id: "top", name: "Top" },
+  { id: "center", name: "Center" },
+  { id: "bottom", name: "Bottom" },
 ];
 
 export const DEFAULT_STYLE: ClipStyle = STYLE_TEMPLATES[0]!.style;

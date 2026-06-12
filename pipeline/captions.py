@@ -38,30 +38,153 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from config import get_settings  # type: ignore
 
-# Default karaoke style (overridable via captions_style.json in the workspace).
-DEFAULT_STYLE: dict[str, Any] = {
-    "font": "Arial",
-    "font_size": 64,
-    "primary_color": "&H00FFFFFF",     # text fill (white) — AABBGGRR
-    "highlight_color": "&H0000E6FF",   # karaoke sweep (yellow #FFE600)
-    "outline_color": "&H00000000",     # black outline
-    "outline": 3,
-    "shadow": 1,
-    "alignment": 2,                    # bottom-center (libass numpad)
-    "margin_v": 220,                   # lift above the very bottom for 9:16
-    "max_words_per_line": 5,
-    "uppercase_emphasis": True,        # UPPERCASE high-energy words
-    "emoji_keywords": {                # auto-emoji for configured keywords
-        "money": "💰", "fail": "💥", "love": "❤️", "win": "🏆",
-        "secret": "🤫", "important": "⭐",
+# Auto-emoji for configured keywords (subtle: at most one per line, see
+# build_ass). Curated so it punches up without looking cheesy.
+_EMOJI_KEYWORDS: dict[str, str] = {
+    "money": "💰", "cash": "💰", "rich": "💰", "profit": "💰",
+    "fire": "🔥", "insane": "🔥", "crazy": "🔥", "hot": "🔥",
+    "fail": "💥", "mistake": "💥", "wrong": "💥",
+    "love": "❤️", "heart": "❤️",
+    "win": "🏆", "winner": "🏆", "best": "🏆", "success": "🏆",
+    "secret": "🤫", "hack": "🤫",
+    "important": "⭐", "key": "⭐", "huge": "⭐",
+    "time": "⏰", "fast": "⚡", "speed": "⚡", "now": "⚡",
+    "idea": "💡", "think": "💡", "smart": "🧠", "brain": "🧠",
+    "growth": "📈", "grow": "📈", "up": "📈",
+    "ai": "🤖", "robot": "🤖", "future": "🚀", "launch": "🚀",
+}
+
+# Alignment names → libass numpad codes (X-center column: 8 top, 5 mid, 2 bottom).
+_ALIGNMENT_MAP: dict[str, int] = {"top": 8, "center": 5, "middle": 5, "bottom": 2}
+
+# ── Named caption templates (the app's style picker maps onto these) ─────────
+# Each is a full ASS style profile. The app sends {template, font,
+# highlight_color, alignment}; _resolve_style merges that onto the chosen
+# template so users can tweak font/colour/position without code.
+TEMPLATES: dict[str, dict[str, Any]] = {
+    # Big, chunky, UPPERCASE, 1–3 words on screen — the viral short-form look.
+    "hormozi": {
+        "font": "Arial",
+        "font_size": 120,
+        "bold": True,
+        "primary_color": "&H00FFFFFF",     # white fill — AABBGGRR
+        "highlight_color": "&H0000E6FF",    # active word: yellow #FFE600
+        "outline_color": "&H00000000",      # black outline
+        "outline": 8,
+        "shadow": 3,
+        "alignment": 5,                     # vertical center (opus-style)
+        "margin_v": 40,
+        "max_words_per_line": 3,
+        "all_caps": True,                   # whole line uppercase
+        "emoji": True,
+    },
+    # Sentence-case karaoke, ~5 words/line, white + colored sweep. Cleaner.
+    "default": {
+        "font": "Arial",
+        "font_size": 84,
+        "bold": True,
+        "primary_color": "&H00FFFFFF",
+        "highlight_color": "&H0000E6FF",
+        "outline_color": "&H00000000",
+        "outline": 5,
+        "shadow": 2,
+        "alignment": 5,
+        "margin_v": 60,
+        "max_words_per_line": 5,
+        "all_caps": False,
+        "emoji": True,
+    },
+    # Minimal: lowercase, thin, no shout. For explainer/talking-head.
+    "minimal": {
+        "font": "Arial",
+        "font_size": 72,
+        "bold": False,
+        "primary_color": "&H00FFFFFF",
+        "highlight_color": "&H00FFFFFF",    # no colour pop, just a bold sweep
+        "outline_color": "&H00000000",
+        "outline": 3,
+        "shadow": 1,
+        "alignment": 2,                     # bottom
+        "margin_v": 220,
+        "max_words_per_line": 5,
+        "all_caps": False,
+        "emoji": False,
+    },
+    # Neon: purple glow highlight for product/tech.
+    "neon": {
+        "font": "Arial",
+        "font_size": 96,
+        "bold": True,
+        "primary_color": "&H00FFFFFF",
+        "highlight_color": "&H00F755A8",    # purple #A855F7
+        "outline_color": "&H00301040",
+        "outline": 6,
+        "shadow": 2,
+        "alignment": 5,
+        "margin_v": 40,
+        "max_words_per_line": 3,
+        "all_caps": True,
+        "emoji": True,
     },
 }
 
-# Words that trigger uppercase emphasis when uppercase_emphasis is on.
+# Back-compat: the default template doubles as DEFAULT_STYLE for callers/tests.
+DEFAULT_STYLE: dict[str, Any] = {**TEMPLATES["hormozi"]}
+
+# Words that trigger per-word uppercase emphasis (when a line is NOT all_caps).
 _EMPHASIS_WORDS = {
     "never", "always", "everyone", "nobody", "huge", "insane", "crazy",
     "best", "worst", "must", "free", "now", "stop", "wrong", "killer",
 }
+
+
+def _hex_to_ass_color(hex_color: str) -> str:
+    """Convert a web ``#RRGGBB`` to an ASS ``&H00BBGGRR`` colour string.
+
+    ASS colours are little-endian BGR with an alpha byte. Already-ASS values
+    (starting ``&H``) pass through unchanged.
+    """
+    if not hex_color:
+        return "&H00FFFFFF"
+    if hex_color.startswith("&H") or hex_color.startswith("&h"):
+        return hex_color
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return "&H00FFFFFF"
+    rr, gg, bb = h[0:2], h[2:4], h[4:6]
+    return f"&H00{bb}{gg}{rr}".upper()
+
+
+def _resolve_style(raw: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Merge an app/JSON style onto its named template into a full ASS style.
+
+    Accepts either a full pipeline style (the keys in TEMPLATES) or the web
+    shape ``{template, font, highlight_color, alignment}``. The named template
+    is the base; recognised overrides (font, highlight colour, alignment) are
+    applied on top so the app's picker controls the look without code changes.
+    """
+    raw = raw or {}
+    template_id = str(raw.get("template", "hormozi")).lower()
+    base = dict(TEMPLATES.get(template_id, TEMPLATES["hormozi"]))
+
+    # Full pipeline-style overrides (anything already in template shape wins).
+    for k, v in raw.items():
+        if k in base and k not in ("template",):
+            base[k] = v
+
+    # Web-shape conveniences: font name, highlight colour (#hex), alignment name.
+    if raw.get("font"):
+        base["font"] = raw["font"]
+    if raw.get("highlight_color"):
+        base["highlight_color"] = _hex_to_ass_color(str(raw["highlight_color"]))
+    if raw.get("primary_color"):
+        base["primary_color"] = _hex_to_ass_color(str(raw["primary_color"]))
+    align = raw.get("alignment")
+    if isinstance(align, str):
+        base["alignment"] = _ALIGNMENT_MAP.get(align.lower(), base["alignment"])
+    elif isinstance(align, int):
+        base["alignment"] = align
+    return base
 
 _RTL_LANGS = {"ar", "fa", "ur", "he", "ps", "sd", "ckb"}
 # Unicode bidi controls for explicit RTL embedding.
@@ -124,7 +247,7 @@ def _ass_header(style: dict[str, Any], rtl: bool) -> str:
     play_w, play_h = 1080, 1920
     return (
         "[Script Info]\n"
-        "; FocalDive Clips karaoke captions\n"
+        "; YT Shorts Clips karaoke captions\n"
         "ScriptType: v4.00+\n"
         "WrapStyle: 2\n"
         "ScaledBorderAndShadow: yes\n"
@@ -138,9 +261,11 @@ def _ass_header(style: dict[str, Any], rtl: bool) -> str:
         "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
         "Alignment, MarginL, MarginR, MarginV, Encoding\n"
         # SecondaryColour is the pre-sweep karaoke colour (highlight target).
+        # Bold is -1 (on) / 0 (off) in ASS.
         f"Style: Karaoke,{style['font']},{style['font_size']},"
         f"{style['primary_color']},{style['highlight_color']},"
-        f"{style['outline_color']},&H64000000,-1,0,0,0,"
+        f"{style['outline_color']},&H64000000,"
+        f"{-1 if style.get('bold', True) else 0},0,0,0,"
         f"100,100,0,0,1,{style['outline']},{style['shadow']},"
         f"{style['alignment']},60,60,{style['margin_v']},1\n"
         "\n"
@@ -150,18 +275,23 @@ def _ass_header(style: dict[str, Any], rtl: bool) -> str:
     )
 
 
+def _bare(word: str) -> str:
+    """Lowercased word with surrounding punctuation stripped (for keyword match)."""
+    return word.strip(".,!?;:\"'—-").lower()
+
+
 def _style_word(word: str, style: dict[str, Any]) -> str:
-    """Apply emoji + uppercase-emphasis decoration to a word's display text."""
-    display = word
-    if style.get("uppercase_emphasis"):
-        bare = word.strip(".,!?;:\"'").lower()
-        if bare in _EMPHASIS_WORDS:
-            display = word.upper()
-    emoji_map: dict[str, str] = style.get("emoji_keywords", {})
-    bare = word.strip(".,!?;:\"'").lower()
-    if bare in emoji_map:
-        display = f"{display} {emoji_map[bare]}"
-    return display
+    """Apply caps decoration to a word's display text (emoji handled per-line).
+
+    ``all_caps`` uppercases every word (Hormozi/neon). Otherwise individual
+    high-energy words are uppercased for emphasis. Emoji are added once per line
+    in :func:`build_ass`, not here, so a line never gets cluttered.
+    """
+    if style.get("all_caps"):
+        return word.upper()
+    if _bare(word) in _EMPHASIS_WORDS:
+        return word.upper()
+    return word
 
 
 def _ass_escape(text: str) -> str:
@@ -184,9 +314,10 @@ def build_ass(
     is one Dialogue event whose text is a sequence of ``{\\kNN}word`` tokens so
     each word highlights as it is spoken.
     """
-    st = {**DEFAULT_STYLE, **(style or {})}
+    st = _resolve_style(style) if style is not None else dict(DEFAULT_STYLE)
     header = _ass_header(st, rtl)
     max_words = int(st.get("max_words_per_line", 5))
+    emoji_on = bool(st.get("emoji")) and not rtl  # keep RTL lines clean
 
     events: list[str] = []
     lines = [words[i:i + max_words] for i in range(0, len(words), max_words)]
@@ -196,12 +327,23 @@ def build_ass(
         line_start = max(0.0, float(line_words[0]["start"]) - clip_start)
         line_end = max(line_start, float(line_words[-1]["end"]) - clip_start)
 
+        # At most one emoji per line: the first keyword word in the line gets it.
+        emoji_idx = -1
+        if emoji_on:
+            for i, w in enumerate(line_words):
+                if _bare(str(w["word"])) in _EMOJI_KEYWORDS:
+                    emoji_idx = i
+                    break
+
         tokens: list[str] = []
-        for w in line_words:
+        for i, w in enumerate(line_words):
             ws = max(0.0, float(w["start"]) - clip_start)
             we = max(ws, float(w["end"]) - clip_start)
             k_cs = max(1, int(round((we - ws) * 100)))  # \k unit = centiseconds
-            display = _ass_escape(_style_word(str(w["word"]).strip(), st))
+            display = _style_word(str(w["word"]).strip(), st)
+            display = _ass_escape(display)
+            if i == emoji_idx:
+                display = f"{display} {_EMOJI_KEYWORDS[_bare(str(w['word']))]}"
             tokens.append(f"{{\\k{k_cs}}}{display}")
 
         text = " ".join(tokens)
@@ -217,11 +359,19 @@ def build_ass(
 
 
 def _load_style(ws: Path) -> dict[str, Any]:
-    """Load captions_style.json from the workspace if present, else defaults."""
+    """Load the app/job style from captions_style.json, else the default template.
+
+    Returns the RAW style dict (web shape ``{template, font, highlight_color,
+    alignment}`` or a full pipeline style); :func:`build_ass` resolves it onto a
+    named template via :func:`_resolve_style`.
+    """
     style_file = ws / "captions_style.json"
     if style_file.exists():
-        return {**DEFAULT_STYLE, **json.loads(style_file.read_text(encoding="utf-8"))}
-    return dict(DEFAULT_STYLE)
+        try:
+            return json.loads(style_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {"template": "hormozi"}
 
 
 def _words_in_range(segments: list[dict], start: float, end: float) -> list[dict]:
@@ -401,7 +551,7 @@ def _selftest() -> None:
 
 
 def _main() -> None:
-    parser = argparse.ArgumentParser(description="FocalDive captions stage")
+    parser = argparse.ArgumentParser(description="FD captions stage")
     parser.add_argument("--job-id", default="demo-job-0001")
     parser.add_argument("--top", type=int, default=None)
     parser.add_argument("--selftest", action="store_true",

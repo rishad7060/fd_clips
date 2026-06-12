@@ -1,6 +1,6 @@
 """Pipeline orchestrator — ingest -> transcribe -> score -> extract -> reframe -> captions.
 
-Runs the full FocalDive Clips pipeline for one source (URL or local file) and a
+Runs the full YT Shorts Clips pipeline for one source (URL or local file) and a
 requested clip count. Features:
 
 * Resumable: each stage writes a marker; completed stages are skipped on re-run
@@ -119,7 +119,7 @@ def run_pipeline(
         _save_state(ws, state)
 
     print("=" * 70)
-    print(f"FocalDive Clips pipeline  job={job_id}  clips={clip_count}  "
+    print(f"YT Shorts Clips pipeline  job={job_id}  clips={clip_count}  "
           f"mock={settings.mock_mode}")
     print(f"source: {source}")
     print(f"workspace: {ws}")
@@ -204,7 +204,7 @@ def _print_summary(summary: dict[str, Any], state: dict[str, Any]) -> None:
             pass
         console = Console()
         table = Table(
-            title=f"FocalDive Clips - {summary['job_id']} "
+            title=f"YT Shorts Clips - {summary['job_id']} "
                   f"({summary['clip_count']} clips, model={summary['model']})"
         )
         table.add_column("#", justify="right", style="bold")
@@ -242,7 +242,7 @@ def _print_summary(summary: dict[str, Any], state: dict[str, Any]) -> None:
 
 
 def _main() -> None:
-    parser = argparse.ArgumentParser(description="FocalDive Clips full pipeline")
+    parser = argparse.ArgumentParser(description="YT Shorts Clips full pipeline")
     parser.add_argument("source", nargs="?", default="mock://fixture-podcast",
                         help="YouTube/remote URL or local file path")
     parser.add_argument("--source", dest="source_opt", default=None,
@@ -255,6 +255,11 @@ def _main() -> None:
                         help="Ignore resume markers and re-run every stage")
     parser.add_argument("--json-progress", action="store_true",
                         help="Emit machine-readable @@PROGRESS@@/@@RESULT@@ lines for a parent process")
+    parser.add_argument("--style-json", default=None,
+                        help="Caption style as a JSON string (web shape "
+                             "{template,font,highlight_color,alignment}); written "
+                             "to workspace/{job_id}/captions_style.json for the "
+                             "captions stage.")
     args = parser.parse_args()
 
     global _JSON_PROGRESS
@@ -266,6 +271,19 @@ def _main() -> None:
 
     source = args.source_opt or args.source
     clip_count = max(1, min(10, args.clips))
+
+    # Persist the app-chosen caption style so the captions stage picks it up.
+    if args.style_json:
+        try:
+            style = json.loads(args.style_json)
+            ws = get_settings().workspace(args.job_id)
+            ws.mkdir(parents=True, exist_ok=True)
+            (ws / "captions_style.json").write_text(
+                json.dumps(style, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except (json.JSONDecodeError, OSError) as exc:
+            print(f"[run] ignoring --style-json ({exc})")
+
     run_pipeline(source, args.job_id, clip_count, force=args.force)
 
 

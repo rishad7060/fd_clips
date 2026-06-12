@@ -1,5 +1,5 @@
 /**
- * Shared wire types for FocalDive Clips web app.
+ * Shared wire types for YT Shorts Clips web app.
  *
  * These mirror CONTRACTS.md. Field names are snake_case to match the
  * pipeline/worker JSON and the queue payloads. The NestJS API may expose
@@ -41,6 +41,8 @@ export interface ClipStyle {
   template: string;
   font: string;
   highlight_color: string;
+  /** Caption vertical placement; the pipeline maps this to an ASS alignment. */
+  alignment?: "top" | "center" | "bottom";
 }
 
 /** Job, DB / API view (CONTRACTS §1). */
