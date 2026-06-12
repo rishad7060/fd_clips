@@ -40,9 +40,16 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from config import get_settings  # type: ignore
 
-MIN_CLIP_SEC = 20.0
+MIN_CLIP_SEC = 15.0   # research: 15-30s = highest retention; allow down to 15s
 MAX_CLIP_SEC = 90.0
+# Cross-platform sweet spot (full length bonus inside this band).
+IDEAL_MIN_SEC = 30.0
+IDEAL_MAX_SEC = 60.0
 MOCK_MODEL = "mock-heuristic-v1"
+
+# Penalty applied to a clip the LLM couldn't give a payoff_line for (an
+# "orphaned hook" — the #1 reason a clip fails). Heavy so these drop in ranking.
+NO_PAYOFF_PENALTY = 25
 
 # Heuristic keyword banks for the deterministic mock scorer.
 _HOOK_WORDS = {
@@ -71,6 +78,11 @@ def score_clips(job_id: str, top_n: Optional[int] = None) -> dict[str, Any]:
         result = _score_real(job_id, transcript)
     else:  # "mock"
         result = _score_mock(job_id, transcript)
+
+    # Normalize new schema fields + apply the "complete idea" adjustments:
+    # penalize orphaned hooks (no payoff) and reward the 30-60s length sweet spot.
+    result["candidates"] = [_normalize_candidate(c) for c in result["candidates"]]
+    _apply_completeness_and_length(result["candidates"])
 
     # Blend in the YouTube "most replayed" heatmap when the source has one, so
     # clips over the most-rewatched moments rank higher (real audience signal,
@@ -169,6 +181,69 @@ def _apply_replay_blend(ws: "Path", result: dict[str, Any]) -> None:
           f"(weight {REPLAY_WEIGHT:.0%}).")
 
 
+# ── Completeness (payoff) + length-tier scoring ─────────────────────────────
+
+def _normalize_candidate(c: dict[str, Any]) -> dict[str, Any]:
+    """Ensure every candidate carries the new schema fields with safe defaults.
+
+    LLM scorers should emit payoff_line/hook_type/hashtags/description; the mock
+    scorer and any model that omits them get sensible defaults so clips.json and
+    downstream stages always see a consistent shape.
+    """
+    c.setdefault("payoff_line", "")
+    c.setdefault("hook_type", "")
+    c.setdefault("hashtags", [])
+    c.setdefault("description", "")
+    # Coerce hashtags to a clean list of strings without leading '#'.
+    if isinstance(c.get("hashtags"), str):
+        c["hashtags"] = [t.strip() for t in c["hashtags"].split() if t.strip()]
+    c["hashtags"] = [str(t).lstrip("#").strip() for t in (c.get("hashtags") or [])][:5]
+    return c
+
+
+def _length_multiplier(duration: float) -> float:
+    """Score multiplier rewarding the 30-60s sweet spot, soft-penalizing outside.
+
+    30-60s = 1.0 (ideal); 15-30s = 0.95 (good if self-contained); 60-90s decays
+    ~0.04 per extra 10s; outside 15-90s = 0.6 (will usually be dropped anyway).
+    """
+    if IDEAL_MIN_SEC <= duration <= IDEAL_MAX_SEC:
+        return 1.0
+    if MIN_CLIP_SEC <= duration < IDEAL_MIN_SEC:
+        return 0.95
+    if IDEAL_MAX_SEC < duration <= MAX_CLIP_SEC:
+        return max(0.8, 1.0 - 0.04 * ((duration - IDEAL_MAX_SEC) / 10.0))
+    return 0.6
+
+
+def _apply_completeness_and_length(candidates: list[dict[str, Any]]) -> None:
+    """Adjust virality_score for payoff completeness and length, in place.
+
+    - Orphaned-hook penalty: a clip whose hook is a question/open-loop but has no
+      ``payoff_line`` inside it loses NO_PAYOFF_PENALTY points (the #1 failure
+      mode — 'cuts the question, not the answer').
+    - Length tier: multiply by _length_multiplier so 30-60s clips rank above
+      equally-good clips that are too short or too long.
+    """
+    open_loop_types = {"question", "curiosity_gap", "numbered_promise", "bold_claim"}
+    for c in candidates:
+        score = float(c.get("virality_score", 0))
+        hook_type = str(c.get("hook_type", "")).lower()
+        hook = str(c.get("hook_line", "")).strip()
+        payoff = str(c.get("payoff_line", "")).strip()
+        looks_open = hook_type in open_loop_types or hook.endswith("?")
+        # Penalize an open-loop hook with no resolving line inside the clip.
+        if looks_open and not payoff:
+            score -= NO_PAYOFF_PENALTY
+            c["reason"] = (
+                f"{str(c.get('reason','')).rstrip('.')}. "
+                "Penalized: hook opens a loop with no payoff line inside the clip."
+            ).strip()
+        duration = float(c["end"]) - float(c["start"])
+        score *= _length_multiplier(duration)
+        c["virality_score"] = max(0, min(100, int(round(score))))
+
+
 # ── Dedup / overlap helpers (shared by mock + real) ─────────────────────────
 
 def _overlap_fraction(a: dict, b: dict) -> float:
@@ -212,6 +287,12 @@ def _first_sentence(text: str) -> str:
     """Return the first sentence of a block of text (the hook line)."""
     parts = re.split(r"(?<=[.!?])\s+", text.strip())
     return parts[0].strip() if parts else text.strip()
+
+
+def _last_sentence(text: str) -> str:
+    """Return the last sentence of a block of text (the payoff line)."""
+    parts = [p for p in re.split(r"(?<=[.!?])\s+", text.strip()) if p.strip()]
+    return parts[-1].strip() if parts else text.strip()
 
 
 def _title_from(text: str) -> str:
@@ -322,14 +403,22 @@ def _score_mock(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
             text = " ".join(text_parts)
             score, reason = _score_window(text, duration)
             hook = _first_sentence(seg_i["text"])
+            # The window's last full sentence stands in as the payoff so the
+            # mock path isn't penalized by the orphaned-hook check; it does
+            # genuinely contain the segment's resolution.
+            payoff = _last_sentence(seg_j["text"])
             candidates.append(
                 {
                     "start": round(start, 2),
                     "end": round(end, 2),
                     "hook_line": hook,
+                    "payoff_line": payoff,
+                    "hook_type": "question" if hook.rstrip().endswith("?") else "story",
                     "virality_score": score,
                     "reason": reason,
                     "suggested_title": _title_from(seg_i["text"]),
+                    "hashtags": [],
+                    "description": "",
                 }
             )
             # Emit only the smallest complete window per anchor to maximise

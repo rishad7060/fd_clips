@@ -1,4 +1,4 @@
-# FocalDive Clips — Shared Contracts
+# YT Shorts Clips — Shared Contracts
 
 This file is the **single source of truth** for the JSON shapes that flow between the
 four subsystems:
@@ -127,11 +127,16 @@ Produced by `pipeline/score_clips.py` (GPT-4o-mini against
 | Field             | Type          | Required | Notes |
 |-------------------|---------------|----------|-------|
 | `start`           | float (sec)   | yes      | Snaps to a sentence/segment boundary. |
-| `end`             | float (sec)   | yes      | `end - start` is 20–90s per the rubric. |
-| `hook_line`       | string        | yes      | The attention-grabbing opening line. |
-| `virality_score`  | int (0–100)   | yes      | Ranking score. |
+| `end`             | float (sec)   | yes      | `end - start` is 15–90s (ideal 30–60s) per the rubric. |
+| `hook_line`       | string        | yes      | The attention-grabbing opening line (verbatim). |
+| `payoff_line`     | string        | yes      | The line that DELIVERS the answer/insight (verbatim, inside the clip). Empty only when the scorer couldn't find one — such clips are penalized. |
+| `hook_type`       | string        | no       | One of: question, bold_claim, contrarian, curiosity_gap, story, numbered_promise, direct_address. |
+| `virality_score`  | int (0–100)   | yes      | Ranking score (after payoff/length/replay adjustments). |
+| `replay_score`    | int (0–100) \| null | no | This video's normalized "most replayed" intensity over the clip range; null when no YouTube heatmap. |
 | `reason`          | string        | yes      | Why it scored this way (rubric-grounded). |
 | `suggested_title` | string        | yes      | Short shareable title. |
+| `hashtags`        | string[]      | no       | 3–5 post hashtags (no `#`), for the social caption. |
+| `description`     | string        | no       | 1-sentence post caption for the clip. |
 
 Downstream stages (`extract` → `reframe` → `captions`) add render outputs but do **not**
 mutate these fields; rendered file references are tracked as R2 keys (see §5).
