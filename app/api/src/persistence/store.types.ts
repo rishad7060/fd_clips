@@ -126,6 +126,11 @@ export interface DataStore {
   // Clips
   createClip(input: CreateClipInput): Promise<ClipRecord>;
   listClips(organizationId: string, jobId?: string): Promise<ClipRecord[]>;
+  updateClip(
+    organizationId: string,
+    clipId: string,
+    patch: Partial<Pick<ClipRecord, 'start' | 'end'>>,
+  ): Promise<ClipRecord | null>;
 }
 
 export const DATA_STORE = Symbol('DATA_STORE');

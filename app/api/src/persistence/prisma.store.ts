@@ -236,4 +236,17 @@ export class PrismaStore implements DataStore {
     });
     return rows.map((r: any) => this.mapClip(r));
   }
+
+  async updateClip(
+    organizationId: string,
+    clipId: string,
+    patch: Partial<Pick<ClipRecord, 'start' | 'end'>>,
+  ): Promise<ClipRecord | null> {
+    const existing = await this.prisma.clip.findFirst({
+      where: { id: clipId, organizationId },
+    });
+    if (!existing) return null;
+    const c = await this.prisma.clip.update({ where: { id: clipId }, data: patch });
+    return this.mapClip(c);
+  }
 }

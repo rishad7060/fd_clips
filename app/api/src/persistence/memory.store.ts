@@ -183,4 +183,16 @@ export class MemoryStore implements DataStore {
       .filter((c) => c.organizationId === organizationId && (jobId ? c.jobId === jobId : true))
       .sort((a, b) => a.rank - b.rank);
   }
+
+  async updateClip(
+    organizationId: string,
+    clipId: string,
+    patch: Partial<Pick<ClipRecord, 'start' | 'end'>>,
+  ): Promise<ClipRecord | null> {
+    const clip = this.clips.get(clipId);
+    if (!clip || clip.organizationId !== organizationId) return null;
+    const updated = { ...clip, ...patch, updatedAt: now() };
+    this.clips.set(clipId, updated);
+    return updated;
+  }
 }
