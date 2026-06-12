@@ -136,3 +136,95 @@ Reference competitors: **Opus.pro** (OpusClip), **Vizard**, **Klap**,
 > Phasing: the roadmap (`fd_clips_v2.md` Part 5, `FocalDive_Clips_Complete_Roadmap.md`
 > Part 4) already maps most of these as revenue-triggered upgrades. This file is
 > the scoreboard to prioritise against.
+
+---
+
+# GO-TO-MARKET NOW: what to spend immediately to compete & launch
+
+_The point of the MVP was $0 fixed cost. That gets you **validating**, not_
+_**competing**. This section is the honest "what you must pay for NOW" to ship a_
+_product people compare to Opus and pay for — with the exact tool and price._
+
+## A. What "$0 stack" actually costs you in quality (why you can't stay free)
+
+| Free choice today | The hidden cost | Felt by the customer as |
+|---|---|---|
+| CPU libx264 render on VPS | 10–30 min/video, 1 video ties up the box | "Opus did it in 2 min, yours took 25" |
+| yt-dlp ≤720p (often 360p) | soft, upscaled clips | "looks low quality / blurry" |
+| MediaPipe face crop (no LR-ASD) | wrong/edge framing on 2-person | "it cut the other person out" |
+| Groq/Gemini free tiers | rate-limited; jobs queue/stall at volume | "stuck processing" |
+
+You can launch on free to get your **first 10 testimonials**. To **charge and
+retain**, you need the paid pieces below.
+
+## B. The IMMEDIATE spend (Tier 0 → launch & charge) — ~$50–90/mo + ~$0.10–0.30/video
+
+Buy these the week you turn on Stripe. Everything is variable/cheap and pays for
+itself from the first paid video.
+
+| # | Need it fixes | Tool to buy | Price | Why this one |
+|---|---|---|---|---|
+| 1 | **Speed + quality render** | **RunPod Serverless 4090** (Flex, scale-to-zero) | ~$0.00069/s ≈ **$0.05–0.20/video**, **$0 idle** | Same Docker image as the CPU worker; NVENC + GPU = minutes not 30 min. The single biggest "feels like Opus" lever. |
+| 2 | **Transcription at volume** | **Groq paid** OR self-host **faster-whisper** on the RunPod GPU | Groq ~**$0.04/hr audio**; self-host = GPU time only | Removes the free-tier rate limit that stalls jobs. |
+| 3 | **Clip scoring at volume** | **Gemini 2.5 Flash paid** (or GPT-4o-mini) | ~**$0.005–0.015/video** | Removes free daily-quota cap. |
+| 4 | **Sharper input** | _code change, $0_ — raise yt-dlp target to **≥1080p** in `ingest.py` | $0 | Stop shipping 360p. Do this first; it's free. |
+| 5 | **Commercial frontend** | **Vercel Pro** | **$20/mo** | Hobby tier ToS forbids commercial use the moment you charge. |
+| 6 | **Managed DB (reliability)** | **Neon** or **Supabase** Postgres | **$0–25/mo** | Backups + uptime once you have paying users' data. |
+| 7 | **Storage/delivery** | **Cloudflare R2** | **$0** to 10 GB, **$0.015/GB** after, **$0 egress** | Already in the stack; egress-free is decisive for video. |
+| 8 | **Email delivery** | **Resend** | **$0** to 3k/mo | Already wired in `worker.py`; wire the API path to trigger it. |
+| 9 | **Domain + emails** | domain + Google Workspace | **~$6–12/mo** | focaldive.com + support@ |
+
+**Tier-0 fixed cost: ≈ $50–90/mo.** Variable: **~$0.10–0.30/video** all-in
+(GPU + ASR + LLM). You charge ~$0.08–0.10/source-minute in credits → **every
+video is profitable from the first one.**
+
+## C. The COMPETE spend (Tier 1 — close the "feels like Opus" gap) — code/dev time, little extra cash
+
+These are mostly **engineering on infra you already pay for in Tier 0**, not new
+subscriptions. Do them in this order; each is a thing customers directly notice.
+
+| Priority | Gap it closes | What to build / buy | Extra cost |
+|---|---|---|---|
+| 1 | **Active-speaker tracking** (the #1 visible gap) | Integrate **LR-ASD** (open-source, free) into `reframe.py`; runs on the Tier-0 GPU | **$0** (GPU time only) |
+| 2 | **Animated captions** | Add pop/scale/slide word effects to the ASS generator (Submagic-style) | **$0** (code) |
+| 3 | **Editor UI** (trim + caption edit + re-render) | Wire the existing `POST /clips/render` endpoint to a real editor screen | **$0** (code) |
+| 4 | **Social copy** (title/hashtags/description) | One extra LLM call per clip (Gemini) | **~$0.001/clip** |
+| 5 | **Aspect ratios** 1:1 / 4:5 / 16:9 | render-param in pipeline | **$0** (code) |
+| 6 | **More caption templates** (10–20) | author more ASS style presets | **$0** (content) |
+
+## D. The RETAIN/SCALE spend (Tier 2 — only when MRR justifies it)
+
+| Trigger | Add | Cost |
+|---|---|---|
+| ~$500 MRR | Priority GPU lane for paid users | included |
+| ~$1.5k MRR | Always-on Community 4090 pod (baseline) + serverless overflow | **~$250/mo** (halves unit cost) |
+| Retention need | **Direct publish** to TikTok/Reels/Shorts (OAuth) + scheduler | dev time |
+| Retention need | **Analytics** (views/retention), **B-roll/stock** (Pexels free API → paid) | $0–low |
+| Business deals | **API / white-label** for agencies | dev time (margin engine) |
+
+## E. Three honest launch budgets
+
+| Plan | Monthly fixed | Per-video | Gets you | Verdict |
+|---|---|---|---|---|
+| **Stay free** | ~$0 + VPS | $0 | 10 beta testimonials only | Validation, **not** a sellable product |
+| **Tier 0 (recommended launch)** | **~$50–90** | **~$0.10–0.30** | Fast GPU render, 1080p, no rate-limit stalls, real email | **Charge confidently; profitable per video** |
+| **Tier 0 + Tier 1** | **~$50–90** (+ ~1–2 wks dev) | same | Active-speaker, animated captions, editor — "feels like Opus" | **Competes head-to-head in the niche** |
+
+## F. Going to market — the immediate motion (week-by-week)
+
+1. **This week (code, $0):** raise ingest to 1080p (`ingest.py`); wire the API
+   worker to upload→R2→Resend so the "email when done" actually fires.
+2. **Buy Tier 0** (≈$50–90/mo): point the worker at RunPod Serverless 4090; flip
+   Groq + Gemini to paid; Vercel Pro; domain.
+3. **Price it** (Stripe Payment Links, no code): e.g. **$9 = 10 videos**,
+   **$19 = 25 videos**, 2 free watermarked trials. Margin ≈ 30–90× unit cost.
+4. **Sell manually first** to 10 niche creators (Sri Lankan / GCC podcasters,
+   sermon channels, coaches). WhatsApp before/after demos. 3 of 10 saying "can I
+   pay for more?" = validated.
+5. **Then build Tier 1** (active-speaker + animated captions + editor), funded by
+   that first revenue — and now you're genuinely comparable to Opus for your niche.
+
+> **Bottom line:** ~**$50–90/month + ~$0.10–0.30/video** is the real cost to stop
+> being a demo and start being a product you can charge for **today**. The
+> "$0 forever" path is only for proving demand — it cannot compete on speed or
+> quality, which is exactly what customers compare against Opus.
