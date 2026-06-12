@@ -675,6 +675,56 @@ def _build_keyframes(
     return collapsed
 
 
+# ── Wide two-shot detection (blur-pad fallback) ─────────────────────────────
+# When the speaker sits far to one side of a WIDE frame for most of the clip,
+# a tight 9:16 crop leaves them looking at empty space and drops the (often
+# undetectable) conversation partner. In that case we fit the whole frame into
+# 9:16 with a blurred background instead — nobody is cut off.
+# A face is "off to a side" when its center is past this distance from the
+# middle (0.18 ≈ outside the central ~64%). 0.50 of frames being off-side marks
+# a clip where the subject lives near an edge — a tight crop would frame them
+# against empty space / drop the off-screen partner.
+WIDE_SHOT_OFFCENTER = 0.18
+WIDE_SHOT_MIN_FRAC = 0.30    # ...for at least this fraction of framed samples
+WIDE_SHOT_MIN_ASPECT = 1.7   # only for genuinely wide (≈16:9+) sources
+
+
+def _is_wide_two_shot(
+    samples: list["FaceSample"], src_w: int, src_h: int
+) -> bool:
+    """True when the clip reads as a wide two-shot the tight crop would ruin.
+
+    Heuristic (no second face needed — MediaPipe often can't see the far person):
+    the source is wide (≥~16:9) AND the single detected face sits consistently
+    off to one side (so centering it would crop out the rest of the scene / the
+    person they're talking to). For such clips we blur-pad the full frame.
+    """
+    if src_h == 0 or (src_w / src_h) < WIDE_SHOT_MIN_ASPECT:
+        return False
+    framed = [s for s in samples if s.cx >= 0.0]
+    if len(framed) < 4:
+        return False
+    offcenter = [abs(s.cx - 0.5) for s in framed]
+    off_frac = sum(1 for d in offcenter if d > WIDE_SHOT_OFFCENTER) / len(framed)
+    return off_frac >= WIDE_SHOT_MIN_FRAC
+
+
+def _blur_pad_vf() -> str:
+    """ffmpeg filtergraph: fit the full frame into 9:16 over a blurred fill.
+
+    The background is the source scaled to COVER 1080x1920 and heavily blurred;
+    the foreground is the full source scaled to FIT the width, centered. Keeps
+    both people visible (letterbox-style) without hard black bars.
+    """
+    return (
+        f"split[bg][fg];"
+        f"[bg]scale={TARGET_W}:{TARGET_H}:force_original_aspect_ratio=increase,"
+        f"crop={TARGET_W}:{TARGET_H},gblur=sigma=28[bgb];"
+        f"[fg]scale={TARGET_W}:-2[fgs];"
+        f"[bgb][fgs]overlay=(W-w)/2:(H-h)/2"
+    )
+
+
 def _window_to_window_px(
     cx_frac: float, cy_frac: float, w_frac: float, aspect: float,
     src_w: int, src_h: int,
@@ -742,6 +792,37 @@ def _reframe_real(
 
     mode = "center-fallback"
     geom_note = f"center crop {crop_w}x{crop_h}@x={center_x} (no face / no pixels)"
+
+    # ── Wide two-shot → blur-pad the whole frame (nobody cropped out) ──────
+    if samples and _is_wide_two_shot(samples, src_w, src_h):
+        vf = _blur_pad_vf()
+        mode = "fit-blur-pad"
+        keyframes = [CropKeyframe(t=0.0, x=0, y=0, width=src_w, height=src_h)]
+        geom_note = (
+            "wide two-shot: blur-padded full frame into 9:16 (both people kept)"
+        )
+        if not ffmpeg or not have_clip:
+            vertical.write_bytes(b"FOCALDIVE_MOCK_VERTICAL\x00")
+            print(f"    [no-ffmpeg] reframe skipped; intended blur-pad: {vf}")
+            return CropPlan(
+                rank=rank, mode=mode, target_width=TARGET_W, target_height=TARGET_H,
+                source_width=src_w, source_height=src_h, scene_cuts=[],
+                keyframes=keyframes, vertical_path=str(vertical), mock=False,
+                notes=f"ffmpeg/clip absent; wrote placeholder ({geom_note}).",
+            )
+        cmd = [
+            ffmpeg, "-y", "-i", str(raw), "-filter_complex", vf,
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-pix_fmt", "yuv420p", "-c:a", "aac", str(vertical),
+        ]
+        subprocess.run(cmd, check=True)
+        print(f"    [reframe] {geom_note}")
+        return CropPlan(
+            rank=rank, mode=mode, target_width=TARGET_W, target_height=TARGET_H,
+            source_width=src_w, source_height=src_h, scene_cuts=[],
+            keyframes=keyframes, vertical_path=str(vertical), mock=False,
+            notes=f"CPU {geom_note} -> {TARGET_W}x{TARGET_H} via libx264 (no GPU).",
+        )
 
     # Time-windowed follow + two-shot widen → a smoothed crop path.
     keyframes = _build_keyframes(samples, clip_duration, src_w, src_h) if samples else []
