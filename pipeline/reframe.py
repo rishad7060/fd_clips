@@ -74,6 +74,17 @@ FRAME_SAMPLE_STRIDE = 5     # run face detection on every Nth decoded frame
 EMA_ALPHA = 0.25            # crop-center smoothing weight (0.2-0.3 = calm camera)
 FACE_MIN_CONFIDENCE = 0.5   # MediaPipe min detection confidence
 
+# ── Per-shot framing (opus.pro-style) ───────────────────────────────────────
+# A new "shot" begins when the frame-to-frame mean-abs difference exceeds this
+# fraction of full scale (0..1). Higher = fewer cuts. ~0.30 catches hard cuts
+# between cameras without splitting on motion/lighting.
+SCENE_CUT_THRESHOLD = 0.30
+SCENE_MIN_SHOT_SEC = 0.8    # ignore cuts that would make a shot shorter than this
+# Vertical face placement: the face center sits this fraction down from the top
+# of the 9:16 window (upper third = ~0.33 → short-form-native composition with
+# headroom above and caption space below).
+FACE_VERTICAL_ANCHOR = 0.36
+
 
 @dataclass
 class CropKeyframe:
@@ -81,7 +92,9 @@ class CropKeyframe:
 
     t: float       # seconds, relative to clip start
     x: int         # left edge of the crop window in source pixels
-    width: int     # crop window width (height is full source height)
+    width: int     # crop window width
+    y: int = 0     # top edge of the crop window in source pixels
+    height: int = 0  # crop window height (0 = full source height, legacy)
 
 
 @dataclass
@@ -164,7 +177,7 @@ def _deterministic_plan(
         center = min(0.85, max(0.15, frac + 0.03 * ((rank % 3) - 1)))
         x = int(round(center * SRC_W - width / 2))
         x = max(0, min(max_x, x))
-        keyframes.append(CropKeyframe(t=t, x=x, width=width))
+        keyframes.append(CropKeyframe(t=t, x=x, width=width, y=0, height=SRC_H))
 
     return mode, scene_cuts, keyframes, notes
 
@@ -317,9 +330,10 @@ def _make_face_detector(mp: Any) -> Optional[tuple[Any, Any]]:
     """Build a face detector across both MediaPipe API generations.
 
     Returns ``(detect_fn, closer)`` where ``detect_fn(rgb_ndarray) ->
-    list[tuple[center_frac, area, score]]`` (one entry per detected face, all in
-    0..1 fractions of frame size), and ``closer()`` releases any resources.
-    Returns ``None`` when no usable detector can be constructed.
+    list[tuple[cx, cy, area, score]]`` (one entry per detected face; cx/cy are
+    the box-center fractions 0..1 of frame width/height, area is the box-area
+    fraction, score is detection confidence), and ``closer()`` releases any
+    resources. Returns ``None`` when no usable detector can be constructed.
 
     Tier 1: the classic ``mp.solutions.face_detection`` API (no model file).
     Tier 2: the newer Tasks ``FaceDetector`` (needs a cached .tflite model).
@@ -331,15 +345,16 @@ def _make_face_detector(mp: Any) -> Optional[tuple[Any, Any]]:
             model_selection=1, min_detection_confidence=FACE_MIN_CONFIDENCE
         )
 
-        def detect_classic(rgb: Any) -> list[tuple[float, float, float]]:
+        def detect_classic(rgb: Any) -> list[tuple[float, float, float, float]]:
             res = det.process(rgb)
-            out: list[tuple[float, float, float]] = []
+            out: list[tuple[float, float, float, float]] = []
             for d in res.detections or []:
                 box = d.location_data.relative_bounding_box
-                center = box.xmin + box.width / 2.0
+                cx = box.xmin + box.width / 2.0
+                cy = box.ymin + box.height / 2.0
                 area = max(0.0, box.width) * max(0.0, box.height)
                 score = d.score[0] if d.score else 0.0
-                out.append((center, area, score))
+                out.append((cx, cy, area, score))
             return out
 
         return detect_classic, det.close
@@ -363,44 +378,56 @@ def _make_face_detector(mp: Any) -> Optional[tuple[Any, Any]]:
     )
     det = vision.FaceDetector.create_from_options(options)
 
-    def detect_tasks(rgb: Any) -> list[tuple[float, float, float]]:
+    def detect_tasks(rgb: Any) -> list[tuple[float, float, float, float]]:
         h, w = rgb.shape[:2]
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         res = det.detect(mp_image)
-        out: list[tuple[float, float, float]] = []
+        out: list[tuple[float, float, float, float]] = []
         for d in res.detections or []:
             bb = d.bounding_box  # pixel coords
-            center = (bb.origin_x + bb.width / 2.0) / max(1, w)
+            cx = (bb.origin_x + bb.width / 2.0) / max(1, w)
+            cy = (bb.origin_y + bb.height / 2.0) / max(1, h)
             area = (bb.width / max(1, w)) * (bb.height / max(1, h))
             score = d.categories[0].score if d.categories else 0.0
-            out.append((center, area, score))
+            out.append((cx, cy, area, score))
         return out
 
     return detect_tasks, det.close
 
 
-def _smoothed_face_center_x(raw: Path, src_w: int, src_h: int) -> Optional[float]:
-    """Sample the clip with MediaPipe and return an EMA-smoothed face center x.
+@dataclass
+class FaceSample:
+    """One sampled frame's dominant-face position (fractions 0..1 of frame)."""
 
-    Opens ``raw`` with OpenCV, runs MediaPipe face detection on every
-    ``FRAME_SAMPLE_STRIDE``-th frame, and on each sampled frame picks the
-    *dominant* face (largest box area, breaking ties on detection score). The
-    dominant face's horizontal center (as a fraction 0..1 of frame width) is
-    fed through an exponential moving average (``EMA_ALPHA``) so the resulting
-    virtual-camera center is stable rather than jittery.
+    t: float            # seconds, relative to clip start
+    cx: float           # face center x as fraction of width
+    cy: float           # face center y as fraction of height
+    is_cut: bool        # True if a scene cut was detected at/just before this frame
 
-    Returns the smoothed center as a pixel x-coordinate in source space, or
-    ``None`` when OpenCV/MediaPipe can't open the clip or no face is detected in
-    any sample (caller then falls back to a centered crop).
 
-    Heavy/paid-ish deps (cv2, mediapipe) are imported lazily *inside* this
+def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
+    """Sample the clip with MediaPipe, returning per-frame dominant-face positions.
+
+    Opens ``raw`` with OpenCV and, on every ``FRAME_SAMPLE_STRIDE``-th frame,
+    runs MediaPipe face detection and records the *dominant* face's center (x and
+    y, as fractions of frame size) tagged with the frame timestamp. It also flags
+    scene cuts by comparing each sampled frame to the previous one (mean absolute
+    difference over a downscaled grayscale frame) — a cheap, dependency-free
+    stand-in for PySceneDetect so the crop can re-frame per shot.
+
+    Returns the list of samples (ordered by time), or ``None`` when OpenCV /
+    MediaPipe is unavailable or can't open the clip. An empty list means the clip
+    decoded but no face was found in any sample (caller centers the crop).
+
+    Heavy/paid-ish deps (cv2, mediapipe, numpy) are imported lazily *inside* this
     real-branch helper so the mock path stays import-free.
     """
     # PHASE 2: replace the single-largest-face heuristic with LR-ASD
-    # active-speaker tracking so the crop follows the talker, and emit a
-    # time-varying center instead of one EMA value — see fd_clips_v2.md Part 5.
+    # active-speaker tracking so the crop follows the *talker* per shot — see
+    # fd_clips_v2.md Part 5.
     try:
         import cv2  # lazy: real branch only
+        import numpy as np  # lazy: real branch only
         import mediapipe as mp  # lazy: real branch only
     except Exception as exc:  # pragma: no cover - depends on host env
         print(f"    [reframe] MediaPipe/OpenCV unavailable ({exc}); center crop.")
@@ -417,8 +444,12 @@ def _smoothed_face_center_x(raw: Path, src_w: int, src_h: int) -> Optional[float
         close_fn()
         return None
 
-    ema_center: Optional[float] = None  # fraction 0..1 of frame width
-    samples = 0
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    if fps <= 1e-3:
+        fps = 30.0
+
+    samples: list[FaceSample] = []
+    prev_small: Any = None
     try:
         frame_idx = 0
         while True:
@@ -428,25 +459,40 @@ def _smoothed_face_center_x(raw: Path, src_w: int, src_h: int) -> Optional[float
             if frame_idx % FRAME_SAMPLE_STRIDE != 0:
                 frame_idx += 1
                 continue
+            t = frame_idx / fps
             frame_idx += 1
+
+            # Scene-cut detection: mean-abs-diff vs the previous sampled frame on
+            # a tiny grayscale thumbnail (cheap, robust to small motion).
+            small = cv2.resize(
+                cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (64, 36)
+            ).astype(np.float32) / 255.0
+            is_cut = False
+            if prev_small is not None:
+                diff = float(np.mean(np.abs(small - prev_small)))
+                is_cut = diff > SCENE_CUT_THRESHOLD
+            prev_small = small
 
             # MediaPipe expects contiguous RGB.
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            faces = detect_fn(rgb)  # [(center_frac, area, score), ...]
+            faces = detect_fn(rgb)  # [(cx, cy, area, score), ...]
             if not faces:
+                # Still record the cut so a faceless shot boundary isn't lost,
+                # but mark no face (cx/cy = -1 → treated as "use neighbours").
+                if is_cut:
+                    samples.append(FaceSample(t=t, cx=-1.0, cy=-1.0, is_cut=True))
                 continue
 
             # Dominant face = largest box area; tie-break on detection score.
-            center_frac, _area, _score = max(faces, key=lambda f: (f[1], f[2]))
-            center_frac = min(1.0, max(0.0, center_frac))
-
-            if ema_center is None:
-                ema_center = center_frac
-            else:
-                ema_center = (
-                    EMA_ALPHA * center_frac + (1.0 - EMA_ALPHA) * ema_center
+            cx, cy = _dominant_face_xy(faces)
+            samples.append(
+                FaceSample(
+                    t=t,
+                    cx=min(1.0, max(0.0, cx)),
+                    cy=min(1.0, max(0.0, cy)),
+                    is_cut=is_cut,
                 )
-            samples += 1
+            )
     finally:
         cap.release()
         try:
@@ -454,46 +500,121 @@ def _smoothed_face_center_x(raw: Path, src_w: int, src_h: int) -> Optional[float
         except Exception:
             pass
 
-    if ema_center is None:
-        print("    [reframe] no face detected in any sample; center crop.")
-        return None
-
-    print(f"    [reframe] face-tracked {samples} sample(s); "
-          f"smoothed center={ema_center:.3f} of width.")
-    return ema_center * src_w
+    face_count = sum(1 for s in samples if s.cx >= 0.0)
+    cut_count = sum(1 for s in samples if s.is_cut)
+    print(f"    [reframe] sampled {len(samples)} frame(s); "
+          f"{face_count} with a face, {cut_count} scene cut(s).")
+    return samples
 
 
-def _crop_window_from_center(
-    center_x: float, src_w: int, src_h: int
-) -> tuple[int, int, int]:
-    """Build a 9:16 crop window centered on ``center_x``, clamped to the frame.
+def _dominant_face_xy(
+    faces: list[tuple[float, float, float, float]],
+) -> tuple[float, float]:
+    """Pick the dominant face and return its (cx, cy) center fractions.
 
-    Returns (crop_w, crop_h, x). Width/height use the same largest-fitting 9:16
-    rectangle as the center-crop fallback; only the horizontal offset changes to
-    follow the (smoothed) face center.
+    Dominant = largest box area, breaking ties on detection score. Each face is
+    ``(cx, cy, area, score)`` from ``_make_face_detector``.
+    """
+    cx, cy, _area, _score = max(faces, key=lambda f: (f[2], f[3]))
+    return cx, cy
+
+
+def _crop_window_for_face(
+    cx_frac: float, cy_frac: float, src_w: int, src_h: int
+) -> tuple[int, int, int, int]:
+    """Build a 9:16 crop window framing a face, clamped to the frame.
+
+    ``cx_frac``/``cy_frac`` are the face center as fractions 0..1 of source
+    width/height. The window is the largest 9:16 rectangle that fits the source;
+    it is positioned so the face is centered horizontally and sits at
+    ``FACE_VERTICAL_ANCHOR`` down from the top (upper-third short-form framing).
+    Both offsets are clamped so the window stays inside the frame.
+
+    Returns (crop_w, crop_h, x, y).
     """
     crop_w, crop_h, _ = _center_crop_geometry(src_w, src_h)
-    x = int(round(center_x - crop_w / 2.0))
-    x = max(0, min(src_w - crop_w, x))  # clamp to frame bounds
-    return crop_w, crop_h, x
+    face_x = cx_frac * src_w
+    face_y = cy_frac * src_h
+    x = int(round(face_x - crop_w / 2.0))
+    y = int(round(face_y - crop_h * FACE_VERTICAL_ANCHOR))
+    x = max(0, min(src_w - crop_w, x))
+    y = max(0, min(src_h - crop_h, y))
+    return crop_w, crop_h, x, y
+
+
+def _segment_shots(
+    samples: list["FaceSample"], clip_duration: float
+) -> list[tuple[float, float, list["FaceSample"]]]:
+    """Group face samples into shots delimited by scene cuts.
+
+    Returns a list of ``(shot_start, shot_end, shot_samples)`` in seconds
+    relative to the clip. Cuts that would create a shot shorter than
+    ``SCENE_MIN_SHOT_SEC`` are merged into the previous shot (debounces rapid
+    cuts and detection noise). Samples with no face (cx < 0) stay attached to
+    their shot so a shot's median is computed only from its real detections.
+    """
+    if not samples:
+        return [(0.0, clip_duration, [])]
+
+    # Build raw shot boundaries from cut flags.
+    boundaries = [s.t for s in samples if s.is_cut and s.t > 1e-6]
+    # Always include clip start; dedupe and sort.
+    bounds = sorted({0.0, *boundaries})
+
+    # Merge boundaries that are too close together (min shot length).
+    merged: list[float] = [bounds[0]]
+    for b in bounds[1:]:
+        if b - merged[-1] >= SCENE_MIN_SHOT_SEC:
+            merged.append(b)
+    merged.append(clip_duration)
+
+    shots: list[tuple[float, float, list[FaceSample]]] = []
+    for i in range(len(merged) - 1):
+        s0, s1 = merged[i], merged[i + 1]
+        in_shot = [s for s in samples if s0 <= s.t < s1]
+        shots.append((s0, s1, in_shot))
+    return shots
+
+
+def _shot_face_center(shot_samples: list["FaceSample"]) -> Optional[tuple[float, float]]:
+    """Median (cx, cy) of the faces detected within a shot, or None if no face.
+
+    Median (not mean) so a couple of stray detections on the wrong person don't
+    drag the framing; within a single shot the dominant face is stable.
+    """
+    xs = sorted(s.cx for s in shot_samples if s.cx >= 0.0)
+    ys = sorted(s.cy for s in shot_samples if s.cy >= 0.0)
+    if not xs:
+        return None
+    mid = len(xs) // 2
+    cx = xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2.0
+    cy = ys[mid] if len(ys) % 2 else (ys[mid - 1] + ys[mid]) / 2.0
+    return cx, cy
 
 
 def _reframe_real(
     rank: int, start: float, end: float, speakers: list[str],
     raw: Path, vertical: Path,
 ) -> CropPlan:
-    """v2 MVP reframe: MediaPipe face-detect smart crop -> 9:16 via libx264.
+    """v2 MVP reframe: per-shot MediaPipe face framing -> 9:16 via libx264.
 
-    We sample the raw clip every ~5th frame with MediaPipe face detection,
-    EMA-smooth the dominant face's center, and crop a static 9:16 window around
-    it (clamped to the frame). When no face is found — or OpenCV/MediaPipe is
-    unavailable — we fall back to a centered 9:16 crop. The window is then scaled
-    to 1080x1920 and encoded with ``-c:v libx264`` (CPU, no nvenc).
+    Opus.pro-style composition on the free CPU path:
+      1. Sample the raw clip (~every 5th frame) with MediaPipe face detection,
+         recording each dominant face's (x, y) center *and* detecting scene cuts
+         by frame-difference.
+      2. Segment the clip into shots at those cuts and, per shot, compute a 9:16
+         crop window centered horizontally on that shot's median face and
+         positioned so the face sits in the upper third (FACE_VERTICAL_ANCHOR) —
+         so every camera angle is well-framed and heads aren't cut off.
+      3. Render one ffmpeg pass with a time-switched ``crop`` (piecewise-constant
+         x/y per shot) -> ``scale=1080:1920`` on ``-c:v libx264`` (CPU, no nvenc).
 
-    When ffmpeg is genuinely unavailable we keep the placeholder behaviour so
-    mock/CI stays green even with MOCK_MODE=false.
+    Fallbacks: a shot with no detected face inherits the nearest framed shot's
+    window (or center crop if none); when OpenCV/MediaPipe can't run we center
+    crop the whole clip; when ffmpeg is absent we write a placeholder so mock/CI
+    stays green.
 
-    # PHASE 2: animated per-frame crop (sendcmd) + LR-ASD active-speaker
+    # PHASE 2: smooth per-frame virtual camera (sendcmd) + LR-ASD active-speaker
     # tracking + h264_nvenc — see module docstring and fd_clips_v2.md Part 5.
     """
     import subprocess
@@ -501,40 +622,69 @@ def _reframe_real(
     ffmpeg = _resolve_ffmpeg()
     src_w, src_h = _probe_dimensions(raw)
     have_clip = raw.exists() and raw.stat().st_size > 64
+    clip_duration = max(0.1, end - start)
+    crop_w, crop_h, center_x = _center_crop_geometry(src_w, src_h)
+    center_y = max(0, (src_h - crop_h) // 2)
 
-    # Decide the crop window: face-centered when we can read pixels, else center.
-    center_x: Optional[float] = None
-    if have_clip:
-        center_x = _smoothed_face_center_x(raw, src_w, src_h)
+    samples = _sample_faces(raw) if have_clip else None
 
-    if center_x is not None:
-        crop_w, crop_h, x = _crop_window_from_center(center_x, src_w, src_h)
-        mode = "active-speaker"  # dominant-face tracked (single-speaker MVP)
-        geom_note = (
-            f"MediaPipe face crop {crop_w}x{crop_h}@x={x} "
-            f"(center {center_x / src_w:.3f} of width)"
-        )
+    keyframes: list[CropKeyframe] = []
+    mode = "center-fallback"
+    geom_note = f"center crop {crop_w}x{crop_h}@x={center_x} (no face / no pixels)"
+
+    if samples:
+        shots = _segment_shots(samples, clip_duration)
+        # First pass: framed window per shot (None where no face in that shot).
+        windows: list[Optional[tuple[int, int]]] = []  # (x, y) per shot
+        for _s0, _s1, shot_samples in shots:
+            face = _shot_face_center(shot_samples)
+            if face is None:
+                windows.append(None)
+            else:
+                _w, _h, x, y = _crop_window_for_face(face[0], face[1], src_w, src_h)
+                windows.append((x, y))
+        # Second pass: fill faceless shots from the nearest framed neighbour.
+        if any(w is not None for w in windows):
+            _fill_missing_windows(windows, (center_x, center_y))
+            for (s0, _s1, _ss), win in zip(shots, windows):
+                x, y = win  # type: ignore[misc]
+                keyframes.append(CropKeyframe(t=round(s0, 3), x=x, y=y,
+                                              width=crop_w, height=crop_h))
+            distinct = len({(kf.x, kf.y) for kf in keyframes})
+            mode = "per-shot-face" if len(keyframes) > 1 else "active-speaker"
+            geom_note = (
+                f"{len(keyframes)} shot(s), {distinct} distinct frame(s); "
+                f"face crop {crop_w}x{crop_h}, upper-third vertical anchor"
+            )
+
+    if not keyframes:
+        # No usable face data anywhere → single centered window.
+        keyframes = [CropKeyframe(t=0.0, x=center_x, y=center_y,
+                                  width=crop_w, height=crop_h)]
+
+    scene_cuts = [kf.t for kf in keyframes if kf.t > 1e-6]
+    x_expr = _keyframes_to_ffmpeg_expr(keyframes, "x")
+    y_expr = _keyframes_to_ffmpeg_expr(keyframes, "y")
+    if len(keyframes) == 1:
+        kf = keyframes[0]
+        vf = (f"crop={crop_w}:{crop_h}:{kf.x}:{kf.y},"
+              f"scale={TARGET_W}:{TARGET_H}")
     else:
-        crop_w, crop_h, x = _center_crop_geometry(src_w, src_h)
-        mode = "center-fallback"
-        geom_note = f"center crop {crop_w}x{crop_h}@x={x} (no face / no pixels)"
-
-    # A single static keyframe describes the crop window. The Phase-2 animated
-    # planner would emit many keyframes; the renderer/CropPlan shape is identical.
-    keyframes = [CropKeyframe(t=0.0, x=x, width=crop_w)]
-    vf = f"crop={crop_w}:{crop_h}:{x}:0,scale={TARGET_W}:{TARGET_H}"
+        # Time-switched crop: x/y change at shot boundaries (piecewise-constant).
+        vf = (f"crop={crop_w}:{crop_h}:x='{x_expr}':y='{y_expr}',"
+              f"scale={TARGET_W}:{TARGET_H}")
 
     if not ffmpeg or not have_clip:
         # Graceful fallback: placeholder + logged intent, mock/CI stays green.
         intended = (
-            f"ffmpeg -y -i {raw} -vf {vf} "
+            f"ffmpeg -y -i {raw} -vf \"{vf}\" "
             f"-c:v libx264 -preset veryfast -crf 20 -c:a aac {vertical}"
         )
         vertical.write_bytes(b"FOCALDIVE_MOCK_VERTICAL\x00")
         print(f"    [no-ffmpeg] reframe skipped; intended: {intended}")
         return CropPlan(
             rank=rank, mode=mode, target_width=TARGET_W, target_height=TARGET_H,
-            source_width=src_w, source_height=src_h, scene_cuts=[],
+            source_width=src_w, source_height=src_h, scene_cuts=scene_cuts,
             keyframes=keyframes, vertical_path=str(vertical), mock=False,
             notes=f"ffmpeg/clip absent; wrote placeholder (intended: {geom_note}).",
         )
@@ -548,27 +698,58 @@ def _reframe_real(
 
     return CropPlan(
         rank=rank, mode=mode, target_width=TARGET_W, target_height=TARGET_H,
-        source_width=src_w, source_height=src_h, scene_cuts=[],
+        source_width=src_w, source_height=src_h, scene_cuts=scene_cuts,
         keyframes=keyframes, vertical_path=str(vertical), mock=False,
         notes=(
             f"CPU {geom_note} -> {TARGET_W}x{TARGET_H} via libx264 (no GPU). "
-            "LR-ASD active-speaker + animated crop are the Phase-2 upgrade."
+            "LR-ASD active-speaker + smooth pan are the Phase-2 upgrade."
         ),
     )
 
 
-def _keyframes_to_ffmpeg_x(keyframes: list[CropKeyframe]) -> str:
-    """Turn keyframes into a piecewise-constant ffmpeg x() expression on `t`."""
+def _fill_missing_windows(
+    windows: list[Optional[tuple[int, int]]], default: tuple[int, int]
+) -> None:
+    """In-place fill ``None`` windows from the nearest non-None neighbour.
+
+    Forward-fill then backward-fill; any still-empty (no framed shot at all on
+    one side) takes ``default`` (the centered window).
+    """
+    last: Optional[tuple[int, int]] = None
+    for i, w in enumerate(windows):
+        if w is not None:
+            last = w
+        elif last is not None:
+            windows[i] = last
+    nxt: Optional[tuple[int, int]] = None
+    for i in range(len(windows) - 1, -1, -1):
+        if windows[i] is not None:
+            nxt = windows[i]
+        elif nxt is not None:
+            windows[i] = nxt
+    for i, w in enumerate(windows):
+        if w is None:
+            windows[i] = default
+
+
+def _keyframes_to_ffmpeg_expr(keyframes: list[CropKeyframe], axis: str) -> str:
+    """Piecewise-constant ffmpeg crop expression on time ``t`` for x or y.
+
+    ``axis`` is ``"x"`` or ``"y"``. Each shot holds its window until the next
+    shot's start time, so the crop snaps to the new framing on each scene cut
+    (no interpolation — matches the per-shot composition we computed).
+    """
     if not keyframes:
         return "0"
-    expr = str(keyframes[-1].x)
+    val = (lambda kf: kf.x) if axis == "x" else (lambda kf: kf.y)
+    expr = str(val(keyframes[-1]))
     for kf in reversed(keyframes[:-1]):
-        expr = f"if(lt(t,{kf.t + 0.0001:.4f}),{kf.x},{expr})"
+        expr = f"if(lt(t,{kf.t + 0.0001:.4f}),{val(kf)},{expr})"
     return expr
 
 
 def _main() -> None:
-    parser = argparse.ArgumentParser(description="FocalDive vertical reframe stage")
+    parser = argparse.ArgumentParser(description="FD vertical reframe stage")
     parser.add_argument("--job-id", default="demo-job-0001")
     parser.add_argument("--top", type=int, default=None)
     args = parser.parse_args()
