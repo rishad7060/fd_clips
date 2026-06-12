@@ -70,45 +70,55 @@ export default function DashboardPage() {
 
       {jobs && jobs.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {jobs.map((job) => (
-            <Link
-              key={job.job_id}
-              href={
-                job.status === "completed"
-                  ? `/jobs/${job.job_id}/clips`
-                  : `/jobs/${job.job_id}`
-              }
-              className="group rounded-2xl border border-ink-700 bg-ink-900/60 p-5 transition hover:border-brand/60 hover:bg-ink-850"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="line-clamp-2 font-semibold text-white">
-                  {job.title ?? job.job_id}
-                </h3>
-                <StatusPill status={job.status} />
-              </div>
-              <p className="mt-2 text-xs text-ink-500">
-                {job.clip_count} clips requested · {formatRelative(job.created_at)}
-              </p>
-              {job.status !== "completed" && (
-                <div className="mt-4">
-                  <div className="h-1.5 overflow-hidden rounded-full bg-ink-700">
-                    <div
-                      className="h-full rounded-full bg-brand transition-all"
-                      style={{ width: `${job.progress}%` }}
-                    />
-                  </div>
-                  <p className="mt-1.5 text-xs text-white/60">
-                    {job.stage} · {job.progress}%
-                  </p>
+          {jobs.map((job) => {
+            const produced = job.clips_produced ?? 0;
+            const completedNoClips =
+              job.status === "completed" && produced === 0;
+            return (
+              <Link
+                key={job.job_id}
+                href={
+                  job.status === "completed"
+                    ? `/jobs/${job.job_id}/clips`
+                    : `/jobs/${job.job_id}`
+                }
+                className="group rounded-2xl border border-ink-700 bg-ink-900/60 p-5 transition hover:border-brand/60 hover:bg-ink-850"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="line-clamp-2 font-semibold text-white">
+                    {job.title ?? job.job_id}
+                  </h3>
+                  <StatusPill status={job.status} />
                 </div>
-              )}
-              {job.status === "completed" && (
-                <p className="mt-4 text-sm text-brand-400 group-hover:text-brand">
-                  View {job.clip_count} clips →
+                <p className="mt-2 text-xs text-ink-500">
+                  {job.clip_count} clips requested · {formatRelative(job.created_at)}
                 </p>
-              )}
-            </Link>
-          ))}
+                {job.status !== "completed" && (
+                  <div className="mt-4">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-ink-700">
+                      <div
+                        className="h-full rounded-full bg-brand transition-all"
+                        style={{ width: `${job.progress}%` }}
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs text-white/60">
+                      {job.stage} · {job.progress}%
+                    </p>
+                  </div>
+                )}
+                {job.status === "completed" && produced > 0 && (
+                  <p className="mt-4 text-sm text-brand-400 group-hover:text-brand">
+                    View {produced} clip{produced === 1 ? "" : "s"} →
+                  </p>
+                )}
+                {completedNoClips && (
+                  <p className="mt-4 text-sm text-ink-500 group-hover:text-white/70">
+                    No clips found — try another video →
+                  </p>
+                )}
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

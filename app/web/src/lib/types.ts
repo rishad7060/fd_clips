@@ -53,6 +53,8 @@ export interface Job {
   source_url?: string | null;
   source_key?: string | null;
   clip_count: number;
+  /** Clips actually produced (may be 0 on a completed job); != clip_count (requested). */
+  clips_produced?: number;
   style?: ClipStyle | null;
   status: JobStatus;
   progress: number;

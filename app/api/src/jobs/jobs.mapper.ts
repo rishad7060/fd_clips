@@ -16,9 +16,16 @@ export interface JobView {
   error: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Number of clips the pipeline ACTUALLY produced (rows in the Clip store),
+   * as opposed to `clipCount` which is how many were *requested*. A completed
+   * job can have 0 produced clips when the scorer found no standout moment, so
+   * the UI must use this — not clipCount — to label/route the card.
+   */
+  clipsProduced: number;
 }
 
-export function toJobView(job: JobRecord): JobView {
+export function toJobView(job: JobRecord, clipsProduced = 0): JobView {
   return {
     jobId: job.id,
     organizationId: job.organizationId,
@@ -34,5 +41,6 @@ export function toJobView(job: JobRecord): JobView {
     error: job.error,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
+    clipsProduced,
   };
 }

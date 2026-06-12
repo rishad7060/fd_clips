@@ -82,4 +82,24 @@ export class JobsService {
   async list(organizationId: string): Promise<JobRecord[]> {
     return this.store.listJobs(organizationId);
   }
+
+  /** How many clips a job actually produced (Clip rows), not how many requested. */
+  async clipsProduced(organizationId: string, jobId: string): Promise<number> {
+    const clips = await this.store.listClips(organizationId, jobId);
+    return clips.length;
+  }
+
+  /** Jobs paired with their actual produced-clip counts (for the dashboard). */
+  async listWithClipCounts(
+    organizationId: string,
+  ): Promise<Array<{ job: JobRecord; clipsProduced: number }>> {
+    const jobs = await this.store.listJobs(organizationId);
+    // One clips query scoped to the org, bucketed by jobId — avoids N round-trips.
+    const allClips = await this.store.listClips(organizationId);
+    const counts = new Map<string, number>();
+    for (const c of allClips) {
+      counts.set(c.jobId, (counts.get(c.jobId) ?? 0) + 1);
+    }
+    return jobs.map((job) => ({ job, clipsProduced: counts.get(job.id) ?? 0 }));
+  }
 }

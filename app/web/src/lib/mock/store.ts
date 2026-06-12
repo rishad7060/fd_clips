@@ -147,6 +147,12 @@ function tick(rec: MockJobRecord): void {
   job.updated_at = nowIso();
 }
 
+/** Job snapshot carrying the produced-clip count (0 until the job completes). */
+function withProduced(rec: MockJobRecord): Job {
+  const produced = rec.job.status === "completed" ? rec.clips.length : 0;
+  return { ...rec.job, clips_produced: produced };
+}
+
 function clipsReady(rec: MockJobRecord): number {
   // Clips become "ready" through the captions stage (80→100).
   const p = rec.job.progress;
@@ -199,7 +205,7 @@ export const mockStore = {
     const rec = records.get(jobId);
     if (!rec) return null;
     tick(rec);
-    return { ...rec.job };
+    return withProduced(rec);
   },
 
   listJobs(): Job[] {
@@ -207,7 +213,7 @@ export const mockStore = {
     const all = [...records.values()];
     all.forEach(tick);
     return all
-      .map((r) => ({ ...r.job }))
+      .map(withProduced)
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   },
 

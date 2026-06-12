@@ -48,6 +48,7 @@ interface ApiJobView {
   error: string | null;
   createdAt: string;
   updatedAt: string;
+  clipsProduced?: number;
 }
 
 /** Mirrors clips.controller.ts ClipView. */
@@ -82,6 +83,7 @@ function toJob(v: ApiJobView): Job {
     error: v.error,
     created_at: v.createdAt,
     updated_at: v.updatedAt,
+    clips_produced: v.clipsProduced ?? 0,
     // Friendly title for the dashboard; the real API has no title field.
     title: v.sourceUrl ?? v.sourceKey ?? v.jobId,
   };
