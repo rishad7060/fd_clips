@@ -43,6 +43,8 @@ export interface ClipStyle {
   highlight_color: string;
   /** Caption vertical placement; the pipeline maps this to an ASS alignment. */
   alignment?: "top" | "center" | "bottom";
+  /** Caption font size override (px in the 1080x1920 canvas); omit = template default. */
+  font_size?: number;
 }
 
 /** Job, DB / API view (CONTRACTS §1). */

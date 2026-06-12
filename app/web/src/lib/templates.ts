@@ -51,6 +51,19 @@ export const ALIGNMENT_OPTIONS: { id: "top" | "center" | "bottom"; name: string 
   { id: "bottom", name: "Bottom" },
 ];
 
+/**
+ * Caption font-size choices (px in the 1080x1920 ASS canvas). `value: 0` means
+ * "use the template's own size". The pipeline auto-shrinks any line that would
+ * still overflow, so even XL is safe.
+ */
+export const FONT_SIZE_OPTIONS: { label: string; value: number }[] = [
+  { label: "Default", value: 0 },
+  { label: "S", value: 72 },
+  { label: "M", value: 96 },
+  { label: "L", value: 120 },
+  { label: "XL", value: 150 },
+];
+
 export const DEFAULT_STYLE: ClipStyle = STYLE_TEMPLATES[0]!.style;
 
 export function templateById(id: string): StyleTemplate {
