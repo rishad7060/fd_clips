@@ -1,4 +1,4 @@
-# FocalDive Clips — start the REAL stack (API + web) on this machine.
+# YT Shorts Clips — start the REAL stack (API + web) on this machine.
 # Web (localhost:3000) -> NestJS API (localhost:4000) -> real Python pipeline
 # (Gemini scoring + faster-whisper CPU transcription + FFmpeg cuts), driven by .env.
 #
@@ -38,6 +38,13 @@ Pop-Location
 Start-Sleep -Seconds 3
 Write-Host "Starting Next.js web on :3000 (points at the real API) ..." -ForegroundColor Cyan
 $env:NEXT_PUBLIC_API_URL = "http://localhost:4000"
+# Clear the Next.js dev cache so a restart always serves the latest source — a
+# stale .next is a classic gotcha (e.g. the caption style/size picker change not
+# showing up). Skip with -SKIP_WEB_CLEAN.
+if (-not $env:SKIP_WEB_CLEAN) {
+  $nextCache = Join-Path $root "app/web/.next"
+  if (Test-Path $nextCache) { Remove-Item -Recurse -Force $nextCache -ErrorAction SilentlyContinue }
+}
 $web = Start-Process -FilePath "cmd.exe" -ArgumentList "/c","npm run dev" `
   -WorkingDirectory "$root/app/web" -PassThru -NoNewWindow
 
