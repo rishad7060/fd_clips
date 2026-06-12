@@ -31,9 +31,9 @@ import json
 import os
 import shutil
 import subprocess
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 try:  # package import (python -m pipeline.ingest / imported by run.py)
     from .config import get_settings
@@ -67,6 +67,12 @@ class SourceMetadata:
     video_codec: str
     audio_codec: str
     mock: bool
+    # YouTube "most replayed" heatmap (from yt-dlp), when available: a list of
+    # {start_time, end_time, value} where value is relative replay intensity
+    # (0..1). Empty when the platform/video exposes no heatmap. Used by the
+    # scorer to boost candidates over the most-rewatched moments.
+    heatmap: list[dict[str, float]] = field(default_factory=list)
+    view_count: Optional[int] = None
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -179,6 +185,7 @@ def _ingest_real(
     source: str, job_id: str, source_type: str, out_path: Path, ws: Path
 ) -> SourceMetadata:
     """Real ingest via yt-dlp + ffprobe + ffmpeg (runs on the GPU/full box)."""
+    info: dict[str, Any] = {}  # yt-dlp metadata (heatmap/view_count); {} for local files
     if source_type == "url":
         import yt_dlp  # imported lazily so MOCK_MODE never needs it
 
@@ -223,7 +230,10 @@ def _ingest_real(
             ydl_opts["cookiesfrombrowser"] = (cookie_browser,)
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([source])
+                # extract_info(download=True) both downloads AND returns the
+                # metadata dict — which carries the "most replayed" heatmap and
+                # view_count. (ydl.download() would discard that.)
+                info = ydl.extract_info(source, download=True) or {}
         except Exception as e:  # noqa: BLE001 — surface a clear, actionable error
             msg = str(e)
             if "JavaScript" in msg or "nsig" in msg or "player" in msg.lower():
@@ -299,6 +309,22 @@ def _ingest_real(
     num, den = (vstream.get("r_frame_rate", "30/1").split("/") + ["1"])[:2]
     fps = float(num) / float(den) if float(den) else 30.0
 
+    # "Most replayed" heatmap from yt-dlp (empty list when the video has none).
+    # Normalize to plain floats so it round-trips cleanly through JSON.
+    heatmap: list[dict[str, float]] = []
+    for h in (info.get("heatmap") or []):
+        try:
+            heatmap.append({
+                "start_time": float(h["start_time"]),
+                "end_time": float(h["end_time"]),
+                "value": float(h["value"]),
+            })
+        except (KeyError, TypeError, ValueError):
+            continue
+    view_count = info.get("view_count")
+    if heatmap:
+        print(f"  [ingest] captured 'most replayed' heatmap: {len(heatmap)} segments.")
+
     return SourceMetadata(
         job_id=job_id,
         source_type=source_type,
@@ -311,11 +337,13 @@ def _ingest_real(
         video_codec=vstream.get("codec_name", "h264"),
         audio_codec=astream.get("codec_name", "aac"),
         mock=False,
+        heatmap=heatmap,
+        view_count=int(view_count) if isinstance(view_count, (int, float)) else None,
     )
 
 
 def _main() -> None:
-    parser = argparse.ArgumentParser(description="FocalDive ingest stage")
+    parser = argparse.ArgumentParser(description="FD ingest stage")
     parser.add_argument("--source", default="mock://fixture-podcast",
                         help="URL or local file path (default: a mock placeholder)")
     parser.add_argument("--job-id", default="demo-job-0001")

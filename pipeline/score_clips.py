@@ -72,6 +72,11 @@ def score_clips(job_id: str, top_n: Optional[int] = None) -> dict[str, Any]:
     else:  # "mock"
         result = _score_mock(job_id, transcript)
 
+    # Blend in the YouTube "most replayed" heatmap when the source has one, so
+    # clips over the most-rewatched moments rank higher (real audience signal,
+    # not just the transcript rubric). No-op when there's no heatmap.
+    _apply_replay_blend(ws, result)
+
     # Dedupe overlapping candidates, then optionally trim to top_n.
     result["candidates"] = _dedupe_overlaps(result["candidates"])
     result["candidates"].sort(key=lambda c: c["virality_score"], reverse=True)
@@ -82,6 +87,86 @@ def score_clips(job_id: str, top_n: Optional[int] = None) -> dict[str, Any]:
         json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"
     )
     return result
+
+
+# ── "Most replayed" heatmap blend ───────────────────────────────────────────
+# Weight of the real replay signal vs the rubric score when a heatmap exists.
+# 0.35 = replay meaningfully reorders ties/close calls without overriding a
+# clearly-better-written clip the audience hadn't reached yet.
+REPLAY_WEIGHT = 0.35
+
+
+def _clip_replay_score(start: float, end: float, heatmap: list[dict]) -> Optional[float]:
+    """Mean replay intensity (0..1) over [start, end], or None if no overlap.
+
+    Each heatmap segment is {start_time, end_time, value(0..1)}. We average the
+    segment values weighted by how much of the clip each one covers, so a clip
+    spanning a hot peak and a cold trough gets a fair middle score.
+    """
+    if not heatmap:
+        return None
+    total_w = 0.0
+    acc = 0.0
+    for seg in heatmap:
+        s, e, v = seg["start_time"], seg["end_time"], seg["value"]
+        overlap = max(0.0, min(end, e) - max(start, s))
+        if overlap > 0:
+            acc += v * overlap
+            total_w += overlap
+    if total_w <= 0:
+        return None
+    return acc / total_w
+
+
+def _apply_replay_blend(ws: "Path", result: dict[str, Any]) -> None:
+    """Blend the source's replay heatmap into each candidate's virality_score.
+
+    Reads ``source.meta.json`` for the heatmap (written by ingest). For each
+    candidate, computes its replay score, normalizes the set to 0..100, and sets
+    ``virality_score = (1-W)*rubric + W*replay``. Also records ``replay_score``
+    (0..100) and a short note per candidate. No-op (and unchanged scores) when
+    the source has no heatmap — so non-YouTube/new videos behave exactly as before.
+    """
+    meta_file = ws / "source.meta.json"
+    if not meta_file.exists():
+        return
+    try:
+        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return
+    heatmap = meta.get("heatmap") or []
+    candidates = result.get("candidates", [])
+    if not heatmap or not candidates:
+        return
+
+    # Raw replay score per candidate (None where it falls outside the heatmap).
+    raw = [_clip_replay_score(float(c["start"]), float(c["end"]), heatmap)
+           for c in candidates]
+    have = [r for r in raw if r is not None]
+    if not have:
+        return
+    lo, hi = min(have), max(have)
+    span = (hi - lo) or 1.0
+
+    blended = 0
+    for c, r in zip(candidates, raw):
+        rubric = float(c["virality_score"])
+        if r is None:
+            c["replay_score"] = None
+            continue
+        # Normalize this video's replay values to 0..100 (relative within the video).
+        replay100 = round((r - lo) / span * 100.0, 1)
+        c["replay_score"] = replay100
+        new_score = (1.0 - REPLAY_WEIGHT) * rubric + REPLAY_WEIGHT * replay100
+        c["virality_score"] = int(round(new_score))
+        c["reason"] = (
+            f"{c.get('reason', '').rstrip('.')}. "
+            f"Replay signal: {replay100:.0f}/100 of this video's most-rewatched range."
+        ).strip()
+        blended += 1
+    result["replay_blended"] = blended
+    print(f"  [score] blended 'most replayed' heatmap into {blended} candidate(s) "
+          f"(weight {REPLAY_WEIGHT:.0%}).")
 
 
 # ── Dedup / overlap helpers (shared by mock + real) ─────────────────────────
@@ -387,7 +472,7 @@ def _score_gemini(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
 
 
 def _main() -> None:
-    parser = argparse.ArgumentParser(description="FocalDive clip scoring stage")
+    parser = argparse.ArgumentParser(description="FD clip scoring stage")
     parser.add_argument("--job-id", default="demo-job-0001")
     parser.add_argument("--top", type=int, default=None, help="Keep only top N clips")
     args = parser.parse_args()
