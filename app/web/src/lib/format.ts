@@ -36,9 +36,11 @@ export function scoreColor(score: number): string {
   return "bg-sky-500/20 text-sky-300 ring-sky-500/40";
 }
 
-/** Text-only colour for the big virality number (Opus-style green=high). */
+/** Text-only colour for the big virality number (Opus-style bright green=high).
+ * Green threshold (80) matches the gallery's "Recommended" cutoff so a
+ * recommended clip always shows the bright-green winning score. */
 export function scoreTextColor(score: number): string {
-  if (score >= 85) return "text-emerald-400";
-  if (score >= 70) return "text-amber-400";
+  if (score >= 80) return "text-green-400";
+  if (score >= 65) return "text-amber-400";
   return "text-sky-400";
 }
