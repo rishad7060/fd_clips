@@ -85,9 +85,13 @@ export default function ClipGalleryPage({
       )}
 
       {data && data.clips.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {data.clips.map((clip) => (
-            <ClipCard key={clip.rank} clip={clip} />
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {data.clips.map((clip, i) => (
+            <ClipCard
+              key={clip.rank}
+              clip={clip}
+              recommended={i === 0 && clip.virality_score >= 80}
+            />
           ))}
         </div>
       )}

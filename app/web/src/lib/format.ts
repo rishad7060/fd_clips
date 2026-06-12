@@ -35,3 +35,10 @@ export function scoreColor(score: number): string {
   if (score >= 70) return "bg-amber-500/20 text-amber-300 ring-amber-500/40";
   return "bg-sky-500/20 text-sky-300 ring-sky-500/40";
 }
+
+/** Text-only colour for the big virality number (Opus-style green=high). */
+export function scoreTextColor(score: number): string {
+  if (score >= 85) return "text-emerald-400";
+  if (score >= 70) return "text-amber-400";
+  return "text-sky-400";
+}
