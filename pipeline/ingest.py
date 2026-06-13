@@ -197,9 +197,16 @@ def _ingest_real(
         ffmpeg_dir = str(Path(ffmpeg).parent) if ffmpeg else None
         download_target = ws / "download.%(ext)s"
         ydl_opts = {
-            # Prefer a ready-made <=720p mp4 (no merge needed, smaller/faster for CPU);
-            # then a merge of separate streams; then anything.
-            "format": "best[ext=mp4][height<=720]/best[height<=720]/bestvideo[height<=1080]+bestaudio/best",
+            # Prefer SHARP output: a 1080p video+audio merge first (the progressive
+            # single-file mp4 YouTube offers is often only 360p, which upscales to
+            # a blurry 9:16 clip). Fall back to 720p, then a ready-made mp4, then
+            # anything. Quality matters more than the small extra merge/CPU cost.
+            "format": (
+                "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/"
+                "bestvideo[height<=1080]+bestaudio/"
+                "bestvideo[height<=720]+bestaudio/"
+                "best[ext=mp4][height<=1080]/best"
+            ),
             "outtmpl": str(download_target),
             "merge_output_format": "mp4",
             "quiet": True,
