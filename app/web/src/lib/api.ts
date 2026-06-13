@@ -196,10 +196,22 @@ export const api = {
       if (!clip) throw new Error(`Clip not found for re-render`);
       return delay(clip, 600);
     }
-    return http<Clip>(`/clips/render`, {
+    // The API boundary is camelCase (RenderClipDto) with whitelist validation:
+    // map snake_case -> camelCase and send ONLY the fields the DTO accepts
+    // (jobId, rank, start, end, style). caption_lines is not part of the DTO —
+    // the server re-derives captions from the transcript, so we drop it.
+    const body: Record<string, unknown> = {
+      jobId: input.job_id,
+      rank: input.rank,
+    };
+    if (typeof input.start === "number") body.start = input.start;
+    if (typeof input.end === "number") body.end = input.end;
+    if (input.style) body.style = input.style;
+    const v = await http<ApiClipView>(`/clips/render`, {
       method: "POST",
-      body: JSON.stringify(input),
+      body: JSON.stringify(body),
     });
+    return toClip(v);
   },
 
   /**
