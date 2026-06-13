@@ -21,25 +21,36 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [reaction, setReaction] = useState<"up" | "down" | null>(null);
-  // True once the user explicitly paused via click; suppresses hover-autoplay so
-  // a deliberately-paused clip doesn't restart from 0 on the next hover.
   const [userPaused, setUserPaused] = useState(false);
+  // Player controls: mute (default true for hover-preview) + playback progress.
+  const [muted, setMuted] = useState(true);
+  const [progress, setProgress] = useState(0); // 0..1 of clip duration
+  const [hovering, setHovering] = useState(false);
 
   const hasVideo = Boolean(clip.final_url);
   const hasThumb = Boolean(clip.thumb_url);
   const safeName =
     (clip.suggested_title?.trim().replace(/\s+/g, "_") || `clip_${clip.rank}`) + ".mp4";
+  // Banner text: prefer the short LLM hook_title; else a trimmed hook_line.
+  const hookText = (() => {
+    const t = (clip.hook_title || "").trim();
+    if (t) return t;
+    const words = (clip.hook_line || "").split(/\s+/).filter(Boolean);
+    const short = words.slice(0, 7).join(" ");
+    return short.length > 44 ? short.slice(0, 44).replace(/\s+\S*$/, "") + "…" : short;
+  })();
 
   const play = () => {
     const v = videoRef.current;
     if (v && hasVideo) void v.play().catch(() => {});
   };
   const onEnter = () => {
+    setHovering(true);
     if (!userPaused) play();
   };
   const onLeave = () => {
+    setHovering(false);
     const v = videoRef.current;
-    // Only rewind the hover-preview; if the user clicked to play, leave it be.
     if (v && !playing && !userPaused) {
       v.pause();
       v.currentTime = 0;
@@ -56,7 +67,27 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
       v.pause();
     }
   };
-  // Stop a thumb/control click from bubbling into the play/pause overlay.
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const v = videoRef.current;
+    const next = !muted;
+    setMuted(next);
+    if (v) v.muted = next;
+  };
+  // Seek: forward/backward via the scrub bar (fraction 0..1 of the clip).
+  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const v = videoRef.current;
+    if (!v || !v.duration || !isFinite(v.duration)) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    v.currentTime = frac * v.duration;
+    setProgress(frac);
+  };
+  const onTimeUpdate = () => {
+    const v = videoRef.current;
+    if (v && v.duration && isFinite(v.duration)) setProgress(v.currentTime / v.duration);
+  };
   const react = (e: React.MouseEvent, value: "up" | "down") => {
     e.stopPropagation();
     setReaction((prev) => (prev === value ? null : value));
@@ -75,7 +106,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
             ref={videoRef}
             src={clip.final_url}
             poster={hasThumb ? clip.thumb_url : undefined}
-            muted
+            muted={muted}
             loop
             playsInline
             preload="metadata"
@@ -83,6 +114,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
             // and aria-label never lie (autoplay rejection, ended, etc.).
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
+            onTimeUpdate={onTimeUpdate}
             className="h-full w-full object-cover"
           />
         ) : (
@@ -92,11 +124,13 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
           </div>
         )}
 
-        {/* Text hook banner — white rounded card near the top */}
-        {clip.hook_line && (
-          <div className="pointer-events-none absolute inset-x-2 top-9 flex justify-center">
-            <span className="line-clamp-2 max-w-full rounded-lg bg-white/90 px-3 py-1.5 text-center text-xs font-semibold leading-snug text-ink-950 shadow">
-              {clip.hook_line}
+        {/* Text hook banner — white rounded card near the top. Uses the SHORT
+            hook_title (Opus-style punchy hook); falls back to a trimmed
+            hook_line so older clips without a title still read clean. */}
+        {hookText && (
+          <div className="pointer-events-none absolute inset-x-2 top-9 z-10 flex justify-center">
+            <span className="line-clamp-2 max-w-[90%] rounded-lg bg-white/95 px-2.5 py-1 text-center text-xs font-bold leading-tight text-ink-950 shadow">
+              {hookText}
             </span>
           </div>
         )}
@@ -169,6 +203,55 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
               )}
             </span>
           </button>
+        )}
+
+        {/* Controls bar — scrub (forward/backward) + mute. Visible on hover or
+            while playing; sits above the play overlay (z-20). */}
+        {hasVideo && (
+          <div
+            className={`absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 bg-gradient-to-t from-black/70 to-transparent px-2 pb-2 pt-6 transition ${
+              hovering || playing ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            {/* Scrub / seek bar */}
+            <div
+              role="slider"
+              aria-label="Seek"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(progress * 100)}
+              tabIndex={0}
+              onClick={seek}
+              className="group/seek relative h-3 flex-1 cursor-pointer"
+            >
+              <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/30" />
+              <div
+                className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-brand"
+                style={{ width: `${progress * 100}%` }}
+              />
+              <div
+                className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 transition group-hover/seek:opacity-100"
+                style={{ left: `${progress * 100}%` }}
+              />
+            </div>
+            {/* Mute / unmute */}
+            <button
+              type="button"
+              onClick={toggleMute}
+              aria-label={muted ? "Unmute" : "Mute"}
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-white hover:bg-white/15"
+            >
+              {muted ? (
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 5L6 9H2v6h4l5 4V5z" /><path d="M23 9l-6 6M17 9l6 6" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 5L6 9H2v6h4l5 4V5z" /><path d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" />
+                </svg>
+              )}
+            </button>
+          </div>
         )}
       </div>
 

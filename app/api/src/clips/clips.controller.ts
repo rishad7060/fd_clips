@@ -34,6 +34,7 @@ interface ClipView {
   start: number;
   end: number;
   hookLine: string;
+  hookTitle: string | null;
   viralityScore: number;
   reason: string;
   suggestedTitle: string;
@@ -92,6 +93,7 @@ export class ClipsController {
       start: updated.start,
       end: updated.end,
       hookLine: updated.hookLine,
+      hookTitle: updated.hookTitle ?? null,
       viralityScore: updated.viralityScore,
       reason: updated.reason,
       suggestedTitle: updated.suggestedTitle,
@@ -139,6 +141,7 @@ export class ClipsController {
         start: c.start,
         end: c.end,
         hookLine: c.hookLine,
+        hookTitle: c.hookTitle ?? null,
         viralityScore: c.viralityScore,
         reason: c.reason,
         suggestedTitle: c.suggestedTitle,

@@ -46,6 +46,8 @@ export interface ClipRecord {
   start: number;
   end: number;
   hookLine: string;
+  /** Short punchy on-screen hook for the gallery banner (≤~6 words). */
+  hookTitle?: string | null;
   viralityScore: number;
   reason: string;
   suggestedTitle: string;
@@ -83,6 +85,7 @@ export interface CreateClipInput {
   start: number;
   end: number;
   hookLine: string;
+  hookTitle?: string | null;
   viralityScore: number;
   reason: string;
   suggestedTitle: string;

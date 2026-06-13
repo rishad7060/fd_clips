@@ -25,6 +25,7 @@ Return ONLY a single JSON object, no prose, matching exactly:
       "start": <float seconds>,
       "end": <float seconds>,
       "hook_line": "<the attention-grabbing opening line, verbatim from the transcript>",
+      "hook_title": "<a SHORT punchy on-screen hook, 3-6 words, <= 32 chars, that stops the scroll — a catchy REWRITE, not necessarily verbatim. e.g. 'Will AI make us dumber?', 'AI Could Cost You Your Skills', 'The 95% Nobody Talks About'>",
       "payoff_line": "<the line that DELIVERS the answer/insight, verbatim from the transcript, occurring before end>",
       "hook_type": "<one of: question, bold_claim, contrarian, curiosity_gap, story, numbered_promise, direct_address>",
       "virality_score": <integer 0-100>,
@@ -56,6 +57,9 @@ HARD RULES (reject any candidate that violates these)
    only the higher-scoring one.
 6. GROUNDED: `hook_line` and `payoff_line` are copied verbatim from the
    transcript. `reason` references the rubric dimensions, not generic praise.
+7. HOOK_TITLE: short and punchy — 3-6 words, max 32 characters, Title Case or a
+   crisp question. It is the big on-screen text overlay, so it MUST be skimmable
+   in under a second. Never paste the long verbatim sentence here.
 
 SCORING DIMENSIONS (weight the final 0-100 score across these)
 --------------------------------------------------------------

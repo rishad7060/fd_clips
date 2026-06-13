@@ -59,6 +59,7 @@ interface ApiClipView {
   start: number;
   end: number;
   hookLine: string;
+  hookTitle?: string | null;
   viralityScore: number;
   reason: string;
   suggestedTitle: string;
@@ -96,6 +97,7 @@ function toClip(v: ApiClipView): Clip {
     start: v.start,
     end: v.end,
     hook_line: v.hookLine,
+    hook_title: v.hookTitle ?? null,
     virality_score: v.viralityScore,
     reason: v.reason,
     suggested_title: v.suggestedTitle,

@@ -1,4 +1,4 @@
-// FocalDive Clips — Prisma schema (Postgres)
+// YT Shorts Clips — Prisma schema (Postgres)
 // Every table carries organization_id for tenant scoping + RLS (PROMPT 9b).
 // Shapes mirror CONTRACTS.md §1 (Job), §3 (Clip), and §9d (Credit/billing).
 
@@ -100,6 +100,7 @@ model Clip {
   start          Float
   end            Float
   hookLine       String  @map("hook_line")
+  hookTitle      String? @map("hook_title")
   viralityScore  Int     @map("virality_score")
   reason         String
   suggestedTitle String  @map("suggested_title")

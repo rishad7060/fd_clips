@@ -198,7 +198,34 @@ def _normalize_candidate(c: dict[str, Any]) -> dict[str, Any]:
     if isinstance(c.get("hashtags"), str):
         c["hashtags"] = [t.strip() for t in c["hashtags"].split() if t.strip()]
     c["hashtags"] = [str(t).lstrip("#").strip() for t in (c.get("hashtags") or [])][:5]
+
+    # hook_title = the SHORT on-screen banner. Prefer the LLM's; else derive a
+    # punchy fallback from suggested_title or the first ~6 words of hook_line,
+    # capped so the gallery banner never overflows.
+    title = str(c.get("hook_title") or "").strip()
+    if not title:
+        title = str(c.get("suggested_title") or "").strip()
+    if not title:
+        words = str(c.get("hook_line") or "").split()
+        title = " ".join(words[:6])
+    c["hook_title"] = _shorten_hook(title)
     return c
+
+
+def _shorten_hook(text: str, *, max_chars: int = 42, max_words: int = 7) -> str:
+    """Trim a hook to a short, banner-safe string (word-boundary, no trailing
+    punctuation noise). Keeps a '?' if the hook is a question."""
+    t = " ".join(text.split())
+    is_q = t.rstrip().endswith("?")
+    words = t.split()
+    if len(words) > max_words:
+        t = " ".join(words[:max_words])
+    if len(t) > max_chars:
+        t = t[:max_chars].rsplit(" ", 1)[0]
+    t = t.rstrip(" ,.;:—-")
+    if is_q and not t.endswith("?"):
+        t += "?"
+    return t
 
 
 def _length_multiplier(duration: float) -> float:
@@ -412,6 +439,7 @@ def _score_mock(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
                     "start": round(start, 2),
                     "end": round(end, 2),
                     "hook_line": hook,
+                    "hook_title": _shorten_hook(_title_from(seg_i["text"])),
                     "payoff_line": payoff,
                     "hook_type": "question" if hook.rstrip().endswith("?") else "story",
                     "virality_score": score,

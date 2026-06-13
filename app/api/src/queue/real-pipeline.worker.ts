@@ -45,6 +45,7 @@ interface ClipCandidate {
   start: number;
   end: number;
   hook_line: string;
+  hook_title?: string;
   virality_score: number;
   reason: string;
   suggested_title?: string;
@@ -301,6 +302,7 @@ export class RealPipelineWorker implements JobWorker {
         start: c.start,
         end: c.end,
         hookLine: c.hook_line,
+        hookTitle: c.hook_title ?? null,
         viralityScore: c.virality_score,
         reason: c.reason,
         suggestedTitle: c.suggested_title ?? '',

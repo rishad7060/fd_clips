@@ -166,6 +166,7 @@ export class MemoryStore implements DataStore {
       start: input.start,
       end: input.end,
       hookLine: input.hookLine,
+      hookTitle: input.hookTitle ?? null,
       viralityScore: input.viralityScore,
       reason: input.reason,
       suggestedTitle: input.suggestedTitle,

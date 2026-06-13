@@ -86,6 +86,8 @@ export interface ClipCandidate {
   start: number;
   end: number;
   hook_line: string;
+  /** Short punchy on-screen hook for the banner (≤~6 words); falls back to hook_line. */
+  hook_title?: string | null;
   virality_score: number;
   reason: string;
   suggested_title: string;
