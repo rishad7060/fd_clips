@@ -684,29 +684,37 @@ def _build_keyframes(
 # middle (0.18 ≈ outside the central ~64%). 0.50 of frames being off-side marks
 # a clip where the subject lives near an edge — a tight crop would frame them
 # against empty space / drop the off-screen partner.
-WIDE_SHOT_OFFCENTER = 0.18
-WIDE_SHOT_MIN_FRAC = 0.30    # ...for at least this fraction of framed samples
 WIDE_SHOT_MIN_ASPECT = 1.7   # only for genuinely wide (≈16:9+) sources
+# Blur-pad is a LAST RESORT (it letterboxes the whole frame). Like Opus, we
+# default to a TIGHT face-following crop and only blur-pad when BOTH people in a
+# real two-shot are on screen at once, too far apart for one 9:16 crop to hold —
+# i.e. genuinely simultaneous two-face frames with a large horizontal spread.
+TWO_FACE_SPREAD_PAD = 0.45   # two faces must span > this fraction of width
+TWO_FACE_FRAC_PAD = 0.55     # ...in at least this share of FRAMED samples
 
 
 def _is_wide_two_shot(
     samples: list["FaceSample"], src_w: int, src_h: int
 ) -> bool:
-    """True when the clip reads as a wide two-shot the tight crop would ruin.
+    """True ONLY for a genuine wide two-shot a tight crop can't hold.
 
-    Heuristic (no second face needed — MediaPipe often can't see the far person):
-    the source is wide (≥~16:9) AND the single detected face sits consistently
-    off to one side (so centering it would crop out the rest of the scene / the
-    person they're talking to). For such clips we blur-pad the full frame.
+    A single off-centre face is NOT a two-shot — we just tight-crop to it (that's
+    what Opus does). Blur-pad fires only when TWO faces are detected
+    simultaneously AND span a large fraction of the (wide) frame for most of the
+    clip — the rare case where one 9:16 crop would drop a person mid-conversation.
     """
     if src_h == 0 or (src_w / src_h) < WIDE_SHOT_MIN_ASPECT:
         return False
     framed = [s for s in samples if s.cx >= 0.0]
-    if len(framed) < 4:
+    if len(framed) < 6:
         return False
-    offcenter = [abs(s.cx - 0.5) for s in framed]
-    off_frac = sum(1 for d in offcenter if d > WIDE_SHOT_OFFCENTER) / len(framed)
-    return off_frac >= WIDE_SHOT_MIN_FRAC
+    wide_two = 0
+    for s in framed:
+        if len(s.faces) >= 2:
+            xs = [f[0] for f in s.faces]
+            if (max(xs) - min(xs)) > TWO_FACE_SPREAD_PAD:
+                wide_two += 1
+    return (wide_two / len(framed)) >= TWO_FACE_FRAC_PAD
 
 
 def _blur_pad_vf() -> str:
