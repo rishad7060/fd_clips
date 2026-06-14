@@ -45,12 +45,16 @@ def render_one(
     start: Optional[float] = None,
     end: Optional[float] = None,
     style: Optional[dict[str, Any]] = None,
+    captions: Optional[list[dict[str, Any]]] = None,
 ) -> dict[str, Any]:
     """Re-render clip ``rank`` for ``job_id``; return the updated candidate dict.
 
     ``start``/``end`` override the trim when provided (validated to a sane range).
-    ``style`` (web shape) is persisted for the captions stage. Raises ValueError
-    for a bad rank or an invalid range.
+    ``style`` (web shape) is persisted for the captions stage. ``captions`` (the
+    editor's edited subtitle words, clip-relative seconds) is persisted to
+    ``captions_override.json`` so the captions stage burns the EDITED text instead
+    of re-deriving it from the transcript. Raises ValueError for a bad rank or an
+    invalid range.
     """
     settings = get_settings()
     ws = settings.workspace(job_id)
@@ -84,6 +88,20 @@ def render_one(
         (ws / "captions_style.json").write_text(
             json.dumps(style, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+
+    # Persist edited caption words. The single-clip passthrough below renders the
+    # target as position/rank "1" (then renames outputs), so the captions stage
+    # looks up the override under "1". We write ONLY "1" and remove it after, so
+    # the override file never carries stale entries for other ranks.
+    ov_path = ws / "captions_override.json"
+    if captions:
+        ov_path.write_text(
+            json.dumps({"1": {"words": captions}}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    else:
+        # No edited captions → ensure no stale override leaks into this render.
+        ov_path.unlink(missing_ok=True)
 
     # Re-render ONLY this clip by running each stage against a one-candidate view.
     # The stage functions read clips.json and index by position, so we hand them a
@@ -133,6 +151,9 @@ def _render_single_stage_passthrough(
         captions.caption_clips(ws.name, top_n=1)
     finally:
         clips_path.write_text(backup, encoding="utf-8")
+        # The override was written under "1" for this single render; remove it so
+        # a later FULL pipeline run doesn't pick up one clip's edits for rank 1.
+        (ws / "captions_override.json").unlink(missing_ok=True)
 
     if rank != 1:
         # Move freshly-rendered {1}_* -> {rank}_*, then restore stashed clip #1.
@@ -153,11 +174,16 @@ def _main() -> None:
     p.add_argument("--start", type=float, default=None)
     p.add_argument("--end", type=float, default=None)
     p.add_argument("--style-json", default=None)
+    p.add_argument("--captions-json", default=None,
+                   help="Edited subtitle words as JSON: "
+                        "[{word,start,end}] in clip-relative seconds.")
     args = p.parse_args()
 
     style = json.loads(args.style_json) if args.style_json else None
+    caps = json.loads(args.captions_json) if args.captions_json else None
     cand = render_one(
-        args.job_id, args.rank, start=args.start, end=args.end, style=style
+        args.job_id, args.rank, start=args.start, end=args.end,
+        style=style, captions=caps,
     )
     print("@@RENDERED@@ " + json.dumps(cand))
     print(f"Re-rendered clip #{args.rank} of job {args.job_id}: "

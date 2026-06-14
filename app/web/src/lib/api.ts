@@ -4,6 +4,7 @@ import type {
   Clip,
   ClipsResponse,
   ClipStyle,
+  ClipTranscript,
   CreateJobInput,
   Job,
   JobProgressEvent,
@@ -65,6 +66,23 @@ interface ApiClipView {
   suggestedTitle: string;
   downloadUrl: string | null;
   thumbnailUrl: string | null;
+}
+
+/** Mirrors clips.controller.ts WordView (clip-relative seconds). */
+interface ApiWordView {
+  word: string;
+  start: number;
+  end: number;
+}
+
+/** Mirrors clips.controller.ts ClipTranscriptView. */
+interface ApiClipTranscriptView {
+  clipId: string;
+  jobId: string;
+  rank: number;
+  clipStart: number;
+  clipEnd: number;
+  words: ApiWordView[];
 }
 
 // ---- Normalizers (camelCase API view -> snake_case wire types) -------------
@@ -190,6 +208,31 @@ export const api = {
     };
   },
 
+  /**
+   * Per-clip transcript words (clip-relative seconds) for the karaoke subtitle
+   * layer. Mock mode synthesizes/derives words offline; real mode hits
+   * GET /clips/transcript and maps camelCase -> snake_case. Callers should wrap
+   * in try/catch — a failure should degrade to an empty word list so the hook
+   * layer still works.
+   */
+  async getClipTranscript(jobId: string, rank: number): Promise<ClipTranscript> {
+    if (USING_MOCK_API) {
+      const t = mockStore.getClipTranscript(jobId, rank);
+      if (!t) throw new Error(`Transcript for ${jobId}#${rank} not found`);
+      return delay(t, 150);
+    }
+    const v = await http<ApiClipTranscriptView>(
+      `/clips/transcript?jobId=${encodeURIComponent(jobId)}&rank=${rank}`,
+    );
+    return {
+      job_id: v.jobId,
+      rank: v.rank,
+      clip_start: v.clipStart,
+      clip_end: v.clipEnd,
+      words: v.words.map((w) => ({ word: w.word, start: w.start, end: w.end })),
+    };
+  },
+
   async renderClip(input: RenderClipInput): Promise<Clip> {
     if (USING_MOCK_API) {
       const clip = mockStore.renderClip(input);
@@ -198,8 +241,8 @@ export const api = {
     }
     // The API boundary is camelCase (RenderClipDto) with whitelist validation:
     // map snake_case -> camelCase and send ONLY the fields the DTO accepts
-    // (jobId, rank, start, end, style). caption_lines is not part of the DTO —
-    // the server re-derives captions from the transcript, so we drop it.
+    // (jobId, rank, start, end, style, captions). caption_lines is NOT a DTO
+    // field; the EDITED per-word `captions` carry the text into the render.
     const body: Record<string, unknown> = {
       jobId: input.job_id,
       rank: input.rank,
@@ -207,6 +250,9 @@ export const api = {
     if (typeof input.start === "number") body.start = input.start;
     if (typeof input.end === "number") body.end = input.end;
     if (input.style) body.style = input.style;
+    if (input.captions && input.captions.length > 0) {
+      body.captions = input.captions;
+    }
     const v = await http<ApiClipView>(`/clips/render`, {
       method: "POST",
       body: JSON.stringify(body),

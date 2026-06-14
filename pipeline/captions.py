@@ -482,6 +482,23 @@ def _words_in_range(segments: list[dict], start: float, end: float) -> list[dict
     return out
 
 
+def _load_caption_overrides(ws: Path) -> dict[str, Any]:
+    """Load editor caption overrides from ``captions_override.json`` if present.
+
+    Shape: ``{"<rank>": {"words": [{"word","start","end"}]}}`` with start/end in
+    CLIP-RELATIVE seconds. Written by ``render_one.py`` from the inline editor's
+    edited subtitle segments. Absent → ``{}`` (the transcript is used as before).
+    """
+    f = ws / "captions_override.json"
+    if not f.exists():
+        return {}
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
 def _make_thumbnail(final: Path, thumb: Path, *, mock: bool) -> bool:
     """Grab a poster frame ~1s into the final clip via ffmpeg -> {n}_thumb.jpg.
 
@@ -520,6 +537,8 @@ def caption_clips(job_id: str, top_n: Optional[int] = None) -> list[CaptionResul
     rtl = _is_rtl(language)
     style = _load_style(ws)
     segments = transcript.get("segments", [])
+    # Editor overrides (per-rank edited caption words, clip-relative seconds).
+    overrides = _load_caption_overrides(ws)
 
     clips_dir = ws / "clips"
     clips_dir.mkdir(parents=True, exist_ok=True)
@@ -527,7 +546,22 @@ def caption_clips(job_id: str, top_n: Optional[int] = None) -> list[CaptionResul
     results: list[CaptionResult] = []
     for rank, cand in enumerate(candidates, start=1):
         start, end = float(cand["start"]), float(cand["end"])
-        words = _words_in_range(segments, start, end)
+        # Prefer the editor's edited words for this rank; else slice the
+        # transcript. Override words are clip-relative → shift to absolute so
+        # build_ass (which re-bases by clip_start) yields the right timing.
+        ov = overrides.get(str(rank)) or overrides.get(rank)
+        if ov and ov.get("words"):
+            words = [
+                {
+                    "word": str(w.get("word", "")),
+                    "start": start + float(w.get("start", 0.0)),
+                    "end": start + float(w.get("end", 0.0)),
+                }
+                for w in ov["words"]
+                if str(w.get("word", "")).strip()
+            ]
+        else:
+            words = _words_in_range(segments, start, end)
         ass = build_ass(
             words, clip_start=start, style=style, rtl=rtl, language=language
         )

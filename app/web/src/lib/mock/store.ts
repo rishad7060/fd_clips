@@ -1,6 +1,7 @@
 import type {
   Clip,
   ClipsResponse,
+  ClipTranscript,
   CreateJobInput,
   Job,
   JobProgressEvent,
@@ -8,7 +9,7 @@ import type {
   RenderClipInput,
 } from "../types";
 import { DEFAULT_STYLE } from "../templates";
-import { SAMPLE_CLIPS, captionsFor } from "./fixtures";
+import { SAMPLE_CLIPS, captionsFor, wordsFor } from "./fixtures";
 import { posterDataUri } from "./posters";
 
 /**
@@ -250,6 +251,26 @@ export const mockStore = {
       caption_lines: rec.caption_overrides[c.rank] ?? c.caption_lines,
     }));
     return { job_id: jobId, model: SAMPLE_CLIPS.model, clips };
+  },
+
+  /**
+   * Per-clip transcript words (clip-relative seconds) for the karaoke subtitle
+   * layer. Mirrors the backend GET /clips/transcript shape: clip_start=0,
+   * clip_end = clip duration, words derived from SAMPLE_CAPTIONS or synthesized.
+   */
+  getClipTranscript(jobId: string, rank: number): ClipTranscript | null {
+    seed();
+    const rec = records.get(jobId);
+    if (!rec) return null;
+    const clip = rec.clips.find((c) => c.rank === rank);
+    if (!clip) return null;
+    return {
+      job_id: jobId,
+      rank: clip.rank,
+      clip_start: 0,
+      clip_end: +(clip.end - clip.start).toFixed(3),
+      words: wordsFor(clip),
+    };
   },
 
   /** Apply a single-clip edit + re-render (10c). Returns the updated clip. */

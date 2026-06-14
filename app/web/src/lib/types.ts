@@ -123,6 +123,61 @@ export interface CaptionLine {
   text: string;
 }
 
+/** One transcript word, CLIP-RELATIVE seconds (matches GET /clips/transcript). */
+export interface TranscriptWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
+/** Per-clip transcript words (clip-relative), feeding the karaoke subtitle layer. */
+export interface ClipTranscript {
+  job_id: string;
+  rank: number;
+  clip_start: number;
+  clip_end: number;
+  words: TranscriptWord[];
+}
+
+/**
+ * Two-layer caption editor model. The HOOK layer is the white-marker banner box
+ * (one editable line near the top); the SUBTITLE layer is the per-word karaoke
+ * captions built from the real transcript words (usually bottom). They are
+ * INDEPENDENT: editing one never touches the other.
+ */
+export interface HookLayer {
+  text: string;
+  show: boolean;
+  /** Text color (default white). */
+  color: string;
+  /** Box / background color (default black — the "white marker" look). */
+  boxColor: string;
+  position: "top" | "center" | "bottom";
+  /** Font size px in the preview; 0 = template default. */
+  fontSize: number;
+}
+
+/**
+ * A karaoke subtitle segment: a run of consecutive transcript words (clip-
+ * relative seconds). `textOverride`, when set, replaces the per-word text (per-
+ * word timing no longer maps cleanly, so the override renders as one block).
+ */
+export interface SubtitleSegment {
+  id: string;
+  startRel: number;
+  endRel: number;
+  words: TranscriptWord[];
+  textOverride?: string;
+}
+
+export interface SubtitleLayer {
+  show: boolean;
+  highlightColor: string;
+  position: "top" | "center" | "bottom";
+  fontSize: number;
+  segments: SubtitleSegment[];
+}
+
 export interface ClipsResponse {
   job_id: string;
   model: string;
@@ -155,4 +210,10 @@ export interface RenderClipInput {
   end: number;
   caption_lines: CaptionLine[];
   style: ClipStyle;
+  /**
+   * Edited subtitle WORDS (clip-relative seconds) from the inline editor. When
+   * present, the renderer burns these instead of re-deriving from the transcript
+   * — so text edits appear in the downloadable file.
+   */
+  captions?: TranscriptWord[];
 }

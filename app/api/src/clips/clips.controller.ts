@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { spawn } from 'node:child_process';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { CurrentOrg } from '../auth/current-org.decorator';
@@ -40,6 +41,23 @@ interface ClipView {
   suggestedTitle: string;
   downloadUrl: string | null;
   thumbnailUrl: string | null;
+}
+
+/** One transcript word, re-based to CLIP-RELATIVE seconds. */
+interface WordView {
+  word: string;
+  start: number;
+  end: number;
+}
+
+/** Per-clip transcript words (clip-relative), camelCase boundary like ClipView. */
+interface ClipTranscriptView {
+  clipId: string;
+  jobId: string;
+  rank: number;
+  clipStart: number;
+  clipEnd: number;
+  words: WordView[];
 }
 
 @UseGuards(ClerkAuthGuard)
@@ -108,6 +126,9 @@ export class ClipsController {
     if (dto.start !== undefined) args.push('--start', String(dto.start));
     if (dto.end !== undefined) args.push('--end', String(dto.end));
     if (dto.style) args.push('--style-json', JSON.stringify(dto.style));
+    if (dto.captions && dto.captions.length > 0) {
+      args.push('--captions-json', JSON.stringify(dto.captions));
+    }
 
     return new Promise((resolve, reject) => {
       const child = spawn(PYTHON_BIN, args, { cwd: REPO_ROOT });
@@ -150,5 +171,88 @@ export class ClipsController {
       })),
     );
     return { clips: views };
+  }
+
+  /**
+   * GET /clips/transcript?jobId=...&rank=... — per-word transcript for ONE clip,
+   * sliced to [clip.start, clip.end] and re-based to clip-relative seconds (the
+   * same scale as the pre-cut n_final.mp4's currentTime). Feeds the editor's
+   * karaoke subtitle layer.
+   *
+   * Org scope comes from listClips (tenant-scoped by organizationId). When the
+   * transcript file is absent OR the real pipeline is off, returns a synthesized
+   * mock track so offline/dev mode always has a non-empty karaoke layer — never
+   * 500s.
+   */
+  @Get('transcript')
+  async transcript(
+    @CurrentOrg() auth: AuthContext,
+    @Query('jobId') jobId: string,
+    @Query('rank') rankRaw: string,
+  ): Promise<ClipTranscriptView> {
+    const rank = Number(rankRaw);
+    if (Number.isNaN(rank)) {
+      throw new BadRequestException('rank must be a number');
+    }
+
+    // Tenant scope: listClips is already org-scoped, so finding the clip here
+    // doubles as the authorization check.
+    const clips = await this.store.listClips(auth.organizationId, jobId);
+    const clip = clips.find((c) => c.rank === rank);
+    if (!clip) {
+      throw new NotFoundException(`Clip #${rank} not found for job ${jobId}`);
+    }
+
+    const clipEnd = +(clip.end - clip.start).toFixed(3);
+
+    const mockFallback = (): ClipTranscriptView => {
+      const text = [clip.hookLine, clip.suggestedTitle].filter(Boolean).join(' ');
+      const toks = text.split(/\s+/).filter(Boolean);
+      const dur = Math.max(0.2, clip.end - clip.start);
+      const per = dur / Math.max(1, toks.length);
+      const words: WordView[] = toks.map((t, i) => ({
+        word: t,
+        start: +(i * per).toFixed(3),
+        end: +((i + 1) * per).toFixed(3),
+      }));
+      return { clipId: clip.id, jobId: clip.jobId, rank: clip.rank, clipStart: 0, clipEnd, words };
+    };
+
+    // Read the source transcript when the real pipeline is on and the file
+    // exists; otherwise synthesize so dev mode still works.
+    const ws = path.resolve(REPO_ROOT, 'workspace', jobId);
+    const file = path.join(ws, 'transcript.json');
+    const raw =
+      process.env.USE_REAL_PIPELINE === 'true' && fs.existsSync(file)
+        ? fs.readFileSync(file, 'utf-8')
+        : null;
+    if (!raw) return mockFallback();
+
+    try {
+      const data = JSON.parse(raw) as {
+        segments?: { words?: { word: string; start: number; end: number }[] }[];
+      };
+      const words: WordView[] = [];
+      for (const seg of data.segments ?? []) {
+        for (const w of seg.words ?? []) {
+          // Keep only words fully contained in the clip range, then rebase.
+          if (w.start >= clip.start && w.end <= clip.end) {
+            words.push({
+              word: w.word,
+              start: +(w.start - clip.start).toFixed(3),
+              end: +(w.end - clip.start).toFixed(3),
+            });
+          }
+        }
+      }
+      return { clipId: clip.id, jobId: clip.jobId, rank: clip.rank, clipStart: 0, clipEnd, words };
+    } catch (e) {
+      this.logger.warn(
+        `transcript.json parse failed for ${jobId}#${rank}; using mock fallback: ${
+          (e as Error).message
+        }`,
+      );
+      return mockFallback();
+    }
   }
 }

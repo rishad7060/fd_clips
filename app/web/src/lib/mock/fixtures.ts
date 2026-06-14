@@ -1,4 +1,4 @@
-import type { ClipCandidate, ClipsDocument } from "../types";
+import type { ClipCandidate, ClipsDocument, TranscriptWord } from "../types";
 
 /**
  * Inlined copy of tests/fixtures/clips.sample.json so the web app is
@@ -118,4 +118,52 @@ export function captionsFor(c: ClipCandidate): { start: number; end: number; tex
       { start: (c.start + c.end) / 2, end: c.end, text: c.suggested_title + "." },
     ]
   );
+}
+
+const round3 = (n: number): number => +n.toFixed(3);
+
+/**
+ * Per-word clip-RELATIVE transcript for a candidate — mirrors the backend's
+ * GET /clips/transcript shape so mock and real modes behave identically.
+ *
+ * Prefer SAMPLE_CAPTIONS (absolute-second lines): split each line into words,
+ * spread evenly across the line's [start,end], then rebase by candidate.start
+ * (dropping anything outside the clip, like the real slice). Falls back to the
+ * same even-split synthesizer the controller uses (hook_line + suggested_title).
+ */
+export function wordsFor(c: ClipCandidate): TranscriptWord[] {
+  const dur = Math.max(0.2, c.end - c.start);
+  const lines = SAMPLE_CAPTIONS[c.start];
+  if (lines && lines.length) {
+    const words: TranscriptWord[] = [];
+    for (const line of lines) {
+      const toks = line.text.split(/\s+/).filter(Boolean);
+      if (!toks.length) continue;
+      const span = Math.max(0.01, line.end - line.start);
+      const per = span / toks.length;
+      toks.forEach((t, i) => {
+        const absStart = line.start + i * per;
+        const absEnd = line.start + (i + 1) * per;
+        // Keep only words fully contained in the clip range, then rebase.
+        if (absStart >= c.start && absEnd <= c.end) {
+          words.push({
+            word: t,
+            start: round3(absStart - c.start),
+            end: round3(absEnd - c.start),
+          });
+        }
+      });
+    }
+    if (words.length) return words;
+  }
+
+  // Synthesizer — mirrors the controller's mock fallback exactly.
+  const text = [c.hook_line, c.suggested_title].filter(Boolean).join(" ");
+  const toks = text.split(/\s+/).filter(Boolean);
+  const per = dur / Math.max(1, toks.length);
+  return toks.map((t, i) => ({
+    word: t,
+    start: round3(i * per),
+    end: round3((i + 1) * per),
+  }));
 }
