@@ -213,11 +213,18 @@ def _ingest_real(
             "noprogress": True,
             "socket_timeout": 30,
             "retries": 2,
-            # Modern YouTube needs a JS runtime to compute the signature/nsig for the
-            # default web player. The mobile player clients ('android'/'ios') serve
-            # pre-signed progressive URLs that DON'T need JS — so prefer them, which
-            # is what makes downloads work on a box with no deno/node JS runtime.
-            "extractor_args": {"youtube": {"player_client": ["android", "ios", "web"]}},
+            # Modern YouTube gates high-res formats behind a JS runtime (nsig/n
+            # challenge), a GVS PO token, SABR-only experiments, or DRM — depending
+            # on the player client. On a box with no deno/node JS runtime, most
+            # clients fall back to a 360p-max ladder, which upscales to a blurry
+            # 9:16 clip. The **android_vr** client is the exception: it serves the
+            # FULL resolution ladder (360→1080→4K) with directly-downloadable URLs,
+            # NO PO token and NO JS runtime. So we try it FIRST, then the other
+            # mobile clients as fallbacks. (Verified 2026-06-15: every other client
+            # — android/ios/mweb/web/tv — was SABR/PO-token/DRM/nsig-gated to 360p.)
+            "extractor_args": {
+                "youtube": {"player_client": ["android_vr", "android", "ios", "web"]}
+            },
         }
         if ffmpeg_dir:
             ydl_opts["ffmpeg_location"] = ffmpeg_dir
@@ -331,6 +338,20 @@ def _ingest_real(
     view_count = info.get("view_count")
     if heatmap:
         print(f"  [ingest] captured 'most replayed' heatmap: {len(heatmap)} segments.")
+
+    # Surface low-res sources loudly: a < 720p source upscales to a soft 9:16
+    # clip (a 360p source becomes a ~200px-wide crop blown up to 1080 → blurry).
+    # This is almost always a yt-dlp extraction problem (the high-res ladder was
+    # gated behind a PO token / JS runtime / SABR experiment and we fell back to
+    # the 360p mobile formats), NOT a crop bug. Print so it's diagnosable.
+    src_h = int(vstream.get("height", 0))
+    if 0 < src_h < 720:
+        print(
+            f"  [ingest] WARNING: source is only {vstream.get('width')}x{src_h} "
+            f"(<720p). Vertical clips will be upscaled and look soft. YouTube likely "
+            f"gated the HD ladder; the android_vr client usually recovers 1080p. If "
+            f"this persists, set YTDLP_COOKIES_FROM_BROWSER to a logged-in browser."
+        )
 
     return SourceMetadata(
         job_id=job_id,
