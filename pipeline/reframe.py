@@ -141,6 +141,11 @@ MIN_HOLD_SEC = 1.5               # min time on a speaker before a switch is allo
 HYSTERESIS_SUSTAIN_SEC = 0.4     # challenger must win continuously for this long
 SNAP_WINDOW_SEC = 0.4            # snap a switch to a word start within +/- this
 SENTENCE_GAP_SEC = 0.4           # inter-word gap above this = sentence boundary
+# Negative-evidence switch: if the on-crop speaker's lips go still while speech
+# CONTINUES (transcript voiced) for this long, the OTHER person is talking — cut
+# to them even if they're in profile and their lips can't be measured. This is
+# what makes switching work on real podcast footage where the listener turns away.
+NEG_EVIDENCE_SEC = 1.0
 
 
 @dataclass
@@ -1022,42 +1027,67 @@ def _assign_speaker_timeline(
             return sum(abs(tr[i][1] - tr[i - 1][1]) for i in range(1, len(tr)))
         return motion(la), motion(rb)
 
-    # Step 1: per sub-window raw winner ("A"/"B"/None).
-    raw: list[tuple[float, Optional[str]]] = []
+    other = {"A": "B", "B": "A"}
+
+    # Step 1: per sub-window raw signal. Each entry is (t, winner, voiced) where
+    # winner ∈ {"A","B",None}: the positively-detected talker (lip motion), or
+    # None when silent OR ambiguous OR nobody measurable moved. ``voiced`` lets
+    # step 2 apply NEGATIVE evidence — if speech continues but the on-crop person
+    # stops moving, the *other* (often in-profile, unmeasurable) person is talking.
+    raw: list[tuple[float, Optional[str], bool]] = []
     t = 0.0
     while t < clip_duration:
         mid = t + LIPMOTION_WIN / 2.0
-        if not _is_voiced(mid, voiced):
-            raw.append((t, None))
+        voiced_now = _is_voiced(mid, voiced)
+        if not voiced_now:
+            raw.append((t, None, False))
             t += LIPMOTION_STEP
             continue
         ma, mb = cluster_motion(t, t + LIPMOTION_WIN)
         hi_lbl, hi, lo = ("A", ma, mb) if ma >= mb else ("B", mb, ma)
         if hi < ASD_MIN_MOTION or (lo > 1e-6 and hi / lo < ASD_DOMINANCE):
-            raw.append((t, None))  # silence-ish or cross-talk → no evidence
+            raw.append((t, None, True))  # voiced but no clear mover
         else:
-            raw.append((t, hi_lbl))
+            raw.append((t, hi_lbl, True))
         t += LIPMOTION_STEP
 
-    # Step 2: commit with min-hold + sustained hysteresis.
+    # Step 2: commit with min-hold + sustained hysteresis (positive evidence) and
+    # negative-evidence switching (current speaker silent while speech continues).
     timeline: list[tuple[float, str]] = []
     current: Optional[str] = None
     last_switch = -1e9
     cand: Optional[str] = None
     cand_since = 0.0
-    for (ts, winner) in raw:
+    silent_since: Optional[float] = None  # current cluster silent-while-voiced start
+    for (ts, winner, voiced_now) in raw:
         if current is None:
             if winner is not None:
                 current = winner
                 last_switch = ts
                 timeline.append((0.0, current))
             continue
-        if winner is None or winner == current:
+
+        # Track how long the CURRENT speaker has shown no lip motion during
+        # continuous voiced speech (negative evidence the other person talks).
+        if voiced_now and winner != current:
+            if silent_since is None:
+                silent_since = ts
+        else:
+            silent_since = None
+
+        # Positive-evidence challenger (the other cluster's lips clearly moved).
+        challenger: Optional[str] = winner if (winner and winner != current) else None
+        # Negative-evidence challenger: speech continues, current speaker has been
+        # silent long enough → infer the OTHER cluster is the talker.
+        if (challenger is None and silent_since is not None
+                and (ts - silent_since) >= NEG_EVIDENCE_SEC):
+            challenger = other[current]
+
+        if challenger is None:
             cand = None
             continue
-        # winner is a challenger
-        if cand != winner:
-            cand = winner
+        if cand != challenger:
+            cand = challenger
             cand_since = ts
         sustained = (ts - cand_since) >= HYSTERESIS_SUSTAIN_SEC
         held = (ts - last_switch) >= MIN_HOLD_SEC
@@ -1066,10 +1096,11 @@ def _assign_speaker_timeline(
             snap = max(0.0, min(clip_duration, snap))
             if snap <= timeline[-1][0]:
                 snap = timeline[-1][0] + 0.01
-            timeline.append((snap, winner))
-            current = winner
+            timeline.append((snap, challenger))
+            current = challenger
             last_switch = ts
             cand = None
+            silent_since = None
     if not timeline:
         # No voiced evidence anywhere: default to the more-present cluster.
         dom = a if a.presence >= b.presence else b
@@ -1584,9 +1615,14 @@ def _keyframes_to_ffmpeg_expr(keyframes: list[CropKeyframe], axis: str) -> str:
     if not keyframes:
         return "0"
     val = (lambda kf: kf.x) if axis == "x" else (lambda kf: kf.y)
+    # Keyframe i's value holds for kf[i].t <= t < kf[i+1].t. So the threshold for
+    # emitting keyframe i's value is the NEXT keyframe's start time, not its own.
+    # Build inside-out: start with the last keyframe's value (holds to the end),
+    # then for each earlier keyframe i wrap "if t < kf[i+1].t use kf[i] else …".
     expr = str(val(keyframes[-1]))
-    for kf in reversed(keyframes[:-1]):
-        expr = f"if(lt(t,{kf.t + 0.0001:.4f}),{val(kf)},{expr})"
+    for i in range(len(keyframes) - 2, -1, -1):
+        next_t = keyframes[i + 1].t
+        expr = f"if(lt(t,{next_t + 0.0001:.4f}),{val(keyframes[i])},{expr})"
     return expr
 
 

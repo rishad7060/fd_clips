@@ -252,6 +252,34 @@ def test_switch_snaps_to_word_boundary() -> None:
     assert reframe._snap_to_boundary(3.07, [1.2, 5.0], 0.4) == 3.07
 
 
+def test_keyframe_expr_holds_until_next_keyframe() -> None:
+    """Each keyframe's value must hold from its OWN time until the NEXT one's.
+
+    Regression: the expr previously used each keyframe's own start as its
+    threshold, shifting the whole crop animation one keyframe early (a clip
+    showing speaker B during speaker A's segment).
+    """
+    kfs = [
+        reframe.CropKeyframe(t=0.0, x=198, width=608),
+        reframe.CropKeyframe(t=2.5, x=1144, width=608),
+        reframe.CropKeyframe(t=3.9, x=198, width=608),
+    ]
+    expr = reframe._keyframes_to_ffmpeg_expr(kfs, "x")
+
+    def ev(t: float) -> int:
+        x = kfs[-1].x
+        for i in range(len(kfs) - 2, -1, -1):
+            if t < kfs[i + 1].t + 0.0001:
+                x = kfs[i].x
+        return x
+
+    assert ev(0.0) == 198 and ev(1.0) == 198 and ev(2.4) == 198, "A holds 0..2.5"
+    assert ev(2.6) == 1144 and ev(3.8) == 1144, "B holds 2.5..3.9"
+    assert ev(4.0) == 198, "A again after 3.9"
+    # The expression must reference the SECOND keyframe's time as the first cut.
+    assert "2.5001" in expr
+
+
 def test_captions_ass_karaoke_ltr(job_id: str) -> None:
     _score(job_id, top=5)
     extract.extract_clips(job_id, top_n=5)
