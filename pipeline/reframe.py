@@ -110,6 +110,14 @@ TWO_SHOT_MIN_FRAC = 0.4
 # talker instead of widening to a two-shot or sitting on the wrong (silent) face.
 ASD_ENABLED = True              # set False to fall back to pure-geometry framing
 ASD_CROP_PAD = 0.35             # pad the BlazeFace box by this frac before mesh
+# Tiled detection: BlazeFace downscales the whole frame to 128px internally, so
+# on a wide two-shot each person becomes tiny and the turned/profile one is
+# missed. Re-running detection on the LEFT and RIGHT halves (each at 2x the
+# effective face resolution) recovers the second speaker. Verified on a real
+# wide two-shot: full-frame found 2 faces in 13/96 frames, tiled in 52/96.
+TILED_DETECT = True
+TILE_OVERLAP = 0.10             # halves overlap by this frac so a centred face isn't split
+TILE_DEDUP_X = 0.06             # merge faces from different tiles within this x-dist
 # A face must out-move the other by this margin (sum of |Δopenness| over the
 # window) to be declared the active speaker; below it the scores are "tied" and
 # we keep both in frame (two-shot) rather than guess.
@@ -664,7 +672,12 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
 
             # MediaPipe expects contiguous RGB.
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            faces = detect_fn(rgb)  # [(cx, cy, area, score), ...]
+            # Tiled detection recovers the 2nd speaker that full-frame BlazeFace
+            # misses on a wide two-shot (each half is detected at 2x face res).
+            faces = (
+                _detect_tiled(rgb, detect_fn, np) if TILED_DETECT
+                else detect_fn(rgb)
+            )  # [(cx, cy, area, score), ...]
             if not faces:
                 # Still record the cut so a faceless shot boundary isn't lost,
                 # but mark no face (cx/cy = -1 → treated as "use neighbours").
@@ -727,6 +740,47 @@ def _dominant_face_xy(
     """
     cx, cy, _area, _score = max(faces, key=lambda f: (f[2], f[3]))
     return cx, cy
+
+
+def _detect_tiled(
+    rgb: Any, detect_fn: Any, np: Any,
+) -> list[tuple[float, float, float, float]]:
+    """Detect faces on the full frame PLUS the left/right halves, merged.
+
+    BlazeFace downscales the whole frame internally, so a person in a wide
+    two-shot is too small to detect reliably. Running detection on each half (at
+    2x effective face resolution) recovers the missed (often turned/profile)
+    second speaker. Coordinates from each tile are mapped back to full-frame
+    fractions; near-duplicate detections (same face found in overlapping tiles)
+    are merged by x-proximity, keeping the larger box. Returns the same
+    ``(cx, cy, area, score)`` shape as ``detect_fn``.
+    """
+    h, w = rgb.shape[:2]
+    found: list[tuple[float, float, float, float]] = list(detect_fn(rgb))
+
+    mid_l = int(w * (0.5 + TILE_OVERLAP))   # left tile = [0, mid_l]
+    mid_r = int(w * (0.5 - TILE_OVERLAP))   # right tile = [mid_r, w]
+    left = np.ascontiguousarray(rgb[:, :mid_l])
+    right = np.ascontiguousarray(rgb[:, mid_r:])
+    lw = max(1, mid_l)
+    rw = max(1, w - mid_r)
+    for (cx, cy, area, sc) in detect_fn(left):
+        # area was a fraction of the tile; rescale to full frame.
+        found.append((cx * lw / w, cy, area * lw / w, sc))
+    for (cx, cy, area, sc) in detect_fn(right):
+        found.append(((cx * rw + mid_r) / w, cy, area * rw / w, sc))
+
+    # Merge near-duplicate detections (same face from overlapping tiles): group
+    # by x within TILE_DEDUP_X, keep the largest-area member of each group.
+    found.sort(key=lambda f: f[0])
+    merged: list[tuple[float, float, float, float]] = []
+    for f in found:
+        if merged and abs(f[0] - merged[-1][0]) < TILE_DEDUP_X:
+            if f[2] > merged[-1][2]:
+                merged[-1] = f
+        else:
+            merged.append(f)
+    return merged
 
 
 def _face_openness(
