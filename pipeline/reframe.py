@@ -128,9 +128,9 @@ TILE_DEDUP_Y = 0.12             # …AND this y-dist (so side-by-side faces aren
 # we keep both in frame (two-shot) rather than guess.
 ASD_MIN_MOTION = 0.06           # min windowed lip-motion to count as "speaking"
 ASD_DOMINANCE = 1.4             # talker's motion must be ≥ this × the other's
-# Hysteresis: once we lock onto a speaker, require this much extra dominance from
-# a challenger before switching, so the crop doesn't ping-pong on back-and-forth.
-ASD_SWITCH_MARGIN = 1.25
+# Anti-flicker hysteresis lives in the timeline commit stage: a challenger must
+# win continuously for HYSTERESIS_SUSTAIN_SEC and MIN_HOLD_SEC must have elapsed
+# since the last switch (see _assign_speaker_timeline).
 
 # ── Clip-level speaker-cluster switching (Opus-style A/B hard cuts) ──────────
 # When TWO persistent face clusters exist (host + guest), we build a clip-level
@@ -645,7 +645,11 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
     openness_fn = None
     close_lm = None
     if ASD_ENABLED:
-        lm = _make_landmarker(mp)
+        try:
+            lm = _make_landmarker(mp)
+        except Exception as exc:  # never leak the already-built detector
+            print(f"    [reframe] landmarker build failed ({exc}); no ASD.")
+            lm = None
         if lm is not None:
             openness_fn, close_lm = lm
 
@@ -1022,11 +1026,12 @@ def _assign_speaker_timeline(
     label ∈ {"A","B"}. Per LIPMOTION_STEP-spaced sub-window: assign each measured
     face to A or B by nearest cluster x, score each cluster by lip MOTION (sum of
     |Δopenness|) over the sub-window, gated by voice activity (silence → no
-    evidence). A challenger replaces the current speaker only if it clears
-    ASD_MIN_MOTION, beats the incumbent by ASD_SWITCH_MARGIN, has won continuously
-    for HYSTERESIS_SUSTAIN_SEC, and MIN_HOLD_SEC has elapsed since the last
-    switch. Silence / cross-talk → hold. Switch times are snapped to the nearest
-    transcript word start (±SNAP_WINDOW_SEC).
+    evidence). A sub-window has a "winner" only if the louder cluster clears
+    ASD_MIN_MOTION and beats the other by ASD_DOMINANCE. A challenger then
+    replaces the current speaker only once it has won continuously for
+    HYSTERESIS_SUSTAIN_SEC AND MIN_HOLD_SEC has elapsed since the last switch
+    (these two are the anti-flicker hysteresis). Silence / cross-talk → hold.
+    Switch times are snapped to the nearest transcript word start (±SNAP_WINDOW_SEC).
     """
     split = (a.cx + b.cx) / 2.0
 

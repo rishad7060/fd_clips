@@ -517,14 +517,16 @@ def _reconstruct_sentences(transcript: dict[str, Any]) -> list["_Sentence"]:
         words = seg.get("words") or []
         if not words:
             # No word timing: close any open sentence, then treat the whole
-            # segment as one sentence so order/timing stay consistent.
+            # segment as one sentence so order/timing stay consistent. Guard the
+            # timing access — a malformed segment may lack start/end.
             flush()
             txt = str(seg.get("text", "")).strip()
+            try:
+                seg_s, seg_e = float(seg["start"]), float(seg["end"])
+            except (KeyError, TypeError, ValueError):
+                continue
             if txt:
-                sentences.append(
-                    _Sentence(len(sentences), txt,
-                              float(seg["start"]), float(seg["end"]))
-                )
+                sentences.append(_Sentence(len(sentences), txt, seg_s, seg_e))
             continue
         for w in words:
             tok = str(w.get("word", "")).strip()

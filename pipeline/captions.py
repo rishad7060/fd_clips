@@ -189,14 +189,29 @@ def _resolve_style(raw: Optional[dict[str, Any]]) -> dict[str, Any]:
     elif isinstance(align, int):
         base["alignment"] = align
 
+    # Normalize alignment to a valid ASS int (5=center default). A junk value —
+    # e.g. a hand-edited style file with alignment:"lower" copied verbatim by the
+    # full-style override loop above, or a string code map miss — must not reach
+    # the int() below and crash the whole captions stage.
+    try:
+        base["alignment"] = int(base.get("alignment", 5))
+    except (TypeError, ValueError):
+        base["alignment"] = _ALIGNMENT_MAP.get(
+            str(base.get("alignment", "")).lower(), 5
+        )
+    try:
+        base["margin_v"] = int(base.get("margin_v", 0))
+    except (TypeError, ValueError):
+        base["margin_v"] = 40
+
     # Position safety: ASS bottom alignment (2) measures margin_v from the very
     # bottom edge. The templates default margin_v ~40 (tuned for CENTER align),
     # which—when the user picks "bottom"—jams captions onto the player scrubber.
     # Opus keeps them in the lower third, well clear of the controls. So when the
     # resolved alignment is bottom, enforce a floor that lifts them above the bar.
     # (Top align (8) measures from the top, so keep its margin as-is.)
-    if int(base.get("alignment", 5)) == 2:
-        base["margin_v"] = max(int(base.get("margin_v", 0)), BOTTOM_SAFE_MARGIN_V)
+    if base["alignment"] == 2:
+        base["margin_v"] = max(base["margin_v"], BOTTOM_SAFE_MARGIN_V)
     return base
 
 _RTL_LANGS = {"ar", "fa", "ur", "he", "ps", "sd", "ckb"}
@@ -490,7 +505,12 @@ def _words_in_range(segments: list[dict], start: float, end: float) -> list[dict
     out: list[dict] = []
     for seg in segments:
         for w in seg.get("words", []):
-            if w["start"] < end and w["end"] > start:
+            # WhisperX can emit a word with null/missing start/end (unaligned
+            # token) — skip it rather than crash the whole captions stage.
+            ws, we = w.get("start"), w.get("end")
+            if ws is None or we is None:
+                continue
+            if ws < end and we > start:
                 out.append(w)
     return out
 

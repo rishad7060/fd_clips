@@ -164,6 +164,39 @@ def test_sentence_spans_segments_without_punctuation() -> None:
     assert sents[0].start == 0.0 and sents[0].end == 2.7
 
 
+def test_reconstruct_sentences_survives_malformed_segment() -> None:
+    """A wordless segment missing start/end must be skipped, not crash."""
+    tr = {
+        "duration": 3.0, "language": "en",
+        "segments": [
+            {"text": "no timing here"},  # malformed: no words, no start/end
+            {"start": 1.0, "end": 2.0, "speaker": "S0", "text": "Real one.",
+             "words": [{"word": "Real", "start": 1.0, "end": 1.4},
+                       {"word": "one.", "start": 1.4, "end": 1.8}]},
+        ],
+    }
+    sents = score_clips._reconstruct_sentences(tr)  # must not raise
+    assert any(s.text == "Real one." for s in sents)
+
+
+def test_words_in_range_skips_null_timing() -> None:
+    """A WhisperX word with null start/end is skipped, not a crash."""
+    segs = [{"words": [
+        {"word": "ok", "start": 1.0, "end": 1.5},
+        {"word": "bad", "start": None, "end": None},  # unaligned token
+        {"word": "fine", "start": 2.0, "end": 2.5},
+    ]}]
+    out = captions._words_in_range(segs, 0.0, 5.0)  # must not raise
+    assert [w["word"] for w in out] == ["ok", "fine"]
+
+
+def test_resolve_style_survives_junk_alignment() -> None:
+    """A hand-edited style with a junk alignment string must not crash."""
+    s = captions._resolve_style({"template": "hormozi", "alignment": "lower"})
+    assert isinstance(s["alignment"], int)  # coerced to a valid ASS code
+    assert isinstance(s["margin_v"], int)
+
+
 def test_indices_to_clip_coerces_messy_types() -> None:
     """LLM-returned messy index types don't crash; un-coercible -> None."""
     sents = score_clips._reconstruct_sentences(_wordy_transcript())
