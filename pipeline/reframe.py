@@ -103,6 +103,22 @@ PATH_EMA_ALPHA = 0.4
 # it as a genuine two-shot (debounces a single stray second detection).
 TWO_SHOT_MIN_FRAC = 0.4
 
+# ── Active-speaker detection (lip movement) ─────────────────────────────────
+# When ≥2 faces are visible we run FaceLandmarker per face-crop to measure mouth
+# openness, then score each face by how much its mouth MOVES over a short window
+# (a talker's mouth oscillates; a listener's is still). The window crops to the
+# talker instead of widening to a two-shot or sitting on the wrong (silent) face.
+ASD_ENABLED = True              # set False to fall back to pure-geometry framing
+ASD_CROP_PAD = 0.35             # pad the BlazeFace box by this frac before mesh
+# A face must out-move the other by this margin (sum of |Δopenness| over the
+# window) to be declared the active speaker; below it the scores are "tied" and
+# we keep both in frame (two-shot) rather than guess.
+ASD_MIN_MOTION = 0.06           # min windowed lip-motion to count as "speaking"
+ASD_DOMINANCE = 1.4             # talker's motion must be ≥ this × the other's
+# Hysteresis: once we lock onto a speaker, require this much extra dominance from
+# a challenger before switching, so the crop doesn't ping-pong on back-and-forth.
+ASD_SWITCH_MARGIN = 1.25
+
 
 @dataclass
 class CropKeyframe:
@@ -346,6 +362,99 @@ def _face_model_path() -> Optional[Path]:
         return None
 
 
+# FaceLandmarker (Tasks API) — 478-point mesh, ~3.7 MB, public, CPU. Used ONLY
+# for active-speaker detection (lip movement) when ≥2 faces are visible. Cached
+# alongside the BlazeFace model. Not bundled — downloaded once per machine.
+_LANDMARKER_MODEL_URL = (
+    "https://storage.googleapis.com/mediapipe-models/face_landmarker/"
+    "face_landmarker/float16/1/face_landmarker.task"
+)
+# FaceMesh lip landmark indices (verified against FACE_LANDMARKS_LIPS):
+#   13 = upper inner lip center, 14 = lower inner lip center,
+#   78 = left inner mouth corner, 308 = right inner mouth corner.
+# Mouth openness (scale-invariant) = dist(13,14) / dist(78,308).
+_LIP_UPPER, _LIP_LOWER = 13, 14
+_LIP_LEFT, _LIP_RIGHT = 78, 308
+
+
+def _landmarker_model_path() -> Optional[Path]:
+    """Local path to ``face_landmarker.task``, downloading once if needed.
+
+    Cached at ``<repo_root>/.cache/mediapipe/face_landmarker.task``. Returns
+    ``None`` if it can't be obtained so active-speaker detection is skipped (the
+    caller falls back to the geometric two-shot widen).
+    """
+    import urllib.request
+
+    cache_dir = get_settings().repo_root / ".cache" / "mediapipe"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    model = cache_dir / "face_landmarker.task"
+    if model.is_file() and model.stat().st_size > 1024:
+        return model
+    try:
+        print(f"    [reframe] fetching MediaPipe face-landmarker -> {model}")
+        urllib.request.urlretrieve(_LANDMARKER_MODEL_URL, str(model))
+        return model if model.stat().st_size > 1024 else None
+    except Exception as exc:  # pragma: no cover - network dependent
+        print(f"    [reframe] landmarker download failed ({exc}); no ASD.")
+        return None
+
+
+def _make_landmarker(mp: Any) -> Optional[tuple[Any, Any]]:
+    """Build a per-crop FaceLandmarker for active-speaker mouth tracking.
+
+    Returns ``(openness_fn, closer)`` where
+    ``openness_fn(rgb_face_crop) -> Optional[float]`` gives that one face's
+    scale-invariant mouth openness ``dist(13,14)/dist(78,308)`` (None if no face
+    landmarks found in the crop), and ``closer()`` releases resources. Returns
+    ``None`` when the Tasks API or model is unavailable (caller skips ASD).
+    """
+    try:
+        from mediapipe.tasks.python import vision
+        from mediapipe.tasks.python.core.base_options import BaseOptions
+    except Exception:  # pragma: no cover
+        return None
+
+    model = _landmarker_model_path()
+    if model is None:
+        return None
+
+    try:
+        options = vision.FaceLandmarkerOptions(
+            base_options=BaseOptions(model_asset_path=str(model)),
+            running_mode=vision.RunningMode.IMAGE,
+            num_faces=1,
+            min_face_detection_confidence=FACE_MIN_CONFIDENCE,
+        )
+        det = vision.FaceLandmarker.create_from_options(options)
+    except Exception as exc:  # pragma: no cover
+        print(f"    [reframe] landmarker init failed ({exc}); no ASD.")
+        return None
+
+    def openness(rgb_crop: Any) -> Optional[float]:
+        h, w = rgb_crop.shape[:2]
+        if h < 8 or w < 8:
+            return None
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_crop)
+        res = det.detect(mp_image)
+        if not res.face_landmarks:
+            return None
+        lm = res.face_landmarks[0]
+        try:
+            up, lo = lm[_LIP_UPPER], lm[_LIP_LOWER]
+            le, ri = lm[_LIP_LEFT], lm[_LIP_RIGHT]
+        except IndexError:
+            return None
+        # Normalized coords (0..1); ratio is scale-invariant so px vs norm agree.
+        v_gap = ((up.x - lo.x) ** 2 + (up.y - lo.y) ** 2) ** 0.5
+        m_width = ((le.x - ri.x) ** 2 + (le.y - ri.y) ** 2) ** 0.5
+        if m_width < 1e-6:
+            return None
+        return v_gap / m_width
+
+    return openness, det.close
+
+
 def _make_face_detector(mp: Any) -> Optional[tuple[Any, Any]]:
     """Build a face detector across both MediaPipe API generations.
 
@@ -429,7 +538,11 @@ class FaceSample:
     cx: float           # dominant face center x as fraction of width (-1 = none)
     cy: float           # dominant face center y as fraction of height (-1 = none)
     is_cut: bool        # True if a scene cut was detected at/just before this frame
-    faces: list[tuple[float, float]] = field(default_factory=list)  # (cx,cy) all faces
+    # Every detected face this frame: (cx, cy, openness). ``openness`` is the
+    # scale-invariant mouth-open ratio from FaceLandmarker, or -1.0 when not
+    # measured (single-face frame, ASD off, or no landmarks). Used for
+    # active-speaker scoring (lip motion over time).
+    faces: list[tuple[float, float, float]] = field(default_factory=list)
 
 
 def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
@@ -465,10 +578,22 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
         return None
     detect_fn, close_fn = detector
 
+    # Active-speaker landmarker (built once, lazily). Only used on frames with
+    # ≥2 faces — single-face frames need no talker disambiguation. If it can't
+    # be built (offline / no model) we simply skip ASD and keep geometry framing.
+    openness_fn = None
+    close_lm = None
+    if ASD_ENABLED:
+        lm = _make_landmarker(mp)
+        if lm is not None:
+            openness_fn, close_lm = lm
+
     cap = cv2.VideoCapture(str(raw))
     if not cap.isOpened():
         print("    [reframe] OpenCV could not open clip; center crop.")
         close_fn()
+        if close_lm:
+            close_lm()
         return None
 
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -512,11 +637,21 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
 
             # Dominant face = largest box area; tie-break on detection score.
             cx, cy = _dominant_face_xy(faces)
-            # Keep every face center (clamped) so a window can widen to two-shot.
-            all_centers = [
-                (min(1.0, max(0.0, fx)), min(1.0, max(0.0, fy)))
-                for (fx, fy, _a, _s) in faces
-            ]
+            # Measure mouth openness per face ONLY when ≥2 faces are visible (the
+            # only case where we must decide WHO is talking). Crop each face box
+            # (padded) and run FaceLandmarker on it — robust on small/360p faces.
+            measure = openness_fn is not None and len(faces) >= 2
+            fh, fw = frame.shape[:2]
+            all_centers: list[tuple[float, float, float]] = []
+            for (fx, fy, area, _s) in faces:
+                fx_c = min(1.0, max(0.0, fx))
+                fy_c = min(1.0, max(0.0, fy))
+                openness = -1.0
+                if measure:
+                    openness = _face_openness(
+                        rgb, fx, fy, area, fw, fh, openness_fn
+                    )
+                all_centers.append((fx_c, fy_c, openness))
             samples.append(
                 FaceSample(
                     t=t,
@@ -530,6 +665,11 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
         cap.release()
         try:
             close_fn()
+        except Exception:
+            pass
+        try:
+            if close_lm:
+                close_lm()
         except Exception:
             pass
 
@@ -552,6 +692,38 @@ def _dominant_face_xy(
     return cx, cy
 
 
+def _face_openness(
+    rgb: Any, fx: float, fy: float, area: float,
+    frame_w: int, frame_h: int, openness_fn: Any,
+) -> float:
+    """Crop the face box (padded) from ``rgb`` and return its mouth openness.
+
+    ``fx``/``fy`` are the face-center fractions and ``area`` the box-area fraction
+    from BlazeFace. A face box is ~square, so side ≈ sqrt(area); we pad it by
+    ``ASD_CROP_PAD`` and feed the crop to ``openness_fn`` (FaceLandmarker on a
+    single face). Returns the openness ratio, or -1.0 when the crop is degenerate
+    or no landmarks are found.
+    """
+    side = max(0.04, area ** 0.5)  # box side as fraction of frame (square approx)
+    half = side * (1.0 + ASD_CROP_PAD) / 2.0
+    x0 = int(round((fx - half) * frame_w))
+    x1 = int(round((fx + half) * frame_w))
+    y0 = int(round((fy - half) * frame_h))
+    y1 = int(round((fy + half) * frame_h))
+    x0 = max(0, min(frame_w - 1, x0))
+    x1 = max(x0 + 1, min(frame_w, x1))
+    y0 = max(0, min(frame_h - 1, y0))
+    y1 = max(y0 + 1, min(frame_h, y1))
+    crop = rgb[y0:y1, x0:x1]
+    if crop.shape[0] < 8 or crop.shape[1] < 8:
+        return -1.0
+    try:
+        val = openness_fn(crop)
+    except Exception:
+        return -1.0
+    return float(val) if val is not None else -1.0
+
+
 def _median(vals: list[float]) -> float:
     """Median of a non-empty list."""
     s = sorted(vals)
@@ -559,16 +731,69 @@ def _median(vals: list[float]) -> float:
     return s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2.0
 
 
+def _active_speaker_x(
+    framed: list["FaceSample"],
+) -> Optional[tuple[float, float]]:
+    """Identify the active speaker in a two-shot window by lip motion.
+
+    Splits the window's faces into a LEFT cluster and a RIGHT cluster (by the
+    per-window median face x), tracks each cluster's mouth openness over time, and
+    scores each by total lip MOTION (sum of |Δopenness| — a talker oscillates, a
+    listener is still). Returns ``(speaker_center_x, motion_ratio)`` when one side
+    clearly out-talks the other (passes ASD_MIN_MOTION and ASD_DOMINANCE), else
+    ``None`` (caller keeps both in a two-shot). ``motion_ratio`` is the talker's
+    motion / the other's, for hysteresis upstream.
+    """
+    # Collect (x, openness) for every measured face, split by overall median x.
+    measured: list[tuple[float, float, float]] = []  # (t, x, openness)
+    for s in framed:
+        for (fx, _fy, op) in s.faces:
+            if op >= 0.0:
+                measured.append((s.t, fx, op))
+    if len(measured) < 4:
+        return None
+    split_x = _median([m[1] for m in measured])
+
+    def motion(track: list[tuple[float, float]]) -> float:
+        # track = [(t, openness)] sorted by t; sum of |Δopenness| between samples.
+        track.sort(key=lambda r: r[0])
+        return sum(abs(track[i][1] - track[i - 1][1]) for i in range(1, len(track)))
+
+    left = [(t, op) for (t, x, op) in measured if x <= split_x]
+    right = [(t, op) for (t, x, op) in measured if x > split_x]
+    if len(left) < 2 or len(right) < 2:
+        return None  # not really two distinct, persistently-tracked faces
+
+    m_left, m_right = motion(left), motion(right)
+    hi, lo = (m_left, m_right) if m_left >= m_right else (m_right, m_left)
+    if hi < ASD_MIN_MOTION:
+        return None  # neither side is moving enough — nobody clearly talking
+    ratio = hi / lo if lo > 1e-6 else 999.0
+    if ratio < ASD_DOMINANCE:
+        return None  # both moving similarly (cross-talk) — keep both
+
+    # Center on the talking cluster's median x.
+    side = left if m_left >= m_right else right
+    # Recover that side's xs to center precisely.
+    xs = [x for (t, x, op) in measured
+          if (x <= split_x) == (m_left >= m_right)]
+    return _median(xs), ratio
+
+
 def _window_target(
     win: list["FaceSample"],
 ) -> Optional[tuple[float, float, float]]:
     """Compute a window's desired framing as (center_x, center_y, width) fractions.
 
-    Looks at every face in the window (not just the dominant one). If two or more
-    faces are spread horizontally by more than ``TWO_SHOT_SPREAD`` in a sufficient
-    share of frames, returns a WIDER window spanning both (so a zoomed-out
-    two-shot keeps the off-centre speaker). Otherwise returns a tight window on
-    the dominant (median) face. ``None`` when the window has no faces at all.
+    Looks at every face in the window (not just the dominant one). Priority order:
+      1. **Active speaker** — if two faces are present and lip-motion clearly marks
+         one as the talker, tight-crop to THEM (Opus-style: follow who's talking,
+         not the biggest/nearest face). This is the fix for "camera sits on the
+         silent listener while the other person speaks".
+      2. **Two-shot** — if both faces are far apart and neither clearly dominates
+         (cross-talk / nobody talking), WIDEN to keep both.
+      3. **Single face** — tight-frame the dominant (median) face.
+    ``None`` when the window has no faces at all.
     """
     framed = [s for s in win if s.cx >= 0.0]
     if not framed:
@@ -580,7 +805,7 @@ def _window_target(
     all_left: list[float] = []
     all_right: list[float] = []
     for s in framed:
-        xs = [fx for (fx, _fy) in s.faces] or [s.cx]
+        xs = [fx for (fx, _fy, _op) in s.faces] or [s.cx]
         lo, hi = min(xs), max(xs)
         all_left.append(lo)
         all_right.append(hi)
@@ -591,14 +816,18 @@ def _window_target(
     cy = _median([s.cy for s in framed])
 
     if is_two_shot:
-        # Span both extremes (median of per-frame extremes = robust to a stray).
+        # 1. Active-speaker: crop tight to the talker if lip motion is decisive.
+        speaker = _active_speaker_x(framed)
+        if speaker is not None:
+            return speaker[0], cy, 0.0  # width 0 → tight 9:16 on the talker
+        # 2. No clear talker → span both extremes (keep both in frame).
         left = _median(all_left)
         right = _median(all_right)
         center_x = (left + right) / 2.0
         width = min(1.0, (right - left) + 2 * TWO_SHOT_MARGIN)
         return center_x, cy, width
 
-    # Tight single-face framing on the dominant (median) center.
+    # 3. Tight single-face framing on the dominant (median) center.
     center_x = _median([s.cx for s in framed])
     return center_x, cy, 0.0  # width 0 → caller uses the base 9:16 width
 

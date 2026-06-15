@@ -1,4 +1,4 @@
-"""Offline (MOCK_MODE) tests for the FocalDive Clips pipeline.
+"""Offline (MOCK_MODE) tests for the YT Shorts Clips pipeline.
 
 Run:  python -m pytest tests/test_pipeline.py -q
 All tests force MOCK_MODE so they run with no GPU, no ffmpeg, and no API keys.
@@ -125,6 +125,48 @@ def test_reframe_plans_vertical(job_id: str) -> None:
         assert p.target_width == 1080 and p.target_height == 1920
         assert p.keyframes, "crop plan must have keyframes"
         assert p.mode in {"active-speaker", "two-face", "center-fallback"}
+
+
+def _two_shot_window(left_open, right_open):
+    """Build a 10-sample two-shot window: LEFT face at x=0.25, RIGHT at x=0.75.
+
+    ``left_open(i)``/``right_open(i)`` give each face's mouth openness per sample.
+    """
+    return [
+        reframe.FaceSample(
+            t=i * 0.12, cx=0.25, cy=0.4, is_cut=False,
+            faces=[(0.25, 0.4, left_open(i)), (0.75, 0.4, right_open(i))],
+        )
+        for i in range(10)
+    ]
+
+
+def test_active_speaker_crops_to_talker() -> None:
+    """ASD: when one face's lips move and the other's are still, crop to the talker."""
+    talk = lambda i: 0.1 + 0.4 * (i % 2)   # oscillating mouth = talking
+    still = lambda i: 0.30                  # constant (even if open) = listening
+
+    # LEFT talks -> tight crop centered on left face (x~0.25), width 0 (tight).
+    cx, _cy, w = reframe._window_target(_two_shot_window(talk, still))
+    assert abs(cx - 0.25) < 0.1 and w == 0.0, "should crop tight to LEFT talker"
+
+    # RIGHT talks -> tight crop on right face (x~0.75).
+    cx, _cy, w = reframe._window_target(_two_shot_window(still, talk))
+    assert abs(cx - 0.75) < 0.1 and w == 0.0, "should crop tight to RIGHT talker"
+
+
+def test_active_speaker_keeps_both_when_ambiguous() -> None:
+    """ASD: cross-talk or both-silent -> keep BOTH (two-shot widen), don't guess."""
+    talk_a = lambda i: 0.1 + 0.4 * (i % 2)
+    talk_b = lambda i: 0.1 + 0.4 * ((i + 1) % 2)
+    # Both talking (cross-talk) -> widen (width > 0), center between them.
+    cx, _cy, w = reframe._window_target(_two_shot_window(talk_a, talk_b))
+    assert w > 0.0 and abs(cx - 0.5) < 0.1, "cross-talk should keep both"
+    # Both still -> widen (no clear talker).
+    _cx, _cy, w2 = reframe._window_target(
+        _two_shot_window(lambda i: 0.30, lambda i: 0.32)
+    )
+    assert w2 > 0.0, "both-silent should keep both, not guess a talker"
 
 
 def test_captions_ass_karaoke_ltr(job_id: str) -> None:
