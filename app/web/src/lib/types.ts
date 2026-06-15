@@ -45,6 +45,9 @@ export interface ClipStyle {
   alignment?: "top" | "center" | "bottom";
   /** Caption font size override (px in the 1080x1920 canvas); omit = template default. */
   font_size?: number;
+  /** Opus-style auto-hook: white box with the hook at the top for the first 5s.
+   *  Defaults to on in the pipeline; set false to "Disable it". */
+  hook_overlay?: boolean;
 }
 
 /** Job, DB / API view (CONTRACTS §1). */

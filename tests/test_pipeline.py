@@ -477,6 +477,34 @@ def test_ass_timestamp_format() -> None:
     assert captions._ass_timestamp(3661.999) == "1:01:02.00"
 
 
+def test_hook_overlay_burned_for_first_seconds() -> None:
+    """The auto-hook box (Opus-style) is burned into the ASS for the first 5s."""
+    words = [{"word": "Because", "start": 0.0, "end": 0.4},
+             {"word": "we", "start": 0.4, "end": 0.8}]
+    ass = captions.build_ass(words, clip_start=0.0,
+                             style={"template": "hormozi"},
+                             hook_title="Will AI Make Us Dumber?")
+    assert "Style: HookTitle" in ass, "hook style must be defined"
+    # The hook Dialogue runs 0 -> HOOK_SECONDS and carries the hook text.
+    hook_lines = [l for l in ass.splitlines() if l.startswith("Dialogue:") and "HookTitle" in l]
+    assert len(hook_lines) == 1
+    assert "0:00:00.00" in hook_lines[0]
+    assert captions._ass_timestamp(captions.HOOK_SECONDS) in hook_lines[0]
+    assert "Dumber?" in hook_lines[0]
+    # Line break must be a real ASS \N, not a literal escaped backslash.
+    bs = chr(92)
+    assert (bs + bs + "N") not in hook_lines[0], "no doubled-backslash break leak"
+
+
+def test_hook_overlay_can_be_disabled() -> None:
+    """The 'Disable it' toggle (hook_overlay=false) suppresses the box."""
+    assert captions._hook_overlay_enabled({"hook_overlay": False}) is False
+    assert captions._hook_overlay_enabled({"hook_overlay": "false"}) is False
+    assert captions._hook_overlay_enabled({"template": "hormozi"}) is True  # default on
+    # No hook event when title is empty.
+    assert captions._hook_event("", False) is None
+
+
 def test_bottom_alignment_lifts_above_scrubber() -> None:
     """Bottom-aligned captions must clear the player controls (lower third).
 

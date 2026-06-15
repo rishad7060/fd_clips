@@ -61,6 +61,16 @@ _ALIGNMENT_MAP: dict[str, int] = {"top": 8, "center": 5, "middle": 5, "bottom": 
 # up) like Opus, not jammed on the progress bar.
 BOTTOM_SAFE_MARGIN_V = 210
 
+# ── Auto-hook overlay (Opus-style: a white box with the hook at the TOP for the
+# first few seconds of the clip). Burned into the rendered video, NOT just shown
+# on the gallery card. Toggleable per job (see HOOK_OVERLAY_DEFAULT).
+HOOK_OVERLAY_DEFAULT = True   # show the hook box unless the job style disables it
+HOOK_SECONDS = 5.0            # how long the hook box stays on (Opus = first 5s)
+HOOK_FONT_SIZE = 64           # smaller than the karaoke captions — it's a banner
+HOOK_BOX_PAD = 12             # Outline value w/ BorderStyle 3 = box padding (px)
+HOOK_MARGIN_V = 150           # top margin so the box sits just below the top edge
+HOOK_MAX_CHARS_PER_LINE = 22  # wrap the hook so the white box doesn't run wide
+
 # ── Named caption templates (the app's style picker maps onto these) ─────────
 # Each is a full ASS style profile. The app sends {template, font,
 # highlight_color, alignment}; _resolve_style merges that onto the chosen
@@ -296,6 +306,14 @@ def _ass_header(style: dict[str, Any], rtl: bool) -> str:
         f"{-1 if style.get('bold', True) else 0},0,0,0,"
         f"100,100,0,0,1,{style['outline']},{style['shadow']},"
         f"{style['alignment']},60,60,{style['margin_v']},1\n"
+        # HookTitle: the opening question/hook in an opaque WHITE box at the TOP
+        # (Opus-style), shown for the first few seconds. BorderStyle 3 = filled
+        # box; black text (PrimaryColour) on a white box (OutlineColour acts as
+        # the box fill with BorderStyle 3). Alignment 8 = top-center.
+        f"Style: HookTitle,{style['font']},{HOOK_FONT_SIZE},"
+        f"&H00000000,&H00000000,&H00FFFFFF,&H00FFFFFF,"
+        f"-1,0,0,0,100,100,0,0,3,{HOOK_BOX_PAD},0,"
+        f"8,80,80,{HOOK_MARGIN_V},1\n"
         "\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, "
@@ -395,6 +413,40 @@ def _wrap_words_to_width(
     return lines
 
 
+def _hook_event(hook_title: str, rtl: bool) -> Optional[str]:
+    """Build the top white-box hook Dialogue event for the first HOOK_SECONDS.
+
+    Opus-style: the opening question/hook sits in an opaque white box at the top
+    of the clip for the first few seconds, then disappears. Returns the Dialogue
+    line, or None when there's no hook text. The text is wrapped to a couple of
+    short lines so the white box stays narrow (\\N = ASS hard line break).
+    """
+    text = " ".join(str(hook_title or "").split())
+    if not text:
+        return None
+    # Wrap to <= HOOK_MAX_CHARS_PER_LINE per line (max 2 lines) so the box is tidy.
+    words = text.split()
+    lines: list[str] = []
+    cur = ""
+    for w in words:
+        if cur and len(cur) + 1 + len(w) > HOOK_MAX_CHARS_PER_LINE:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = f"{cur} {w}".strip()
+    if cur:
+        lines.append(cur)
+    # Escape each line's text FIRST, then join with the ASS hard break \N — if we
+    # escaped after joining, _ass_escape would mangle the \N into a literal "\\N".
+    wrapped = "\\N".join(_ass_escape(ln) for ln in lines[:3])  # cap at 3 lines
+    if rtl:
+        wrapped = f"{_RLE}{wrapped}{_PDF}"
+    return (
+        f"Dialogue: 1,{_ass_timestamp(0.0)},{_ass_timestamp(HOOK_SECONDS)},"
+        f"HookTitle,,0,0,0,,{wrapped}"
+    )
+
+
 def build_ass(
     words: list[dict[str, Any]],
     *,
@@ -402,13 +454,15 @@ def build_ass(
     style: Optional[dict[str, Any]] = None,
     rtl: bool = False,
     language: str = "en",
+    hook_title: str = "",
 ) -> str:
     """Build a full ASS document string with karaoke (\\k) word highlighting.
 
     ``words`` are absolute-timed {word, start, end}; they are re-based to the
     clip start. Words are grouped into lines of ``max_words_per_line``; each line
     is one Dialogue event whose text is a sequence of ``{\\kNN}word`` tokens so
-    each word highlights as it is spoken.
+    each word highlights as it is spoken. When ``hook_title`` is given, an
+    Opus-style white hook box is shown at the TOP for the first HOOK_SECONDS.
     """
     st = _resolve_style(style) if style is not None else dict(DEFAULT_STYLE)
     header = _ass_header(st, rtl)
@@ -482,7 +536,29 @@ def build_ass(
             f"Karaoke,,0,0,0,,{text}"
         )
 
+    # Prepend the top white-box hook overlay (first HOOK_SECONDS) when present.
+    # Layer 1 so it draws above the karaoke captions (layer 0) if they overlap.
+    hook_ev = _hook_event(hook_title, rtl)
+    if hook_ev:
+        events.insert(0, hook_ev)
+
     return header + "\n".join(events) + "\n"
+
+
+def _hook_overlay_enabled(style: Optional[dict[str, Any]]) -> bool:
+    """Whether the top auto-hook box is shown (the app's 'Disable it' toggle).
+
+    Reads ``hook_overlay`` from the raw job style; defaults to
+    ``HOOK_OVERLAY_DEFAULT`` so a job with no preference still gets the hook.
+    """
+    if not style:
+        return HOOK_OVERLAY_DEFAULT
+    val = style.get("hook_overlay")
+    if val is None:
+        return HOOK_OVERLAY_DEFAULT
+    if isinstance(val, str):
+        return val.strip().lower() not in ("false", "0", "no", "off", "disabled")
+    return bool(val)
 
 
 def _load_style(ws: Path) -> dict[str, Any]:
@@ -595,8 +671,20 @@ def caption_clips(job_id: str, top_n: Optional[int] = None) -> list[CaptionResul
             ]
         else:
             words = _words_in_range(segments, start, end)
+        # Opus-style auto-hook: the short hook_title in a white box at the top for
+        # the first few seconds. Off when the job style sets hook_overlay=false
+        # (the "Disable it" toggle). An editor override can also set per-rank text.
+        hook_text = ""
+        if _hook_overlay_enabled(style):
+            hook_text = str(
+                (ov or {}).get("hook_title")
+                or cand.get("hook_title")
+                or cand.get("hook_line")
+                or ""
+            )
         ass = build_ass(
-            words, clip_start=start, style=style, rtl=rtl, language=language
+            words, clip_start=start, style=style, rtl=rtl, language=language,
+            hook_title=hook_text,
         )
         ass_path = clips_dir / f"{rank}.ass"
         ass_path.write_text(ass, encoding="utf-8")
