@@ -56,6 +56,10 @@ _EMOJI_KEYWORDS: dict[str, str] = {
 
 # Alignment names → libass numpad codes (X-center column: 8 top, 5 mid, 2 bottom).
 _ALIGNMENT_MAP: dict[str, int] = {"top": 8, "center": 5, "middle": 5, "bottom": 2}
+# On a 1920-tall 9:16 frame, the player scrubber/controls occupy the bottom ~10%.
+# Bottom-aligned captions must clear them — keep them in the lower third (~200px
+# up) like Opus, not jammed on the progress bar.
+BOTTOM_SAFE_MARGIN_V = 210
 
 # ── Named caption templates (the app's style picker maps onto these) ─────────
 # Each is a full ASS style profile. The app sends {template, font,
@@ -184,6 +188,15 @@ def _resolve_style(raw: Optional[dict[str, Any]]) -> dict[str, Any]:
         base["alignment"] = _ALIGNMENT_MAP.get(align.lower(), base["alignment"])
     elif isinstance(align, int):
         base["alignment"] = align
+
+    # Position safety: ASS bottom alignment (2) measures margin_v from the very
+    # bottom edge. The templates default margin_v ~40 (tuned for CENTER align),
+    # which—when the user picks "bottom"—jams captions onto the player scrubber.
+    # Opus keeps them in the lower third, well clear of the controls. So when the
+    # resolved alignment is bottom, enforce a floor that lifts them above the bar.
+    # (Top align (8) measures from the top, so keep its margin as-is.)
+    if int(base.get("alignment", 5)) == 2:
+        base["margin_v"] = max(int(base.get("margin_v", 0)), BOTTOM_SAFE_MARGIN_V)
     return base
 
 _RTL_LANGS = {"ar", "fa", "ur", "he", "ps", "sd", "ckb"}

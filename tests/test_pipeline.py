@@ -444,6 +444,20 @@ def test_ass_timestamp_format() -> None:
     assert captions._ass_timestamp(3661.999) == "1:01:02.00"
 
 
+def test_bottom_alignment_lifts_above_scrubber() -> None:
+    """Bottom-aligned captions must clear the player controls (lower third).
+
+    Regression: 'bottom' + a template's small center-tuned margin (40) jammed
+    captions onto the video scrubber. The resolver now floors bottom margin_v.
+    """
+    s = captions._resolve_style({"template": "hormozi", "alignment": "bottom"})
+    assert s["alignment"] == 2
+    assert s["margin_v"] >= captions.BOTTOM_SAFE_MARGIN_V, "bottom must clear controls"
+    # Center/top keep their own (smaller) margins — they're measured differently.
+    assert captions._resolve_style({"template": "hormozi", "alignment": "center"})["margin_v"] < 100
+    assert captions._resolve_style({"template": "hormozi", "alignment": "top"})["margin_v"] < 100
+
+
 def test_full_pipeline_five_rows(job_id: str) -> None:
     summary = run_mod.run_pipeline("mock://podcast", job_id, 5, force=True)
     assert summary["clip_count"] == 5
