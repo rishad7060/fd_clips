@@ -516,7 +516,9 @@ def _reconstruct_sentences(transcript: dict[str, Any]) -> list["_Sentence"]:
     for seg in segments:
         words = seg.get("words") or []
         if not words:
-            # No word timing: treat the whole segment as one sentence.
+            # No word timing: close any open sentence, then treat the whole
+            # segment as one sentence so order/timing stay consistent.
+            flush()
             txt = str(seg.get("text", "")).strip()
             if txt:
                 sentences.append(
@@ -532,7 +534,10 @@ def _reconstruct_sentences(transcript: dict[str, Any]) -> list["_Sentence"]:
                 w_start, w_end = float(w["start"]), float(w["end"])
             except (KeyError, TypeError, ValueError):
                 continue
-            # A >0.8s gap between words also ends a sentence (natural pause).
+            # A >0.8s gap between words ends a sentence (natural pause). We do NOT
+            # flush at segment boundaries — WhisperX segments often split a single
+            # spoken sentence, so flushing there would cut a sentence in half. A
+            # sentence ends only on terminal punctuation or a real pause.
             if buf and s_start is not None and (w_start - last_end) > 0.8:
                 flush()
             if s_start is None:
@@ -541,8 +546,7 @@ def _reconstruct_sentences(transcript: dict[str, Any]) -> list["_Sentence"]:
             last_end = w_end
             if tok[-1] in ".?!":
                 flush()
-        flush()  # segment boundary closes any open sentence
-    flush()
+    flush()  # close any sentence still open at the end of the transcript
     return sentences
 
 
@@ -566,11 +570,15 @@ def _repair_start_idx(sentences: list["_Sentence"], start_idx: int, end_idx: int
     if not (0 <= start_idx <= end_idx < len(sentences)):
         return start_idx
     i = start_idx
-    steps = 0
-    while i > 0 and steps < 2 and _starts_on_orphan(sentences[i].text):
+    for _ in range(3):  # check start + up to 2 sentences back
+        if not _starts_on_orphan(sentences[i].text):
+            return i  # found a clean subject start
+        if i == 0:
+            break
         i -= 1
-        steps += 1
-    return i
+    # No clean start within reach → keep the LLM's original choice rather than
+    # returning a still-orphan earlier index (which would also lengthen the clip).
+    return start_idx
 
 
 def _indices_to_clip(
@@ -584,8 +592,15 @@ def _indices_to_clip(
     n = len(sentences)
     if n == 0:
         return None
-    start_idx = max(0, min(n - 1, int(start_idx)))
-    end_idx = max(0, min(n - 1, int(end_idx)))
+    # LLM JSON may hand back "5", 5.0, "5.0", or null — coerce defensively so a
+    # stray type never crashes the whole scoring run; un-coercible → drop.
+    try:
+        start_idx = int(float(start_idx))
+        end_idx = int(float(end_idx))
+    except (TypeError, ValueError):
+        return None
+    start_idx = max(0, min(n - 1, start_idx))
+    end_idx = max(0, min(n - 1, end_idx))
     if end_idx < start_idx:
         start_idx, end_idx = end_idx, start_idx
     start_idx = _repair_start_idx(sentences, start_idx, end_idx)
@@ -663,8 +678,14 @@ def _resolve_index_candidates(
     out: list[dict[str, Any]] = []
     for c in candidates:
         if "start_idx" in c or "end_idx" in c:
-            si = c.get("start_idx", c.get("end_idx", 0))
-            ei = c.get("end_idx", c.get("start_idx", 0))
+            # Treat a present-but-null key as missing so one index can backfill
+            # the other (e.g. {"start_idx": null, "end_idx": 8}).
+            si = c.get("start_idx")
+            ei = c.get("end_idx")
+            if si is None:
+                si = ei
+            if ei is None:
+                ei = si
             resolved = _indices_to_clip(sentences, si, ei)
             if resolved is None:
                 continue

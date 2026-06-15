@@ -143,6 +143,45 @@ def test_indices_to_clip_resolves_real_times() -> None:
     assert text.startswith("Money is simple.") and text.endswith("Start today now.")
 
 
+def test_sentence_spans_segments_without_punctuation() -> None:
+    """A sentence split across WhisperX segments (no mid punctuation) stays ONE."""
+    def words(pairs):
+        return [{"word": w, "start": s, "end": e} for (w, s, e) in pairs]
+    tr = {
+        "duration": 5.0, "language": "en",
+        "segments": [
+            # No terminal punctuation, no pause to next segment -> one sentence.
+            {"start": 0.0, "end": 1.5, "speaker": "S0", "text": "I think that",
+             "words": words([("I", 0.0, 0.3), ("think", 0.3, 0.8), ("that", 0.8, 1.1)])},
+            {"start": 1.5, "end": 3.0, "speaker": "S0", "text": "nobody talks about it.",
+             "words": words([("nobody", 1.2, 1.6), ("talks", 1.6, 2.0),
+                             ("about", 2.0, 2.3), ("it.", 2.3, 2.7)])},
+        ],
+    }
+    sents = score_clips._reconstruct_sentences(tr)
+    assert len(sents) == 1, f"should be one sentence across segments, got {[s.text for s in sents]}"
+    assert sents[0].text == "I think that nobody talks about it."
+    assert sents[0].start == 0.0 and sents[0].end == 2.7
+
+
+def test_indices_to_clip_coerces_messy_types() -> None:
+    """LLM-returned messy index types don't crash; un-coercible -> None."""
+    sents = score_clips._reconstruct_sentences(_wordy_transcript())
+    assert score_clips._indices_to_clip(sents, "0", "2.0") is not None  # str/strfloat
+    assert score_clips._indices_to_clip(sents, 0.0, 2.0) is not None    # float
+    assert score_clips._indices_to_clip(sents, None, 2) is None         # null
+    assert score_clips._indices_to_clip(sents, "foo", 2) is None        # garbage
+
+
+def test_repair_returns_original_when_no_clean_start() -> None:
+    """If every reachable start is an orphan, keep the original (don't lengthen)."""
+    def mk(txt, i):
+        return score_clips._Sentence(i, txt, float(i), float(i) + 0.5)
+    sents = [mk("And one.", 0), mk("But two.", 1), mk("So three.", 2), mk("It four.", 3)]
+    # start at 3 ("It four."), all preceding are orphans within 2 steps -> keep 3.
+    assert score_clips._repair_start_idx(sents, 3, 3) == 3
+
+
 def test_resolve_index_candidates_repairs_orphan() -> None:
     """LLM start_idx on an orphan sentence is repaired to a clean start."""
     sents = score_clips._reconstruct_sentences(_wordy_transcript())
