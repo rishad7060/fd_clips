@@ -99,6 +99,10 @@ TWO_SHOT_MARGIN = 0.10     # extra width padding around the two faces (frac of W
 # EMA smoothing of the window-to-window crop center & width (calm pan/zoom, no
 # whip). Reset on a scene cut so a real angle change snaps instantly.
 PATH_EMA_ALPHA = 0.4
+# Dead-zone: hold the crop steady when the next keyframe is within this many
+# source px of the current one (kills micro-jitter on a still single speaker).
+# ~36px on a 1080-tall source ≈ 3% of the crop — below visible drift, above noise.
+PATH_DEADZONE_PX = 36
 # Min fraction of frames in a window that must contain >=2 faces before we treat
 # it as a genuine two-shot (debounces a single stray second detection).
 TWO_SHOT_MIN_FRAC = 0.4
@@ -138,15 +142,21 @@ CLUSTER_MIN_SEP = 0.18           # min x-separation between the two cluster cent
 CLUSTER_MIN_TWOFACE_SAMPLES = 4  # min samples where BOTH clusters co-occur
 LIPMOTION_WIN = 0.4              # sub-window (s) for per-cluster lip-motion variance
 LIPMOTION_STEP = 0.2             # step between sub-windows (s)
-MIN_HOLD_SEC = 1.5               # min time on a speaker before a switch is allowed
-HYSTERESIS_SUSTAIN_SEC = 0.4     # challenger must win continuously for this long
-SNAP_WINDOW_SEC = 0.4            # snap a switch to a word start within +/- this
+# STABILITY: once a speaker is framed, STAY there. A short min-hold made the crop
+# feel jumpy (re-cutting every ~1.5s). Opus holds a speaker for the whole thought.
+# So: long min-hold, and a challenger must win for a sustained stretch before we
+# cut — a brief interjection / backchannel ("yeah", "right") never steals the crop.
+MIN_HOLD_SEC = 3.0               # min time on a speaker before a switch is allowed
+HYSTERESIS_SUSTAIN_SEC = 0.9     # challenger must win continuously for this long
+SNAP_WINDOW_SEC = 0.5            # snap a switch to a word start within +/- this
 SENTENCE_GAP_SEC = 0.4           # inter-word gap above this = sentence boundary
 # Negative-evidence switch: if the on-crop speaker's lips go still while speech
 # CONTINUES (transcript voiced) for this long, the OTHER person is talking — cut
 # to them even if they're in profile and their lips can't be measured. This is
 # what makes switching work on real podcast footage where the listener turns away.
-NEG_EVIDENCE_SEC = 1.0
+# Kept generous (1.6s) so a momentary pause mid-sentence doesn't trigger a guessy
+# cut — only a sustained handover (the other person clearly took over) does.
+NEG_EVIDENCE_SEC = 1.6
 
 
 @dataclass
@@ -1569,11 +1579,18 @@ def _reframe_real(
         nx = max(0, min(src_w - fixed_w, nx))
         ny = max(0, min(src_h - fixed_h, ny))
         fixed_kfs.append(CropKeyframe(t=kf.t, x=nx, y=ny, width=fixed_w, height=fixed_h))
-    # Collapse identical consecutive frames after re-clamping.
+    # Collapse near-identical consecutive frames after re-clamping. A DEAD-ZONE
+    # (PATH_DEADZONE_PX) holds the crop steady through tiny face-tracking jitter
+    # so a single, mostly-still speaker doesn't visibly drift — the camera only
+    # moves when the face genuinely shifts. (Speaker-switch keyframes jump far
+    # more than the dead-zone, so real A/B cuts are unaffected.)
     keyframes = []
     for kf in fixed_kfs:
-        if keyframes and (kf.x, kf.y) == (keyframes[-1].x, keyframes[-1].y):
-            continue
+        if keyframes:
+            dx = abs(kf.x - keyframes[-1].x)
+            dy = abs(kf.y - keyframes[-1].y)
+            if dx <= PATH_DEADZONE_PX and dy <= PATH_DEADZONE_PX:
+                continue
         keyframes.append(kf)
     crop_w, crop_h = fixed_w, fixed_h
 
