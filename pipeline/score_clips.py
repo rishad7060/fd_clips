@@ -209,7 +209,9 @@ def _normalize_candidate(c: dict[str, Any]) -> dict[str, Any]:
     if not title:
         words = str(c.get("hook_line") or "").split()
         title = " ".join(words[:6])
-    c["hook_title"] = _shorten_hook(title)
+    # Flip a loop-CLOSING reassuring hook into an open question (Opus-style),
+    # then trim to the banner-safe length.
+    c["hook_title"] = _shorten_hook(_punch_up_hook(title))
     return c
 
 
@@ -227,6 +229,57 @@ def _shorten_hook(text: str, *, max_chars: int = 42, max_words: int = 7) -> str:
     if is_q and not t.endswith("?"):
         t += "?"
     return t
+
+
+# Reassuring-negation antipattern: a hook that CLOSES the curiosity loop by giving
+# away the comforting answer ("X Won't Make You Dumber", "AI Doesn't Take Jobs").
+# Opus poses the scary question instead. We flip ONLY the auxiliary-verb negations
+# (won't / doesn't / can't + base verb), where dropping the negation yields a
+# clean "Will X <verb>...?" — NOT copula negations (isn't/aren't) where that
+# breaks grammar ("Coding isn't dead" -> "Will coding dead?").
+_REASSURE_RE = re.compile(
+    r"^(?P<subj>.+?)\s+(won'?t|will\s+not|does\s*n'?t|do\s*n'?t|can'?t|cannot)\s+"
+    r"(?P<rest>.+)$",
+    re.IGNORECASE,
+)
+
+
+def _lower_keep_acronyms(text: str) -> str:
+    """Lowercase a phrase but keep ALL-CAPS tokens (AI, ML, CEO) as-is."""
+    out = []
+    for w in text.split():
+        # Strip punctuation for the all-caps test but keep it on the token.
+        core = w.strip(".,!?;:")
+        out.append(w if (len(core) >= 2 and core.isupper()) else w.lower())
+    return " ".join(out)
+
+
+def _punch_up_hook(title: str) -> str:
+    """Reframe a loop-CLOSING hook into a loop-OPENING one (Opus-style).
+
+    The #1 hook mistake the LLM still makes on the free tier is answering the
+    scary question in the hook ("Calculators Won't Make You Dumber") instead of
+    posing it ("Will AI make us dumber?"). A reassuring negation removes all
+    tension. We detect the auxiliary-negation pattern and flip it to an open
+    question: "Will <subject> <base verb phrase>?". Non-matching hooks (questions,
+    copula negations, statements without a reassuring negation) pass through.
+    """
+    t = " ".join(str(title or "").split())
+    if not t or t.endswith("?"):
+        return t  # already a question (open loop) — leave it
+    m = _REASSURE_RE.match(t)
+    if not m:
+        return t
+    subj = m.group("subj").strip().rstrip(",")
+    rest = m.group("rest").strip().rstrip(".!")
+    if not subj or not rest:
+        return t
+    # "Calculators ... Make You Dumber" -> "Will calculators make you dumber?"
+    question = f"Will {_lower_keep_acronyms(subj)} {_lower_keep_acronyms(rest)}?"
+    # Cap length; if the flip got unwieldy, fall back to the original.
+    if len(question) > 44 or len(question.split()) > 8:
+        return t
+    return question[0].upper() + question[1:]
 
 
 def _length_multiplier(duration: float) -> float:

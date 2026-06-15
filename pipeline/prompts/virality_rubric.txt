@@ -29,7 +29,7 @@ Return ONLY a single JSON object, no prose, matching exactly:
       "start_idx": <int: the sentence index where the clip starts>,
       "end_idx": <int: the sentence index where the clip ends (inclusive)>,
       "hook_line": "<the attention-grabbing opening line, verbatim from the transcript>",
-      "hook_title": "<a SHORT punchy on-screen hook, 3-6 words, <= 32 chars, that stops the scroll — a catchy REWRITE, not necessarily verbatim. e.g. 'Will AI make us dumber?', 'AI Could Cost You Your Skills', 'The 95% Nobody Talks About'>",
+      "hook_title": "<a 3-6 word scroll-stopping on-screen hook that OPENS a curiosity gap — see 'HOW TO WRITE THE HOOK_TITLE' below. e.g. 'Will AI make us dumber?', 'Is coding dead?', 'The skill AI can't copy'>",
       "payoff_line": "<the line that DELIVERS the answer/insight, verbatim from the transcript, occurring before end>",
       "hook_type": "<one of: question, bold_claim, contrarian, curiosity_gap, story, numbered_promise, direct_address>",
       "virality_score": <integer 0-100>,
@@ -67,9 +67,53 @@ HARD RULES (reject any candidate that violates these)
    only the higher-scoring one.
 6. GROUNDED: `hook_line` and `payoff_line` are copied verbatim from the
    transcript. `reason` references the rubric dimensions, not generic praise.
-7. HOOK_TITLE: short and punchy — 3-6 words, max 32 characters, Title Case or a
-   crisp question. It is the big on-screen text overlay, so it MUST be skimmable
-   in under a second. Never paste the long verbatim sentence here.
+7. HOOK_TITLE: a 3-6 word on-screen overlay, skimmable in under a second. Write
+   it per "HOW TO WRITE THE HOOK_TITLE" below — this is the single biggest driver
+   of whether someone watches. Never paste the long verbatim sentence here.
+
+HOW TO WRITE THE HOOK_TITLE (3-6 words) — MOST IMPORTANT SECTION
+---------------------------------------------------------------
+Write a hook that OPENS a curiosity gap and makes the viewer NEED the answer. The
+hook creates tension that the CLIP ITSELF resolves — NEVER resolve it in the hook.
+
+PICK ONE PATTERN (fill the slots):
+  1. PROVOCATIVE QUESTION — "Will [thing] [scary outcome]?" / "Is [familiar thing] dead?"
+     e.g. "Will AI make us dumber?", "Is coding dead?"
+  2. THREAT TO "YOU" — "[Thing] is killing your [X]" / "[Thing] could cost you [stakes]"
+     e.g. "AI is killing this skill", "This could cost you your job"
+  3. CONTRARIAN CLAIM — "[Common belief] is wrong" / "Everyone's wrong about [X]"
+     e.g. "Coding skills are now worthless"
+  4. SECRET / NOBODY-TELLS-YOU — "What nobody tells you about [X]" / "The [X] they hide"
+     e.g. "The skill AI can't replace"
+  5. STAKES QUESTION — "What [X] is AI killing?" / "Who survives the AI layoffs?"
+  6. NUMBER + STAKES — "[Odd #] skills AI will erase" (use 3/5/7, never even numbers)
+
+DO:
+  - DO open a loop the viewer CANNOT close on their own — pose the scary question.
+  - DO aim the stakes at the viewer: use "you / your" or "us / we".
+  - DO use concrete, specific nouns (skills, coding, jobs) — never abstract labels.
+  - DO lean negative/threatening over reassuring (fear converts; comfort doesn't).
+  - DO make the answer live INSIDE the clip (the clip must actually pay it off).
+
+DON'T:
+  - DON'T answer the question or resolve the tension in the hook. THIS IS THE #1 MISTAKE.
+      BAD: "Calculators Won't Make You Dumber"  (gives away the reassuring answer)
+      GOOD: "Will AI make us dumber?"
+  - DON'T be vague/abstract.  BAD: "The 5% Advantage", "Future-Proof Skills Revealed".
+  - DON'T use a one-word-answerable or generic question.  BAD: "Want more skills?"
+  - DON'T use jargon or noun-salad labels.  BAD: "AI's Code Writing Insight".
+  - DON'T reassure or soften — no "Don't worry", "It's fine", "Won't".
+  - DON'T open with filler ("Here's why…", "So basically…").
+
+FEW-SHOT (BAD -> GOOD):
+  "AI's Code Writing Insight"         -> "Will AI take coding jobs?"
+  "Calculators Won't Make You Dumber" -> "Is AI making us dumber?"
+  "The 5% Advantage"                  -> "The skill AI can't copy"
+  "Future-Proof Skills Revealed"      -> "What skill is AI killing?"
+  "Understanding AI Job Impact"       -> "Is your job AI-proof?"
+  "Benefits Of Learning To Code"      -> "Is coding already dead?"
+  "Why Skills Still Matter"           -> "Your degree is now worthless"
+  "The Value Of Human Skills"         -> "The one skill AI can't fake"
 
 SCORING DIMENSIONS (weight the final 0-100 score across these)
 --------------------------------------------------------------

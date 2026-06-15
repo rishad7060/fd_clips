@@ -118,6 +118,19 @@ def _wordy_transcript():
     }
 
 
+def test_hook_punch_up_flips_reassuring_negation() -> None:
+    """A loop-CLOSING reassuring hook flips to an open question (Opus-style)."""
+    pu = score_clips._punch_up_hook
+    # Auxiliary negation -> flipped to "Will ...?", acronyms preserved.
+    assert pu("Calculators Won't Make You Dumber") == "Will calculators make you dumber?"
+    assert pu("AI Doesn't Take Your Job") == "Will AI take your job?"
+    assert pu("AI Won't Replace Developers") == "Will AI replace developers?"
+    # Already a question / no reassuring negation / copula -> unchanged.
+    assert pu("Will AI Make Us Dumber?") == "Will AI Make Us Dumber?"
+    assert pu("The Power of 5%") == "The Power of 5%"
+    assert pu("Coding Isn't Dead") == "Coding Isn't Dead"  # copula, don't break grammar
+
+
 def test_reconstruct_sentences_word_timing() -> None:
     """Sentences rebuild from words with exact first/last-word timing."""
     sents = score_clips._reconstruct_sentences(_wordy_transcript())
