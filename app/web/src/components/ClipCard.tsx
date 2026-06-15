@@ -5,25 +5,26 @@ import type { Clip } from "@/lib/types";
 import { formatDuration, scoreTextColor } from "@/lib/format";
 
 /**
- * Opus-style clip card: the video PLAYS inline (hover to preview, click to
- * play/pause). On hover, like/dislike thumbs appear top-left and a centered
- * play button shows. A white "text hook" banner overlays near the top. Below
- * the video: a big virality score (bright green = high), the title, and a quick
- * action row (schedule / download / trim).
+ * Opus-style clip card: the video sits PAUSED on its poster with a play button,
+ * and plays ONLY when the user presses play (clicking again pauses) — like Opus.
+ * It does NOT autoplay on hover. On hover, like/dislike thumbs appear top-left.
+ * A white "text hook" banner overlays near the top. Below the video: a big
+ * virality score (bright green = high), the title, and a quick action row
+ * (schedule / download / trim).
  *
  * Accessibility note: the player container is NOT a role="button" (it holds
  * nested interactive controls — thumbs, the play overlay — which can't be
- * nested inside a button). Play/pause is driven by an explicit overlay button
- * and pointer handlers on a plain region instead.
+ * nested inside a button). Play/pause is driven by an explicit overlay button.
  */
 export function ClipCard({ clip, recommended = false }: { clip: Clip; recommended?: boolean }) {
   const duration = clip.end - clip.start;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [reaction, setReaction] = useState<"up" | "down" | null>(null);
-  const [userPaused, setUserPaused] = useState(false);
-  // Player controls: mute (default true for hover-preview) + playback progress.
-  const [muted, setMuted] = useState(true);
+  // Player controls: mute + playback progress. The video plays only on an
+  // explicit press of the play button (Opus-style), so default UNMUTED — when
+  // someone deliberately presses play they want sound.
+  const [muted, setMuted] = useState(false);
   const [progress, setProgress] = useState(0); // 0..1 of clip duration
   const [hovering, setHovering] = useState(false);
 
@@ -40,30 +41,16 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
     return short.length > 44 ? short.slice(0, 44).replace(/\s+\S*$/, "") + "…" : short;
   })();
 
-  const play = () => {
-    const v = videoRef.current;
-    if (v && hasVideo) void v.play().catch(() => {});
-  };
-  const onEnter = () => {
-    setHovering(true);
-    if (!userPaused) play();
-  };
-  const onLeave = () => {
-    setHovering(false);
-    const v = videoRef.current;
-    if (v && !playing && !userPaused) {
-      v.pause();
-      v.currentTime = 0;
-    }
-  };
+  // Hover only reveals the controls bar — it never plays/pauses. The video
+  // plays solely on an explicit press of the play button (Opus behavior).
+  const onEnter = () => setHovering(true);
+  const onLeave = () => setHovering(false);
   const toggle = () => {
     const v = videoRef.current;
     if (!v || !hasVideo) return;
     if (v.paused) {
-      setUserPaused(false);
       void v.play().catch(() => {});
     } else {
-      setUserPaused(true);
       v.pause();
     }
   };
@@ -179,7 +166,8 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
         </div>
 
         {/* Play/pause — full-area transparent button (no nested controls inside).
-            Shows a centered icon on hover or while paused. */}
+            At rest the play icon is always visible (the card sits paused, Opus
+            style); while playing it fades and the pause icon shows on hover. */}
         {hasVideo && (
           <button
             type="button"
