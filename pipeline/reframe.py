@@ -119,6 +119,21 @@ ASD_DOMINANCE = 1.4             # talker's motion must be ≥ this × the other'
 # a challenger before switching, so the crop doesn't ping-pong on back-and-forth.
 ASD_SWITCH_MARGIN = 1.25
 
+# ── Clip-level speaker-cluster switching (Opus-style A/B hard cuts) ──────────
+# When TWO persistent face clusters exist (host + guest), we build a clip-level
+# speaker timeline that HARD-CUTS the tight crop between them as each talks, with
+# min-hold + hysteresis, snapped to transcript word boundaries ("cuts on the
+# beat"). This is the host-asks → cut-to-guest-answering behavior.
+CLUSTER_MIN_PRESENCE = 0.15      # each cluster must appear in >=15% of faced samples
+CLUSTER_MIN_SEP = 0.18           # min x-separation between the two cluster centers
+CLUSTER_MIN_TWOFACE_SAMPLES = 4  # min samples where BOTH clusters co-occur
+LIPMOTION_WIN = 0.4              # sub-window (s) for per-cluster lip-motion variance
+LIPMOTION_STEP = 0.2             # step between sub-windows (s)
+MIN_HOLD_SEC = 1.5               # min time on a speaker before a switch is allowed
+HYSTERESIS_SUSTAIN_SEC = 0.4     # challenger must win continuously for this long
+SNAP_WINDOW_SEC = 0.4            # snap a switch to a word start within +/- this
+SENTENCE_GAP_SEC = 0.4           # inter-word gap above this = sentence boundary
+
 
 @dataclass
 class CropKeyframe:
@@ -136,7 +151,9 @@ class CropPlan:
     """Virtual-camera crop plan for a single clip."""
 
     rank: int
-    mode: str                       # "active-speaker" | "two-face" | "center-fallback"
+    # "speaker-switch" | "face-follow" | "two-shot-follow" | "active-speaker" |
+    # "two-shot" | "two-face" | "fit-blur-pad" | "center-fallback"
+    mode: str
     target_width: int
     target_height: int
     source_width: int
@@ -235,17 +252,19 @@ def reframe_clips(job_id: str, top_n: Optional[int] = None) -> list[CropPlan]:
     plans: list[CropPlan] = []
     for rank, cand in enumerate(candidates, start=1):
         start, end = float(cand["start"]), float(cand["end"])
-        speakers = [
-            s["speaker"] for s in segments
-            if s["start"] < end and s["end"] > start
+        clip_segments = [
+            s for s in segments if s["start"] < end and s["end"] > start
         ]
+        speakers = [s["speaker"] for s in clip_segments]
         raw = clips_dir / f"{rank}_raw.mp4"
         vertical = clips_dir / f"{rank}_vertical.mp4"
 
         if settings.mock_mode:
             plan = _reframe_mock(rank, start, end, speakers, raw, vertical)
         else:
-            plan = _reframe_real(rank, start, end, speakers, raw, vertical)
+            plan = _reframe_real(
+                rank, start, end, speakers, raw, vertical, clip_segments
+            )
         plans.append(plan)
         (clips_dir / f"{rank}_reframe.json").write_text(
             json.dumps(plan.to_json(), indent=2), encoding="utf-8"
@@ -431,11 +450,19 @@ def _make_landmarker(mp: Any) -> Optional[tuple[Any, Any]]:
         print(f"    [reframe] landmarker init failed ({exc}); no ASD.")
         return None
 
+    import numpy as np  # lazy: real branch only
+
     def openness(rgb_crop: Any) -> Optional[float]:
         h, w = rgb_crop.shape[:2]
         if h < 8 or w < 8:
             return None
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_crop)
+        # CRITICAL: a sliced crop (rgb[y0:y1, x0:x1]) is a NON-CONTIGUOUS view.
+        # MediaPipe's mp.Image reads the buffer with row-stride assumptions, so a
+        # non-contiguous crop decodes as garbage → FaceLandmarker finds no
+        # landmarks → openness is silently always None (the bug that made ASD
+        # totally inert). Force a contiguous uint8 buffer before handing it over.
+        crop_c = np.ascontiguousarray(rgb_crop, dtype=np.uint8)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=crop_c)
         res = det.detect(mp_image)
         if not res.face_landmarks:
             return None
@@ -543,6 +570,16 @@ class FaceSample:
     # measured (single-face frame, ASD off, or no landmarks). Used for
     # active-speaker scoring (lip motion over time).
     faces: list[tuple[float, float, float]] = field(default_factory=list)
+
+
+@dataclass
+class FaceCluster:
+    """A persistent spatial face cluster across the whole clip (one person)."""
+
+    cx: float            # representative (median) center x, fraction 0..1
+    cy: float            # representative (median) center y, fraction 0..1
+    presence: float      # fraction of faced samples this cluster appears in (0..1)
+    label: str           # "A" (left/smaller cx) or "B" (right)
 
 
 def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
@@ -729,6 +766,301 @@ def _median(vals: list[float]) -> float:
     s = sorted(vals)
     mid = len(s) // 2
     return s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2.0
+
+
+def _percentile(vals: list[float], p: float) -> float:
+    """Linear-interpolated p-percentile (p in 0..1) of a non-empty list."""
+    s = sorted(vals)
+    if len(s) == 1:
+        return s[0]
+    idx = p * (len(s) - 1)
+    lo = int(idx)
+    hi = min(lo + 1, len(s) - 1)
+    return s[lo] + (s[hi] - s[lo]) * (idx - lo)
+
+
+# ── Clip-level two-speaker clustering + switching ───────────────────────────
+
+
+def _cluster_faces(samples: list["FaceSample"]) -> list[FaceCluster]:
+    """Cluster every detected face across the clip into up to 2 spatial clusters by x.
+
+    Collects all face centers, runs a 1-D 2-means on x (init at the 25th/75th
+    percentile), assigns each face to the nearest centroid, iterates to
+    convergence. Presence = (distinct samples contributing a face to the cluster)
+    / (samples that had ≥1 face). Returns clusters sorted by cx (A = left), or a
+    single cluster / [] when there isn't a clear second group.
+    """
+    pts: list[tuple[int, float, float]] = []  # (sample_idx, cx, cy)
+    faced_idx: set[int] = set()
+    for i, s in enumerate(samples):
+        if s.cx < 0.0:
+            continue
+        faced_idx.add(i)
+        if s.faces:
+            for (fx, fy, _op) in s.faces:
+                pts.append((i, fx, fy))
+        else:
+            pts.append((i, s.cx, s.cy))
+    if len(pts) < 4 or not faced_idx:
+        return []
+
+    xs = [p[1] for p in pts]
+    c0, c1 = _percentile(xs, 0.25), _percentile(xs, 0.75)
+    if abs(c1 - c0) < 1e-6:
+        # All faces share one x → single cluster.
+        return [FaceCluster(cx=_median(xs), cy=_median([p[2] for p in pts]),
+                            presence=1.0, label="A")]
+
+    for _ in range(10):
+        left = [p for p in pts if abs(p[1] - c0) <= abs(p[1] - c1)]
+        right = [p for p in pts if abs(p[1] - c0) > abs(p[1] - c1)]
+        if not left or not right:
+            break
+        nc0 = _median([p[1] for p in left])
+        nc1 = _median([p[1] for p in right])
+        if abs(nc0 - c0) < 1e-4 and abs(nc1 - c1) < 1e-4:
+            c0, c1 = nc0, nc1
+            break
+        c0, c1 = nc0, nc1
+
+    left = [p for p in pts if abs(p[1] - c0) <= abs(p[1] - c1)]
+    right = [p for p in pts if abs(p[1] - c0) > abs(p[1] - c1)]
+    n_faced = max(1, len(faced_idx))
+    out: list[FaceCluster] = []
+    for grp, lbl in ((left, "A"), (right, "B")):
+        if not grp:
+            continue
+        out.append(FaceCluster(
+            cx=_median([p[1] for p in grp]),
+            cy=_median([p[2] for p in grp]),
+            presence=len({p[0] for p in grp}) / n_faced,
+            label=lbl,
+        ))
+    out.sort(key=lambda c: c.cx)
+    if len(out) == 2:
+        out[0].label, out[1].label = "A", "B"
+    return out
+
+
+def _detect_two_speaker_clusters(
+    samples: list["FaceSample"],
+) -> Optional[tuple[FaceCluster, FaceCluster]]:
+    """Return (A, B) ONLY when two stable, distinct face clusters persist.
+
+    Requires two clusters each with presence ≥ CLUSTER_MIN_PRESENCE, centers
+    ≥ CLUSTER_MIN_SEP apart in x, and ≥ CLUSTER_MIN_TWOFACE_SAMPLES frames where
+    BOTH clusters are simultaneously present (genuinely two people, not one
+    person moving across frame). Else None → caller uses the single-face path.
+    """
+    clusters = _cluster_faces(samples)
+    if len(clusters) < 2:
+        return None
+    a, b = clusters[0], clusters[1]
+    if a.presence < CLUSTER_MIN_PRESENCE or b.presence < CLUSTER_MIN_PRESENCE:
+        return None
+    if (b.cx - a.cx) < CLUSTER_MIN_SEP:
+        return None
+    # Count frames where both clusters co-occur (≥2 faces straddling the split).
+    split = (a.cx + b.cx) / 2.0
+    co = 0
+    for s in samples:
+        if len(s.faces) >= 2:
+            xs = [f[0] for f in s.faces]
+            if min(xs) <= split <= max(xs):
+                co += 1
+    if co < CLUSTER_MIN_TWOFACE_SAMPLES:
+        return None
+    return a, b
+
+
+def _word_boundaries(
+    segments: list[dict], start: float, end: float,
+) -> tuple[list[float], list[tuple[float, float]]]:
+    """Flatten transcript words overlapping [start,end] into clip-local time.
+
+    Returns (word_starts, voiced): ``word_starts`` is a sorted list of every
+    word-start time (clip-relative, 0 = clip start) — the candidate cut points to
+    snap switches onto. ``voiced`` is the merged list of (t0,t1) spoken intervals
+    for voice-activity gating (hold the crop during silence).
+    """
+    dur = max(0.0, end - start)
+    word_starts: list[float] = []
+    spans: list[tuple[float, float]] = []
+    for seg in segments:
+        for w in seg.get("words", []) or []:
+            try:
+                ws = float(w["start"]) - start
+                we = float(w["end"]) - start
+            except (KeyError, TypeError, ValueError):
+                continue
+            if we < 0 or ws > dur:
+                continue
+            ws = max(0.0, min(dur, ws))
+            we = max(0.0, min(dur, we))
+            word_starts.append(ws)
+            spans.append((ws, we))
+    word_starts.sort()
+    spans.sort()
+    # Merge overlapping/adjacent voiced spans.
+    voiced: list[tuple[float, float]] = []
+    for s0, s1 in spans:
+        if voiced and s0 <= voiced[-1][1] + 1e-3:
+            voiced[-1] = (voiced[-1][0], max(voiced[-1][1], s1))
+        else:
+            voiced.append((s0, s1))
+    return word_starts, voiced
+
+
+def _snap_to_boundary(t: float, word_starts: list[float], window: float) -> float:
+    """Return the word-start nearest to ``t`` within ±window, else ``t`` unchanged."""
+    best = t
+    best_d = window + 1e-9
+    for ws in word_starts:
+        d = abs(ws - t)
+        if d <= best_d:
+            best_d = d
+            best = ws
+    return best
+
+
+def _is_voiced(t: float, voiced: list[tuple[float, float]]) -> bool:
+    """True when time ``t`` falls inside any merged voiced interval."""
+    for t0, t1 in voiced:
+        if t0 <= t <= t1:
+            return True
+    return False
+
+
+def _assign_speaker_timeline(
+    samples: list["FaceSample"],
+    a: FaceCluster,
+    b: FaceCluster,
+    clip_duration: float,
+    word_starts: list[float],
+    voiced: list[tuple[float, float]],
+) -> list[tuple[float, str]]:
+    """Build a piecewise-constant speaker timeline of (switch_time, label) segments.
+
+    label ∈ {"A","B"}. Per LIPMOTION_STEP-spaced sub-window: assign each measured
+    face to A or B by nearest cluster x, score each cluster by lip MOTION (sum of
+    |Δopenness|) over the sub-window, gated by voice activity (silence → no
+    evidence). A challenger replaces the current speaker only if it clears
+    ASD_MIN_MOTION, beats the incumbent by ASD_SWITCH_MARGIN, has won continuously
+    for HYSTERESIS_SUSTAIN_SEC, and MIN_HOLD_SEC has elapsed since the last
+    switch. Silence / cross-talk → hold. Switch times are snapped to the nearest
+    transcript word start (±SNAP_WINDOW_SEC).
+    """
+    split = (a.cx + b.cx) / 2.0
+
+    def cluster_motion(t0: float, t1: float) -> tuple[float, float]:
+        la: list[tuple[float, float]] = []
+        rb: list[tuple[float, float]] = []
+        for s in samples:
+            if not (t0 <= s.t < t1):
+                continue
+            for (fx, _fy, op) in s.faces:
+                if op < 0.0:
+                    continue
+                (la if fx <= split else rb).append((s.t, op))
+        def motion(tr: list[tuple[float, float]]) -> float:
+            tr.sort(key=lambda r: r[0])
+            return sum(abs(tr[i][1] - tr[i - 1][1]) for i in range(1, len(tr)))
+        return motion(la), motion(rb)
+
+    # Step 1: per sub-window raw winner ("A"/"B"/None).
+    raw: list[tuple[float, Optional[str]]] = []
+    t = 0.0
+    while t < clip_duration:
+        mid = t + LIPMOTION_WIN / 2.0
+        if not _is_voiced(mid, voiced):
+            raw.append((t, None))
+            t += LIPMOTION_STEP
+            continue
+        ma, mb = cluster_motion(t, t + LIPMOTION_WIN)
+        hi_lbl, hi, lo = ("A", ma, mb) if ma >= mb else ("B", mb, ma)
+        if hi < ASD_MIN_MOTION or (lo > 1e-6 and hi / lo < ASD_DOMINANCE):
+            raw.append((t, None))  # silence-ish or cross-talk → no evidence
+        else:
+            raw.append((t, hi_lbl))
+        t += LIPMOTION_STEP
+
+    # Step 2: commit with min-hold + sustained hysteresis.
+    timeline: list[tuple[float, str]] = []
+    current: Optional[str] = None
+    last_switch = -1e9
+    cand: Optional[str] = None
+    cand_since = 0.0
+    for (ts, winner) in raw:
+        if current is None:
+            if winner is not None:
+                current = winner
+                last_switch = ts
+                timeline.append((0.0, current))
+            continue
+        if winner is None or winner == current:
+            cand = None
+            continue
+        # winner is a challenger
+        if cand != winner:
+            cand = winner
+            cand_since = ts
+        sustained = (ts - cand_since) >= HYSTERESIS_SUSTAIN_SEC
+        held = (ts - last_switch) >= MIN_HOLD_SEC
+        if sustained and held:
+            snap = _snap_to_boundary(cand_since, word_starts, SNAP_WINDOW_SEC)
+            snap = max(0.0, min(clip_duration, snap))
+            if snap <= timeline[-1][0]:
+                snap = timeline[-1][0] + 0.01
+            timeline.append((snap, winner))
+            current = winner
+            last_switch = ts
+            cand = None
+    if not timeline:
+        # No voiced evidence anywhere: default to the more-present cluster.
+        dom = a if a.presence >= b.presence else b
+        timeline.append((0.0, dom.label))
+    return timeline
+
+
+def _timeline_has_switch(timeline: list[tuple[float, str]]) -> bool:
+    """True when the speaker timeline actually alternates (≥1 A↔B cut)."""
+    labels = [lbl for (_t, lbl) in timeline]
+    return len(set(labels)) >= 2
+
+
+def _build_keyframes_ab(
+    timeline: list[tuple[float, str]],
+    a: FaceCluster,
+    b: FaceCluster,
+    clip_duration: float,
+    src_w: int,
+    src_h: int,
+) -> list[CropKeyframe]:
+    """Emit tight, base-width keyframes that HARD-CUT between cluster centers.
+
+    One keyframe per timeline segment. Width is ALWAYS the base 9:16 width (no
+    widening), x is the talking cluster's center (no EMA smoothing → a hard cut),
+    face anchored upper-third. "A" → cluster A, "B" → cluster B.
+    """
+    base_w, base_h, _ = _center_crop_geometry(src_w, src_h)
+    aspect = base_w / base_h
+    by_label = {"A": a, "B": b}
+    keyframes: list[CropKeyframe] = []
+    for (t, lbl) in timeline:
+        cluster = by_label.get(lbl, a)
+        crop_w, crop_h, x, y = _window_to_window_px(
+            cluster.cx, cluster.cy, 0.0, aspect, src_w, src_h
+        )
+        keyframes.append(CropKeyframe(t=round(max(0.0, t), 3),
+                                      x=x, y=y, width=crop_w, height=crop_h))
+    # Collapse consecutive identical positions.
+    collapsed: list[CropKeyframe] = []
+    for kf in keyframes:
+        if collapsed and (kf.x, kf.y) == (collapsed[-1].x, collapsed[-1].y):
+            continue
+        collapsed.append(kf)
+    return collapsed
 
 
 def _active_speaker_x(
@@ -994,6 +1326,7 @@ def _window_to_window_px(
 def _reframe_real(
     rank: int, start: float, end: float, speakers: list[str],
     raw: Path, vertical: Path,
+    segments: Optional[list[dict]] = None,
 ) -> CropPlan:
     """v2 MVP reframe: time-windowed face-follow (+ two-shot widen) -> 9:16.
 
@@ -1029,8 +1362,35 @@ def _reframe_real(
     mode = "center-fallback"
     geom_note = f"center crop {crop_w}x{crop_h}@x={center_x} (no face / no pixels)"
 
+    # ── Two persistent speakers → HARD-CUT between them per who's talking ───
+    # (host asks → cut to guest answering). Beats blur-pad: when two clusters
+    # genuinely alternate we tight-crop and cut, not letterbox both.
+    ab_keyframes: Optional[list[CropKeyframe]] = None
+    if samples and segments and ASD_ENABLED:
+        clusters = _detect_two_speaker_clusters(samples)
+        if clusters is not None:
+            word_starts, voiced = _word_boundaries(segments, start, end)
+            timeline = _assign_speaker_timeline(
+                samples, clusters[0], clusters[1], clip_duration,
+                word_starts, voiced,
+            )
+            if _timeline_has_switch(timeline):
+                ab_keyframes = _build_keyframes_ab(
+                    timeline, clusters[0], clusters[1],
+                    clip_duration, src_w, src_h,
+                )
+                if len(ab_keyframes) >= 2:
+                    mode = "speaker-switch"
+                    geom_note = (
+                        f"{len(ab_keyframes)} hard-cut(s) between 2 speakers "
+                        f"(A@{clusters[0].cx:.2f}/B@{clusters[1].cx:.2f}), "
+                        f"tight {crop_w}x{crop_h}, switches snapped to words"
+                    )
+                else:
+                    ab_keyframes = None  # collapsed to one target → not a switch
+
     # ── Wide two-shot → blur-pad the whole frame (nobody cropped out) ──────
-    if samples and _is_wide_two_shot(samples, src_w, src_h):
+    if ab_keyframes is None and samples and _is_wide_two_shot(samples, src_w, src_h):
         vf = _blur_pad_vf()
         mode = "fit-blur-pad"
         keyframes = [CropKeyframe(t=0.0, x=0, y=0, width=src_w, height=src_h)]
@@ -1060,26 +1420,33 @@ def _reframe_real(
             notes=f"CPU {geom_note} -> {TARGET_W}x{TARGET_H} via libx264 (no GPU).",
         )
 
-    # Time-windowed follow + two-shot widen → a smoothed crop path.
-    keyframes = _build_keyframes(samples, clip_duration, src_w, src_h) if samples else []
-
-    if not keyframes:
-        # No usable face data anywhere → single centered window.
-        keyframes = [CropKeyframe(t=0.0, x=center_x, y=center_y,
-                                  width=crop_w, height=crop_h)]
-        mode = "center-fallback"
+    if ab_keyframes is not None:
+        # Speaker-switch path: tight base-width keyframes that hard-cut between
+        # the two speakers. No widening, no EMA — feed straight to the render.
+        keyframes = ab_keyframes
+        # mode already set to "speaker-switch"; all widths are base_w (tight).
     else:
-        widened = any(kf.width > crop_w for kf in keyframes)
-        if len(keyframes) == 1:
-            mode = "two-shot" if widened else "active-speaker"
+        # Time-windowed follow + two-shot widen → a smoothed crop path.
+        keyframes = _build_keyframes(samples, clip_duration, src_w, src_h) if samples else []
+
+        if not keyframes:
+            # No usable face data anywhere → single centered window.
+            keyframes = [CropKeyframe(t=0.0, x=center_x, y=center_y,
+                                      width=crop_w, height=crop_h)]
+            mode = "center-fallback"
         else:
-            mode = "two-shot-follow" if widened else "face-follow"
+            widened = any(kf.width > crop_w for kf in keyframes)
+            if len(keyframes) == 1:
+                mode = "two-shot" if widened else "active-speaker"
+            else:
+                mode = "two-shot-follow" if widened else "face-follow"
 
     # ffmpeg's crop evaluates w/h ONCE at init but x/y PER FRAME. So we use a
     # FIXED crop window = the widest any keyframe needs (guarantees a two-shot is
     # never cut), and animate only x/y to follow the action. Height tracks that
     # fixed width to stay 9:16. The (smaller) per-window widths still drive the
     # path's x so single-face moments stay centered within the wider window.
+    # In speaker-switch mode every keyframe is already base-width, so max() == base.
     fixed_w = max(kf.width for kf in keyframes)
     fixed_w = min(fixed_w, src_w)
     fixed_w -= fixed_w % 2

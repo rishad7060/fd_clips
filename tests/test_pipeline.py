@@ -169,6 +169,89 @@ def test_active_speaker_keeps_both_when_ambiguous() -> None:
     assert w2 > 0.0, "both-silent should keep both, not guess a talker"
 
 
+# ── Clip-level speaker-switching (host asks -> cut to guest) ─────────────────
+
+def _ab_samples(a_open, b_open, dur=6.0, n=60):
+    """Two persistent face clusters: A at x=0.25, B at x=0.75, over [0,dur).
+
+    ``a_open(t)``/``b_open(t)`` give each cluster's mouth openness at time t.
+    """
+    out = []
+    for k in range(n):
+        t = dur * k / n
+        out.append(reframe.FaceSample(
+            t=t, cx=0.25, cy=0.4, is_cut=False,
+            faces=[(0.25, 0.4, a_open(t)), (0.75, 0.4, b_open(t))],
+        ))
+    return out
+
+
+def _voiced_segments(dur=6.0):
+    """A transcript segment fully voicing [0,dur) with words every 0.3s."""
+    words = []
+    t = 0.0
+    while t < dur:
+        words.append({"word": "w", "start": t, "end": t + 0.25})
+        t += 0.3
+    return [{"start": 0.0, "end": dur, "speaker": "SPEAKER_00", "words": words}]
+
+
+def test_speaker_switch_clean_a_then_b() -> None:
+    """A talks first half, B talks second half -> timeline cuts A->B; tight crops."""
+    a_open = lambda t: 0.1 + 0.4 * (int(t / 0.2) % 2) if t < 3.0 else 0.30
+    b_open = lambda t: 0.30 if t < 3.0 else 0.1 + 0.4 * (int(t / 0.2) % 2)
+    samples = _ab_samples(a_open, b_open)
+
+    clusters = reframe._detect_two_speaker_clusters(samples)
+    assert clusters is not None, "two persistent clusters must be detected"
+    word_starts, voiced = reframe._word_boundaries(_voiced_segments(), 0.0, 6.0)
+    timeline = reframe._assign_speaker_timeline(
+        samples, clusters[0], clusters[1], 6.0, word_starts, voiced
+    )
+    labels = [lbl for (_t, lbl) in timeline]
+    assert labels[0] == "A" and "B" in labels, f"expect A then B, got {timeline}"
+    assert reframe._timeline_has_switch(timeline)
+
+    kfs = reframe._build_keyframes_ab(
+        timeline, clusters[0], clusters[1], 6.0, 1920, 1080
+    )
+    xs = sorted({kf.x for kf in kfs})
+    assert len(xs) == 2, f"two distinct crop x positions expected, got {xs}"
+    base_w, _h, _ = reframe._center_crop_geometry(1920, 1080)
+    assert all(kf.width == base_w for kf in kfs), "A/B crops must be tight base width"
+
+
+def test_speaker_switch_crosstalk_does_not_engage() -> None:
+    """Both clusters talk the whole time -> no clean switch -> A/B mode off."""
+    a_open = lambda t: 0.1 + 0.4 * (int(t / 0.2) % 2)
+    b_open = lambda t: 0.1 + 0.4 * ((int(t / 0.2) + 1) % 2)
+    samples = _ab_samples(a_open, b_open)
+    clusters = reframe._detect_two_speaker_clusters(samples)
+    assert clusters is not None
+    word_starts, voiced = reframe._word_boundaries(_voiced_segments(), 0.0, 6.0)
+    timeline = reframe._assign_speaker_timeline(
+        samples, clusters[0], clusters[1], 6.0, word_starts, voiced
+    )
+    assert not reframe._timeline_has_switch(timeline), "cross-talk must not switch"
+
+
+def test_single_cluster_no_speaker_switch() -> None:
+    """One face cluster (single speaker) -> no two-speaker detection."""
+    samples = [
+        reframe.FaceSample(t=0.1 * k, cx=0.5, cy=0.4, is_cut=False,
+                           faces=[(0.5, 0.4, 0.2)])
+        for k in range(40)
+    ]
+    assert reframe._detect_two_speaker_clusters(samples) is None
+
+
+def test_switch_snaps_to_word_boundary() -> None:
+    """A committed switch time snaps to the nearest word start within +/-window."""
+    # boundary at 3.20 within 0.4 of 3.07 -> snaps; none near 3.07 -> unchanged.
+    assert reframe._snap_to_boundary(3.07, [1.2, 3.20, 5.0], 0.4) == 3.20
+    assert reframe._snap_to_boundary(3.07, [1.2, 5.0], 0.4) == 3.07
+
+
 def test_captions_ass_karaoke_ltr(job_id: str) -> None:
     _score(job_id, top=5)
     extract.extract_clips(job_id, top_n=5)
