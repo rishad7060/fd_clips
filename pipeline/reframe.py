@@ -117,7 +117,8 @@ ASD_CROP_PAD = 0.35             # pad the BlazeFace box by this frac before mesh
 # wide two-shot: full-frame found 2 faces in 13/96 frames, tiled in 52/96.
 TILED_DETECT = True
 TILE_OVERLAP = 0.10             # halves overlap by this frac so a centred face isn't split
-TILE_DEDUP_X = 0.06             # merge faces from different tiles within this x-dist
+TILE_DEDUP_X = 0.06             # merge tile/full duplicates within this x-dist…
+TILE_DEDUP_Y = 0.12             # …AND this y-dist (so side-by-side faces aren't merged)
 # A face must out-move the other by this margin (sum of |Δopenness| over the
 # window) to be declared the active speaker; below it the scores are "tied" and
 # we keep both in frame (two-shot) rather than guess.
@@ -775,16 +776,23 @@ def _detect_tiled(
     for (cx, cy, area, sc) in detect_fn(right):
         found.append(((cx * rw + mid_r) / w, cy, area * rw / w, sc))
 
-    # Merge near-duplicate detections (same face from overlapping tiles): group
-    # by x within TILE_DEDUP_X, keep the largest-area member of each group.
-    found.sort(key=lambda f: f[0])
+    # Merge near-duplicate detections (the SAME face found in overlapping tiles /
+    # full frame). A duplicate must be close in BOTH x and y — two different
+    # people seated side-by-side near the tile seam share x but differ in y (and
+    # we must NOT collapse them, or we delete the second speaker). Compare each
+    # candidate against ALL kept faces (not just the last), keep the larger box.
     merged: list[tuple[float, float, float, float]] = []
-    for f in found:
-        if merged and abs(f[0] - merged[-1][0]) < TILE_DEDUP_X:
-            if f[2] > merged[-1][2]:
-                merged[-1] = f
-        else:
+    for f in sorted(found, key=lambda r: -r[2]):  # largest first → kept as anchors
+        dup = False
+        for i, m in enumerate(merged):
+            if abs(f[0] - m[0]) < TILE_DEDUP_X and abs(f[1] - m[1]) < TILE_DEDUP_Y:
+                dup = True
+                if f[2] > m[2]:
+                    merged[i] = f
+                break
+        if not dup:
             merged.append(f)
+    merged.sort(key=lambda r: r[0])
     return merged
 
 
@@ -1059,7 +1067,14 @@ def _assign_speaker_timeline(
     cand: Optional[str] = None
     cand_since = 0.0
     silent_since: Optional[float] = None  # current cluster silent-while-voiced start
+    # Cluster we last LEFT via negative evidence. We must NOT bounce straight back
+    # to it on negative evidence alone — when the real talker is the unmeasurable
+    # cluster, "current is silent during speech" is true no matter which side we
+    # sit on, which would ping-pong forever. Only POSITIVE lip motion clears this.
+    neg_evicted: Optional[str] = None
     for (ts, winner, voiced_now) in raw:
+        if winner is not None:
+            neg_evicted = None  # a real mover appeared → clear the bounce-back lock
         if current is None:
             if winner is not None:
                 current = winner
@@ -1078,9 +1093,12 @@ def _assign_speaker_timeline(
         # Positive-evidence challenger (the other cluster's lips clearly moved).
         challenger: Optional[str] = winner if (winner and winner != current) else None
         # Negative-evidence challenger: speech continues, current speaker has been
-        # silent long enough → infer the OTHER cluster is the talker.
+        # silent long enough → infer the OTHER cluster is the talker. Suppressed
+        # when that other cluster is exactly the one we just left via negative
+        # evidence (prevents the unmeasurable-talker ping-pong).
         if (challenger is None and silent_since is not None
-                and (ts - silent_since) >= NEG_EVIDENCE_SEC):
+                and (ts - silent_since) >= NEG_EVIDENCE_SEC
+                and other[current] != neg_evicted):
             challenger = other[current]
 
         if challenger is None:
@@ -1097,6 +1115,9 @@ def _assign_speaker_timeline(
             if snap <= timeline[-1][0]:
                 snap = timeline[-1][0] + 0.01
             timeline.append((snap, challenger))
+            # If this commit was on negative evidence only (no positive winner),
+            # remember the cluster we left so we don't immediately bounce back.
+            neg_evicted = current if winner is None else None
             current = challenger
             last_switch = ts
             cand = None

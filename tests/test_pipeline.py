@@ -235,6 +235,38 @@ def test_speaker_switch_crosstalk_does_not_engage() -> None:
     assert not reframe._timeline_has_switch(timeline), "cross-talk must not switch"
 
 
+def test_negative_evidence_no_pingpong() -> None:
+    """When the active speaker is the UNMEASURABLE cluster, don't ping-pong.
+
+    A talks (measurable) for ~2s, then B talks but B is in profile so its lips
+    are never measured (openness -1). Speech is continuous. The crop should
+    switch A->B ONCE (negative evidence) and then HOLD on B — never bounce back
+    to A every min-hold just because B is unmeasurable.
+    """
+    # A measurable + moving only in the first 2s; B never measurable (op=-1).
+    def a_open(t):
+        return (0.1 + 0.4 * (int(t / 0.2) % 2)) if t < 2.0 else 0.30
+    out = []
+    n, dur = 80, 8.0
+    for k in range(n):
+        t = dur * k / n
+        out.append(reframe.FaceSample(
+            t=t, cx=0.25, cy=0.4, is_cut=False,
+            faces=[(0.25, 0.4, a_open(t)), (0.75, 0.4, -1.0)],  # B unmeasurable
+        ))
+    clusters = reframe._detect_two_speaker_clusters(out)
+    assert clusters is not None
+    word_starts, voiced = reframe._word_boundaries(_voiced_segments(dur), 0.0, dur)
+    timeline = reframe._assign_speaker_timeline(
+        out, clusters[0], clusters[1], dur, word_starts, voiced
+    )
+    labels = [lbl for (_t, lbl) in timeline]
+    # At most one A->B transition, and never a B->A bounce-back.
+    transitions = sum(1 for i in range(1, len(labels)) if labels[i] != labels[i - 1])
+    assert transitions <= 1, f"should not ping-pong, got {timeline}"
+    assert labels[-1] == "B", f"should settle on B (the real talker), got {timeline}"
+
+
 def test_single_cluster_no_speaker_switch() -> None:
     """One face cluster (single speaker) -> no two-speaker detection."""
     samples = [
