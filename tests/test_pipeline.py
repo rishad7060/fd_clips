@@ -95,9 +95,63 @@ def test_score_sorted_desc(job_id: str) -> None:
 
 def test_score_deduped_no_major_overlap(job_id: str) -> None:
     cands = _score(job_id)["candidates"]
+    # Dedupe keeps clips overlapping no more than the threshold of the shorter.
     for i, a in enumerate(cands):
         for b in cands[i + 1:]:
-            assert score_clips._overlap_fraction(a, b) <= 0.5 + 1e-9
+            assert score_clips._overlap_fraction(a, b) <= 0.6 + 1e-9
+
+
+def _wordy_transcript():
+    """A tiny transcript with word-level timing across 3 sentences."""
+    def words(pairs):
+        return [{"word": w, "start": s, "end": e} for (w, s, e) in pairs]
+    return {
+        "duration": 9.0, "language": "en",
+        "segments": [
+            {"start": 0.0, "end": 3.0, "speaker": "S0", "text": "Money is simple.",
+             "words": words([("Money", 0.0, 0.5), ("is", 0.5, 0.8), ("simple.", 0.8, 1.4)])},
+            {"start": 3.0, "end": 6.0, "speaker": "S0", "text": "And it grows fast.",
+             "words": words([("And", 3.0, 3.3), ("it", 3.3, 3.5), ("grows", 3.5, 3.9), ("fast.", 3.9, 4.4)])},
+            {"start": 6.0, "end": 9.0, "speaker": "S0", "text": "Start today now.",
+             "words": words([("Start", 6.0, 6.4), ("today", 6.4, 6.9), ("now.", 6.9, 7.4)])},
+        ],
+    }
+
+
+def test_reconstruct_sentences_word_timing() -> None:
+    """Sentences rebuild from words with exact first/last-word timing."""
+    sents = score_clips._reconstruct_sentences(_wordy_transcript())
+    assert len(sents) == 3
+    assert sents[0].text == "Money is simple." and sents[0].start == 0.0
+    assert sents[2].text == "Start today now." and sents[2].end == 7.4
+
+
+def test_orphan_start_detection_and_repair() -> None:
+    """A clip starting on 'And it…' walks back to the clean prior sentence."""
+    sents = score_clips._reconstruct_sentences(_wordy_transcript())
+    assert score_clips._starts_on_orphan("And it grows fast.")
+    assert not score_clips._starts_on_orphan("Money is simple.")
+    # Starting at idx 1 ("And it…") repairs back to idx 0 ("Money is simple.").
+    assert score_clips._repair_start_idx(sents, 1, 2) == 0
+
+
+def test_indices_to_clip_resolves_real_times() -> None:
+    """Index range resolves to real word-level start/end + joined text."""
+    sents = score_clips._reconstruct_sentences(_wordy_transcript())
+    start, end, text = score_clips._indices_to_clip(sents, 0, 2)
+    assert start == 0.0 and end == 7.4
+    assert text.startswith("Money is simple.") and text.endswith("Start today now.")
+
+
+def test_resolve_index_candidates_repairs_orphan() -> None:
+    """LLM start_idx on an orphan sentence is repaired to a clean start."""
+    sents = score_clips._reconstruct_sentences(_wordy_transcript())
+    cands = [{"start_idx": 1, "end_idx": 2, "virality_score": 80, "hook_line": "",
+              "payoff_line": "", "hook_type": "story"}]
+    out = score_clips._resolve_index_candidates(cands, sents)
+    assert len(out) == 1
+    assert out[0]["start"] == 0.0, "orphan 'And it' start repaired back to idx 0"
+    assert "start_idx" not in out[0] and "end_idx" not in out[0]
 
 
 def test_score_deterministic(job_id: str) -> None:

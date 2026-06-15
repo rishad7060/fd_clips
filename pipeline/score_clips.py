@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -280,31 +281,30 @@ def _overlap_fraction(a: dict, b: dict) -> float:
     return inter / shorter if shorter > 0 else 0.0
 
 
-def _dedupe_overlaps(candidates: list[dict], threshold: float = 0.5) -> list[dict]:
-    """Dedupe candidates that overlap by more than ``threshold`` of the shorter
-    clip, keeping the higher-scored clip of each conflicting pair (CONTRACTS §3).
+def _dedupe_overlaps(candidates: list[dict], threshold: float = 0.6) -> list[dict]:
+    """Dedupe candidates overlapping > ``threshold`` of the shorter clip.
 
-    Implemented as a left-to-right sweep over start time so that a chain of
-    pairwise overlaps resolves to a well-spaced set rather than collapsing to a
-    single global maximum: when a new candidate conflicts (> threshold) with the
-    last kept clip, we keep whichever of the two scores higher and drop the other.
-    Non-conflicting candidates are always kept.
+    Greedy by score (highest first): keep a candidate only if it doesn't overlap
+    any ALREADY-kept clip by more than ``threshold``. This preserves every
+    *distinct* viral moment instead of collapsing a cluster of near-duplicate
+    windows over one moment to a single survivor (the old left-to-right sweep
+    compared only to the last kept clip and chain-collapsed 8 candidates → 3).
+    Threshold raised to 0.6 so two clips over the same hot region that genuinely
+    cover different spans both survive.
     """
     if not candidates:
         return []
+    # Highest score first → a clip is only dropped by a strictly better-or-equal
+    # overlapping one, so the best version of each moment is the one kept.
     ordered = sorted(
-        candidates, key=lambda c: (c["start"], c["end"] - c["start"])
+        candidates,
+        key=lambda c: (-c["virality_score"], c["start"], c["end"] - c["start"]),
     )
-    kept: list[dict] = [ordered[0]]
-    for cand in ordered[1:]:
-        prev = kept[-1]
-        if _overlap_fraction(cand, prev) > threshold:
-            # Conflict with the most recent kept clip: keep the higher score.
-            if cand["virality_score"] > prev["virality_score"]:
-                kept[-1] = cand
-            # else drop cand
-        else:
-            kept.append(cand)
+    kept: list[dict] = []
+    for cand in ordered:
+        if any(_overlap_fraction(cand, k) > threshold for k in kept):
+            continue
+        kept.append(cand)
     return kept
 
 
@@ -460,6 +460,164 @@ def _score_mock(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
     return {"job_id": job_id, "model": MOCK_MODEL, "candidates": candidates}
 
 
+# ── Sentence reconstruction + index-based boundary snapping ──────────────────
+# The single highest-leverage fix (per research): instead of letting the LLM
+# return raw float timestamps (which land mid-sentence / cut the question off
+# from the answer), we reconstruct SENTENCES from the word-level transcript, feed
+# the LLM an indexed sentence list, and have it return start/end SENTENCE INDICES.
+# We then look up the real word-level start/end in code — boundaries fall on
+# sentence edges by construction, and the LLM can't hallucinate a timestamp.
+
+# A clip MUST NOT start on one of these — an orphan pronoun/conjunction/discourse
+# marker whose referent lives in an earlier, un-included sentence ("So…", "And…",
+# "But it…", "That's why…"). Nobody else does this; it's our differentiator.
+_ORPHAN_START_WORDS = {
+    "so", "and", "but", "because", "which", "also", "then", "plus", "anyway",
+    "however", "therefore", "thus", "though", "although", "yet", "or", "nor",
+    "it", "they", "he", "she", "this", "that", "those", "these", "them", "him",
+    "her", "his", "their", "its", "theirs", "hers",
+}
+
+
+@dataclass
+class _Sentence:
+    """One reconstructed sentence with exact word-level timing."""
+
+    idx: int
+    text: str
+    start: float
+    end: float
+
+
+def _reconstruct_sentences(transcript: dict[str, Any]) -> list["_Sentence"]:
+    """Rebuild sentences from the word-level transcript with exact timing.
+
+    Walks every word in order, accumulating into a sentence until a terminal
+    punctuation (``.?!``) closes it (or a long pause / the segment ends). Each
+    sentence's start = its first word's start, end = its last word's end — so any
+    boundary we pick from these is guaranteed to land on a real sentence edge.
+    Falls back to segment-level when words are absent.
+    """
+    sentences: list[_Sentence] = []
+    buf: list[str] = []
+    s_start: Optional[float] = None
+    last_end = 0.0
+
+    def flush() -> None:
+        nonlocal buf, s_start
+        if buf and s_start is not None:
+            text = " ".join(buf).strip()
+            if text:
+                sentences.append(_Sentence(len(sentences), text, s_start, last_end))
+        buf = []
+        s_start = None
+
+    segments = transcript.get("segments", [])
+    for seg in segments:
+        words = seg.get("words") or []
+        if not words:
+            # No word timing: treat the whole segment as one sentence.
+            txt = str(seg.get("text", "")).strip()
+            if txt:
+                sentences.append(
+                    _Sentence(len(sentences), txt,
+                              float(seg["start"]), float(seg["end"]))
+                )
+            continue
+        for w in words:
+            tok = str(w.get("word", "")).strip()
+            if not tok:
+                continue
+            try:
+                w_start, w_end = float(w["start"]), float(w["end"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            # A >0.8s gap between words also ends a sentence (natural pause).
+            if buf and s_start is not None and (w_start - last_end) > 0.8:
+                flush()
+            if s_start is None:
+                s_start = w_start
+            buf.append(tok)
+            last_end = w_end
+            if tok[-1] in ".?!":
+                flush()
+        flush()  # segment boundary closes any open sentence
+    flush()
+    return sentences
+
+
+def _starts_on_orphan(text: str) -> bool:
+    """True if the sentence opens on an orphan pronoun/conjunction (no referent)."""
+    first = text.strip().split()
+    if not first:
+        return False
+    w = first[0].lower().strip(",.;:—-\"'")
+    return w in _ORPHAN_START_WORDS
+
+
+def _repair_start_idx(sentences: list["_Sentence"], start_idx: int, end_idx: int) -> int:
+    """Walk a clip's start back off an orphan-pronoun sentence to a clean one.
+
+    If the chosen start sentence opens on "So/And/It/That…", step the start
+    BACKWARD to the nearest preceding sentence that introduces its own subject,
+    so the clip doesn't begin mid-reference. Won't cross more than 2 sentences
+    back (keeps length sane); returns the original index if no clean start found.
+    """
+    if not (0 <= start_idx <= end_idx < len(sentences)):
+        return start_idx
+    i = start_idx
+    steps = 0
+    while i > 0 and steps < 2 and _starts_on_orphan(sentences[i].text):
+        i -= 1
+        steps += 1
+    return i
+
+
+def _indices_to_clip(
+    sentences: list["_Sentence"], start_idx: int, end_idx: int,
+) -> Optional[tuple[float, float, str]]:
+    """Resolve a sentence index range to (start_sec, end_sec, joined_text).
+
+    Clamps indices, repairs an orphan-pronoun start, and returns real word-level
+    times. ``None`` when the range is invalid.
+    """
+    n = len(sentences)
+    if n == 0:
+        return None
+    start_idx = max(0, min(n - 1, int(start_idx)))
+    end_idx = max(0, min(n - 1, int(end_idx)))
+    if end_idx < start_idx:
+        start_idx, end_idx = end_idx, start_idx
+    start_idx = _repair_start_idx(sentences, start_idx, end_idx)
+    text = " ".join(s.text for s in sentences[start_idx:end_idx + 1]).strip()
+    return sentences[start_idx].start, sentences[end_idx].end, text
+
+
+def _build_sentence_prompt(
+    transcript: dict[str, Any], sentences: list["_Sentence"],
+) -> str:
+    """Indexed sentence list for the LLM (returns indices, not timestamps)."""
+    lines = [
+        f"[{s.idx}] ({s.start:.1f}-{s.end:.1f}s) {s.text}"
+        for s in sentences
+    ]
+    return (
+        f"Video duration: {transcript.get('duration')}s. "
+        f"Language: {transcript.get('language')}.\n\n"
+        "Sentences (index, time, text):\n" + "\n".join(lines) + "\n\n"
+        "Select self-contained short-clip moments. For EACH clip return "
+        '{"start_idx": <int>, "end_idx": <int>, "hook_line", "hook_title", '
+        '"payoff_line", "hook_type", "virality_score", "reason", '
+        '"suggested_title", "hashtags", "description"}. '
+        "start_idx/end_idx MUST be indices from the list above (do NOT invent "
+        "timestamps). The clip [start_idx..end_idx] must contain a complete "
+        "hook->build->PAYOFF arc that makes sense with no prior context; if it "
+        "opens with a question it MUST include the answer; never start on a bare "
+        'pronoun or conjunction ("So/And/But/It/That"). Aim for 15-60s '
+        "(roughly 3-15 sentences). Return JSON {\"candidates\": [...]}."
+    )
+
+
 # ── Shared prompt + length-bound helpers (OpenAI + Gemini) ───────────────────
 
 def _load_rubric() -> str:
@@ -491,6 +649,41 @@ def _enforce_length_bounds(candidates: list[dict[str, Any]]) -> list[dict[str, A
     ]
 
 
+def _resolve_index_candidates(
+    candidates: list[dict[str, Any]], sentences: list["_Sentence"],
+) -> list[dict[str, Any]]:
+    """Turn LLM start_idx/end_idx candidates into real start/end-second clips.
+
+    For each candidate carrying ``start_idx``/``end_idx``, look up the real
+    word-level times (snapping to sentence edges + repairing orphan-pronoun
+    starts via :func:`_indices_to_clip`). Candidates that already carry
+    start/end (e.g. a model that ignored the index instruction) are passed
+    through. Invalid/empty ranges are dropped.
+    """
+    out: list[dict[str, Any]] = []
+    for c in candidates:
+        if "start_idx" in c or "end_idx" in c:
+            si = c.get("start_idx", c.get("end_idx", 0))
+            ei = c.get("end_idx", c.get("start_idx", 0))
+            resolved = _indices_to_clip(sentences, si, ei)
+            if resolved is None:
+                continue
+            start, end, text = resolved
+            c["start"], c["end"] = round(start, 2), round(end, 2)
+            # Backfill hook/payoff from the real clip text when the model left
+            # them blank, so the completeness check sees the true boundaries.
+            if not str(c.get("hook_line", "")).strip():
+                c["hook_line"] = _first_sentence(text)
+            if not str(c.get("payoff_line", "")).strip():
+                c["payoff_line"] = _last_sentence(text)
+            c.pop("start_idx", None)
+            c.pop("end_idx", None)
+            out.append(c)
+        elif "start" in c and "end" in c:
+            out.append(c)
+    return out
+
+
 # ── Real GPT-4o-mini scorer ──────────────────────────────────────────────────
 
 def _score_real(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
@@ -499,7 +692,11 @@ def _score_real(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
 
     settings = get_settings()
     rubric = _load_rubric()
-    user_payload = _build_transcript_prompt(transcript)
+    sentences = _reconstruct_sentences(transcript)
+    user_payload = (
+        _build_sentence_prompt(transcript, sentences) if sentences
+        else _build_transcript_prompt(transcript)
+    )
 
     client = OpenAI(api_key=settings.openai_api_key)
     resp = client.chat.completions.create(
@@ -514,6 +711,8 @@ def _score_real(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
     parsed = json.loads(resp.choices[0].message.content or "{}")
     candidates = parsed.get("candidates", [])
 
+    if sentences:
+        candidates = _resolve_index_candidates(candidates, sentences)
     # Enforce length bounds defensively (the model is told but we double-check).
     candidates = _enforce_length_bounds(candidates)
     return {"job_id": job_id, "model": settings.scoring_model, "candidates": candidates}
@@ -534,7 +733,15 @@ def _score_gemini(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
 
     settings = get_settings()
     rubric = _load_rubric()
-    user_payload = _build_transcript_prompt(transcript)
+    # Index-based selection: feed an indexed SENTENCE list and get back sentence
+    # indices we resolve to exact times (no mid-sentence cuts, no hallucinated
+    # timestamps). Fall back to the old segment prompt only if reconstruction
+    # yields nothing (e.g. a wordless transcript).
+    sentences = _reconstruct_sentences(transcript)
+    user_payload = (
+        _build_sentence_prompt(transcript, sentences) if sentences
+        else _build_transcript_prompt(transcript)
+    )
     client = genai.Client(api_key=settings.gemini_api_key)
 
     config = {
@@ -583,7 +790,10 @@ def _score_gemini(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
     parsed = json.loads(resp.text or "{}")
     candidates = parsed.get("candidates", [])
 
-    # Enforce length bounds defensively (same 20-90s window as the OpenAI path).
+    # Resolve sentence indices → real word-level times (sentence-aligned, orphan
+    # starts repaired), then enforce length bounds defensively.
+    if sentences:
+        candidates = _resolve_index_candidates(candidates, sentences)
     candidates = _enforce_length_bounds(candidates)
     return {"job_id": job_id, "model": used_model, "candidates": candidates}
 
