@@ -772,11 +772,10 @@ def _active_speaker_x(
     if ratio < ASD_DOMINANCE:
         return None  # both moving similarly (cross-talk) — keep both
 
-    # Center on the talking cluster's median x.
-    side = left if m_left >= m_right else right
-    # Recover that side's xs to center precisely.
-    xs = [x for (t, x, op) in measured
-          if (x <= split_x) == (m_left >= m_right)]
+    # Center on the talking cluster's median x. left_talks selects which side of
+    # split_x the talker is on (left cluster = x <= split_x).
+    left_talks = m_left >= m_right
+    xs = [x for (_t, x, _op) in measured if (x <= split_x) == left_talks]
     return _median(xs), ratio
 
 
