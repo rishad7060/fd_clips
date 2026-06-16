@@ -301,7 +301,8 @@ def _print_summary(summary: dict[str, Any], state: dict[str, Any]) -> None:
 def _main() -> None:
     parser = argparse.ArgumentParser(description="YT Shorts Clips full pipeline")
     parser.add_argument("source", nargs="?", default="mock://fixture-podcast",
-                        help="YouTube/remote URL or local file path")
+                        help="Any video URL (YouTube, TikTok, Instagram, X, Vimeo, "
+                             "direct .mp4, …) or a local file path")
     parser.add_argument("--source", dest="source_opt", default=None,
                         help="Alternative to the positional source argument")
     parser.add_argument("--clips", type=int, default=5, help="Number of clips (1-10)")

@@ -115,6 +115,12 @@ def _is_url(source: str) -> bool:
     return source.startswith(("http://", "https://", "www."))
 
 
+def _is_youtube(url: str) -> bool:
+    """True for a YouTube watch/short/youtu.be URL (gets the android_vr tweak)."""
+    u = url.lower()
+    return ("youtube.com" in u) or ("youtu.be" in u)
+
+
 def _probe_real(path: Path) -> dict:
     """Run ffprobe on a real file and return parsed stream/format info."""
     ffprobe = _ffprobe_bin() or "ffprobe"
@@ -197,15 +203,17 @@ def _ingest_real(
         ffmpeg_dir = str(Path(ffmpeg).parent) if ffmpeg else None
         download_target = ws / "download.%(ext)s"
         ydl_opts = {
-            # Prefer SHARP output: a 1080p video+audio merge first (the progressive
-            # single-file mp4 YouTube offers is often only 360p, which upscales to
-            # a blurry 9:16 clip). Fall back to 720p, then a ready-made mp4, then
-            # anything. Quality matters more than the small extra merge/CPU cost.
+            # Platform-agnostic (yt-dlp supports 1000+ sites — YouTube, TikTok,
+            # Instagram, X/Twitter, Vimeo, Facebook, direct mp4, …). Prefer SHARP
+            # output: a ≤1080p video+audio merge first, then a single progressive
+            # file. The final ``best`` catches sites (TikTok/IG/X) that only serve
+            # ONE muxed stream so there's nothing to merge. Quality > the small
+            # extra merge cost.
             "format": (
                 "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/"
                 "bestvideo[height<=1080]+bestaudio/"
                 "bestvideo[height<=720]+bestaudio/"
-                "best[ext=mp4][height<=1080]/best"
+                "best[height<=1080]/best"
             ),
             "outtmpl": str(download_target),
             "merge_output_format": "mp4",
@@ -213,19 +221,18 @@ def _ingest_real(
             "noprogress": True,
             "socket_timeout": 30,
             "retries": 2,
-            # Modern YouTube gates high-res formats behind a JS runtime (nsig/n
-            # challenge), a GVS PO token, SABR-only experiments, or DRM — depending
-            # on the player client. On a box with no deno/node JS runtime, most
-            # clients fall back to a 360p-max ladder, which upscales to a blurry
-            # 9:16 clip. The **android_vr** client is the exception: it serves the
-            # FULL resolution ladder (360→1080→4K) with directly-downloadable URLs,
-            # NO PO token and NO JS runtime. So we try it FIRST, then the other
-            # mobile clients as fallbacks. (Verified 2026-06-15: every other client
-            # — android/ios/mweb/web/tv — was SABR/PO-token/DRM/nsig-gated to 360p.)
-            "extractor_args": {
-                "youtube": {"player_client": ["android_vr", "android", "ios", "web"]}
-            },
         }
+        # YouTube-only tweak: it gates high-res formats behind a JS runtime
+        # (nsig/n challenge), a GVS PO token, SABR-only experiments, or DRM —
+        # depending on the player client. On a box with no deno/node JS runtime,
+        # most clients fall back to a 360p-max ladder (blurry upscale). The
+        # **android_vr** client is the exception: full 360→1080→4K ladder with
+        # directly-downloadable URLs, NO PO token, NO JS runtime. (Other sites
+        # ignore this key, so it's only applied for YouTube to avoid surprises.)
+        if _is_youtube(source):
+            ydl_opts["extractor_args"] = {
+                "youtube": {"player_client": ["android_vr", "android", "ios", "web"]}
+            }
         if ffmpeg_dir:
             ydl_opts["ffmpeg_location"] = ffmpeg_dir
         # YouTube increasingly requires cookies ("Sign in to confirm you're not a
@@ -250,20 +257,31 @@ def _ingest_real(
                 info = ydl.extract_info(source, download=True) or {}
         except Exception as e:  # noqa: BLE001 — surface a clear, actionable error
             msg = str(e)
-            if "JavaScript" in msg or "nsig" in msg or "player" in msg.lower():
+            low = msg.lower()
+            if "unsupported url" in low or "no video" in low or "is not a valid url" in low:
+                hint = (
+                    "This URL isn't a supported video link. Paste a direct link to a "
+                    "single video (YouTube, TikTok, Instagram, X/Twitter, Vimeo, "
+                    "Facebook, or a direct .mp4) — not a channel, playlist, or homepage."
+                )
+            elif _is_youtube(source) and ("javascript" in low or "nsig" in low or "player" in low):
                 hint = (
                     "YouTube extraction needs a JS runtime for this video. Install deno "
                     "(winget install DenoLand.Deno) so yt-dlp can extract it, or try a "
                     "different video / a local file."
                 )
-            elif "Sign in" in msg or "bot" in msg.lower() or "age" in msg.lower() or "private" in msg.lower():
+            elif "sign in" in low or "bot" in low or "age" in low or "private" in low or "login" in low:
                 hint = (
-                    "YouTube is asking to confirm you're not a bot. Easiest fix: set "
+                    "This video needs login/cookies (private, age-gated, or bot-checked — "
+                    "common on Instagram/TikTok/private YouTube). Set "
                     "YTDLP_COOKIES_FROM_BROWSER=chrome (or edge/firefox) in .env to reuse "
-                    "your logged-in browser's cookies; or set YTDLP_COOKIES to a cookies.txt."
+                    "your logged-in browser's cookies, or set YTDLP_COOKIES to a cookies.txt."
                 )
             else:
-                hint = "Try a different/shorter public video, or pass a local file path instead of a URL."
+                hint = (
+                    "Couldn't fetch this video. Try a different/shorter PUBLIC video link, "
+                    "or upload a local file instead."
+                )
             raise RuntimeError(f"yt-dlp could not download {source}: {msg}. {hint}") from e
         downloaded = next(ws.glob("download.*"))
     else:
@@ -346,11 +364,16 @@ def _ingest_real(
     # the 360p mobile formats), NOT a crop bug. Print so it's diagnosable.
     src_h = int(vstream.get("height", 0))
     if 0 < src_h < 720:
+        extra = (
+            " YouTube likely gated the HD ladder; the android_vr client usually "
+            "recovers 1080p. If this persists, set YTDLP_COOKIES_FROM_BROWSER."
+            if source_type == "url" and _is_youtube(source)
+            else " The source itself is low-res (or login-gated); a higher-quality "
+            "link will look sharper."
+        )
         print(
             f"  [ingest] WARNING: source is only {vstream.get('width')}x{src_h} "
-            f"(<720p). Vertical clips will be upscaled and look soft. YouTube likely "
-            f"gated the HD ladder; the android_vr client usually recovers 1080p. If "
-            f"this persists, set YTDLP_COOKIES_FROM_BROWSER to a logged-in browser."
+            f"(<720p). Vertical clips will be upscaled and look soft.{extra}"
         )
 
     return SourceMetadata(

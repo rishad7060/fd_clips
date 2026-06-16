@@ -85,25 +85,25 @@ export default function NewClipsPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Create clips</h1>
         <p className="text-sm text-white/60">
-          Paste a YouTube link and we&apos;ll turn it into your{" "}
+          Paste any video link and we&apos;ll turn it into your{" "}
           {MVP_CLIP_COUNT} best moments as captioned vertical clips.
         </p>
       </div>
 
       <div className="rounded-2xl border border-ink-700 bg-ink-900/60 p-6">
-        {/* YouTube URL */}
+        {/* Video URL — any supported platform */}
         <div>
           <label className="mb-1.5 block text-sm font-medium text-white/80">
-            YouTube URL
+            Video URL
           </label>
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://www.youtube.com/watch?v=…"
+            placeholder="Paste any video link — YouTube, TikTok, Instagram, X…"
             className="w-full rounded-lg border border-ink-600 bg-ink-950 px-3 py-2.5 text-sm text-white placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
           />
           <p className="mt-1.5 text-xs text-ink-500">
-            Single-speaker / talking-head videos work best in the MVP.
+            Works with YouTube, TikTok, Instagram, X/Twitter, Vimeo, Facebook & more.
           </p>
         </div>
 

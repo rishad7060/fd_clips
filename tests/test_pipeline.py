@@ -58,6 +58,19 @@ def test_ingest_emits_metadata(job_id: str) -> None:
     assert (ws / "source.meta.json").exists()
 
 
+def test_ingest_accepts_any_platform_url() -> None:
+    """Ingest is platform-agnostic: the YouTube tweak is YT-only; URLs detected."""
+    assert ingest._is_youtube("https://www.youtube.com/watch?v=X")
+    assert ingest._is_youtube("https://youtu.be/X")
+    assert not ingest._is_youtube("https://www.tiktok.com/@u/video/1")
+    assert not ingest._is_youtube("https://vimeo.com/123")
+    assert not ingest._is_youtube("https://x.com/u/status/1")
+    # All of these are recognized as URLs (so they take the download path).
+    for u in ("https://www.tiktok.com/@u/video/1", "https://vimeo.com/123",
+              "https://x.com/u/status/1", "https://example.com/v.mp4"):
+        assert ingest._is_url(u)
+
+
 def test_transcribe_matches_contract(job_id: str) -> None:
     ingest.ingest("mock://podcast", job_id)
     t = transcribe.transcribe(job_id)
