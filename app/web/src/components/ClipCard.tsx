@@ -8,8 +8,9 @@ import { formatDuration, scoreTextColor } from "@/lib/format";
  * Opus-style clip card: the video sits PAUSED on its poster with a play button,
  * and plays ONLY when the user presses play (clicking again pauses) — like Opus.
  * It does NOT autoplay on hover. On hover, like/dislike thumbs appear top-left.
- * A white "text hook" banner overlays near the top. Below the video: a big
- * virality score (bright green = high), the title, and a quick action row
+ * The hook is BURNED INTO the video (white box, first 5s), so we do not draw a
+ * DOM hook banner here (it would double-stack). Below the video: a big virality
+ * score (bright green = high), the title, and a quick action row
  * (schedule / download / trim).
  *
  * Accessibility note: the player container is NOT a role="button" (it holds
@@ -32,14 +33,6 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
   const hasThumb = Boolean(clip.thumb_url);
   const safeName =
     (clip.suggested_title?.trim().replace(/\s+/g, "_") || `clip_${clip.rank}`) + ".mp4";
-  // Banner text: prefer the short LLM hook_title; else a trimmed hook_line.
-  const hookText = (() => {
-    const t = (clip.hook_title || "").trim();
-    if (t) return t;
-    const words = (clip.hook_line || "").split(/\s+/).filter(Boolean);
-    const short = words.slice(0, 7).join(" ");
-    return short.length > 44 ? short.slice(0, 44).replace(/\s+\S*$/, "") + "…" : short;
-  })();
 
   // Hover only reveals the controls bar — it never plays/pauses. The video
   // plays solely on an explicit press of the play button (Opus behavior).
@@ -111,16 +104,11 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
           </div>
         )}
 
-        {/* Text hook banner — white rounded card near the top. Uses the SHORT
-            hook_title (Opus-style punchy hook); falls back to a trimmed
-            hook_line so older clips without a title still read clean. */}
-        {hookText && (
-          <div className="pointer-events-none absolute inset-x-2 top-9 z-10 flex justify-center">
-            <span className="line-clamp-2 max-w-[90%] rounded-lg bg-white/95 px-2.5 py-1 text-center text-xs font-bold leading-tight text-ink-950 shadow">
-              {hookText}
-            </span>
-          </div>
-        )}
+        {/* NOTE: the hook is now BURNED INTO the video (Opus-style white box,
+            first 5s — see pipeline/captions.py). We deliberately do NOT also draw
+            a DOM banner here, or it double-stacks with the burned-in one (two
+            white boxes). The burned-in hook is the single source of truth: it
+            shows in the poster, on play, and on download. */}
 
         {recommended && (
           <span className="absolute left-2 top-2 z-10 rounded-md bg-brand px-2 py-1 text-[11px] font-bold text-white shadow-glow">
