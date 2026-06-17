@@ -37,11 +37,14 @@ export function VideoPreviewCard({ url }: { url: string }) {
   // Background enrichment (badge + title); never blocks the thumbnail.
   const [preview, setPreview] = useState<VideoPreview | null>(null);
 
-  // Track when the thumbnail image has actually painted so we can shimmer until then.
-  const [imgLoaded, setImgLoaded] = useState(false);
+  // The src whose image has actually painted. We key on the src string (not a
+  // boolean) so it auto-resets when the src changes — no race between a reset
+  // effect and the load callback (which previously left a CACHED image stuck at
+  // opacity 0 because onLoad never fired for an already-complete image).
+  const [loadedSrc, setLoadedSrc] = useState("");
 
-  // Reset the thumbnail tier + loaded flag whenever the URL changes.
-  useEffect(() => { setThumbTier("maxres"); setImgLoaded(false); }, [url]);
+  // Reset the thumbnail tier whenever the URL changes.
+  useEffect(() => { setThumbTier("maxres"); }, [url]);
 
   // Fetch metadata in the background (debounced) for the quality badge + title.
   useEffect(() => {
@@ -57,21 +60,34 @@ export function VideoPreviewCard({ url }: { url: string }) {
     return () => { alive = false; clearTimeout(t); };
   }, [url]);
 
-  // The image src: client-side YouTube CDN URL (instant), else the backend
-  // thumbnail (non-YouTube), else nothing → placeholder.
+  // Backend thumbnail (from /preview): a real http(s) URL in the live API, or a
+  // data: URI poster in mock mode — accept BOTH (the old http-only check left
+  // mock with no fallback, so a blocked ytimg image showed a blank box).
+  const backendThumb =
+    preview?.thumbnail_url &&
+    (preview.thumbnail_url.startsWith("http") || preview.thumbnail_url.startsWith("data:"))
+      ? preview.thumbnail_url
+      : "";
+
+  // The image src: client-side YouTube CDN URL (instant), with a maxres→hq
+  // ladder; once both YouTube tiers fail (ytimg blocked / region / adblock) we
+  // fall back to the backend thumbnail so the box is NEVER left blank.
   const clientThumb = ytId
-    ? (thumbTier === "maxres" ? ytThumb(ytId, "maxresdefault")
-      : thumbTier === "hq" ? ytThumb(ytId, "hqdefault") : "")
+    ? thumbTier === "maxres"
+      ? ytThumb(ytId, "maxresdefault")
+      : thumbTier === "hq"
+        ? ytThumb(ytId, "hqdefault")
+        : "" // "fail" → use backendThumb below
     : "";
-  const backendThumb = preview?.thumbnail_url && preview.thumbnail_url.startsWith("http")
-    ? preview.thumbnail_url : "";
   const src = clientThumb || backendThumb;
+  const imgLoaded = loadedSrc !== "" && loadedSrc === src;
 
   // Quality badge: the backend's real label (suppressed when it's a stub/error,
-  // signalled by `note`), else infer from the YouTube tier (maxres loaded → ≥720p
-  // → show "HD"; nothing premature otherwise). Never claims a resolution we don't know.
-  const badge = (preview && !preview.note ? preview.quality_label : "")
-    || (ytId && thumbTier === "maxres" ? "HD" : "");
+  // signalled by `note`), else infer from the YouTube tier — but ONLY once the
+  // image has actually painted, so we never float an "HD" badge over a blank box.
+  const badge =
+    (preview && !preview.note ? preview.quality_label : "") ||
+    (ytId && thumbTier === "maxres" && imgLoaded ? "HD" : "");
 
   // Nothing to show at all (not a URL, no client thumb, no backend thumb yet).
   if (!url.trim() || (!src && !ytId)) return null;
@@ -85,10 +101,25 @@ export function VideoPreviewCard({ url }: { url: string }) {
           {src ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
+              // Key by src so React remounts on tier change → onLoad fires for
+              // each new image even when swapping maxres→hq→backend.
+              key={src}
               src={src}
               alt=""
               referrerPolicy="no-referrer"
               className={`h-full w-full object-cover transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
+              // Ref callback handles the CACHED case: if the browser already had
+              // the image, `complete` is true at mount and onLoad never fires —
+              // so mark it loaded (and run the same maxres-placeholder check) here.
+              ref={(img) => {
+                if (img && img.complete && img.naturalWidth > 0) {
+                  if (thumbTier === "maxres" && ytId && img.naturalWidth <= 121) {
+                    setThumbTier("hq");
+                  } else {
+                    setLoadedSrc(img.currentSrc || img.src);
+                  }
+                }
+              }}
               onLoad={(e) => {
                 // YouTube serves a 120x90 gray placeholder (HTTP 404) for a
                 // missing maxres — detect by natural width and downgrade.
@@ -97,7 +128,7 @@ export function VideoPreviewCard({ url }: { url: string }) {
                   setThumbTier("hq");
                   return;
                 }
-                setImgLoaded(true);
+                setLoadedSrc(img.currentSrc || img.src);
               }}
               onError={() => {
                 if (thumbTier === "maxres") setThumbTier("hq");
@@ -105,8 +136,12 @@ export function VideoPreviewCard({ url }: { url: string }) {
               }}
             />
           ) : (
-            <div className="grid h-full w-full place-items-center bg-ink-900 text-ink-500">
-              <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 5h16v14H4zM4 9h16M9 5v14" strokeLinecap="round" /></svg>
+            // All image sources failed/blocked (e.g. ytimg blocked by an
+            // ad-blocker/region) — show a clean branded poster, not a black box.
+            <div className="grid h-full w-full place-items-center bg-gradient-to-br from-ink-800 to-ink-900 text-ink-300">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-white/10 ring-1 ring-white/15">
+                <svg viewBox="0 0 24 24" className="ml-0.5 h-4 w-4" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+              </span>
             </div>
           )}
         </div>
