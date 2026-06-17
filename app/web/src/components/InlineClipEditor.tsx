@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { CaptionLine, Clip } from "@/lib/types";
 import { api } from "@/lib/api";
 import { STYLE_TEMPLATES } from "@/lib/templates";
+import { CaptionSwatch } from "@/components/config/CaptionSwatch";
 import { formatTimecode } from "@/lib/format";
 import { useClipEditor } from "@/hooks/useClipEditor";
 import { TrimBar } from "@/components/editor/TrimBar";
@@ -286,23 +287,22 @@ export function InlineClipEditor({ clip }: { clip: Clip }) {
                   aria-pressed={templateId === t.id}
                   aria-label={`Style ${t.name}`}
                   onClick={() => actions.setTemplate(t.id)}
-                  className={`rounded-xl border p-3 text-left transition duration-150 ease-premium ${
+                  className={`relative rounded-xl border p-3 text-left transition duration-150 ease-premium ${
                     templateId === t.id
                       ? "border-brand bg-brand/10 ring-1 ring-brand/40"
                       : "border-white/10 bg-ink-850 hover:border-white/15 hover:bg-ink-800"
                   }`}
                 >
-                  <span
-                    className="block rounded-lg px-2 py-1.5 text-center text-[11px] font-bold"
-                    style={{ background: "#000", color: t.style.highlight_color }}
-                  >
-                    ABC
+                  {t.isNew && (
+                    <span className="absolute -right-1.5 -top-1.5 rounded-md bg-brand px-1.5 py-0.5 text-[9px] font-bold leading-none text-white shadow-glow">
+                      New
+                    </span>
+                  )}
+                  <span className={`grid h-[52px] w-full place-items-center overflow-hidden rounded-lg ${t.preview.bg}`}>
+                    <CaptionSwatch spec={t.preview} noCaption={t.noCaption} />
                   </span>
                   <span className="mt-2 block text-xs font-medium text-white">
                     {t.name}
-                  </span>
-                  <span className="mt-0.5 block text-[10px] text-ink-400">
-                    {t.style.font}
                   </span>
                 </button>
               ))}

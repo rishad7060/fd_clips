@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { STYLE_TEMPLATES, templateById } from "@/lib/templates";
+import { DEFAULT_TEMPLATE_ID, templateById } from "@/lib/templates";
 import type { AspectRatio, ClipLength, ClipStyle, CreateJobInput, Genre } from "@/lib/types";
 import { DEV_USER } from "@/lib/auth";
 import { ConfigPanel } from "@/components/config/ConfigPanel";
@@ -48,7 +48,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
   const [range, setRange] = useState<{ start: number; end: number } | null>(null);
   const [durationSec, setDurationSec] = useState(0); // real source duration (for the timeline)
   const [durationLoading, setDurationLoading] = useState(false); // fetch in flight
-  const [templateId, setTemplateId] = useState(STYLE_TEMPLATES[0]!.id);
+  const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_ID);
   const [alignment, setAlignment] = useState<NonNullable<ClipStyle["alignment"]>>("bottom");
 
   // A source counts as "added" once a valid-looking URL or an upload exists.

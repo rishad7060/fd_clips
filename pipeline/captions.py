@@ -124,13 +124,13 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "all_caps": False,
         "emoji": False,
     },
-    # Neon: purple glow highlight for product/tech.
+    # Neon / "Devin Glow": purple glow highlight for product/tech/aesthetic.
     "neon": {
         "font": "Arial",
         "font_size": 96,
         "bold": True,
         "primary_color": "&H00FFFFFF",
-        "highlight_color": "&H00F755A8",    # purple #A855F7
+        "highlight_color": "&H00FF6B9B",    # soft purple #9B6BFF
         "outline_color": "&H00301040",
         "outline": 6,
         "shadow": 2,
@@ -139,6 +139,121 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "max_words_per_line": 3,
         "all_caps": True,
         "emoji": True,
+    },
+    # Beasty: MrBeast-loud — heavy ALL-CAPS, thick black stroke, bright green pop.
+    "beasty": {
+        "font": "Arial",
+        "font_size": 124,
+        "bold": True,
+        "primary_color": "&H00FFFFFF",
+        "highlight_color": "&H0023FB02",    # bright green #02FB23
+        "outline_color": "&H00000000",
+        "outline": 10,
+        "shadow": 3,
+        "alignment": 5,
+        "margin_v": 40,
+        "max_words_per_line": 3,
+        "all_caps": True,
+        "emoji": True,
+    },
+    # Ali Clean: sentence-case, semibold, subtle green highlight. Calm educational.
+    "ali": {
+        "font": "Arial",
+        "font_size": 80,
+        "bold": True,
+        "primary_color": "&H00FFFFFF",
+        "highlight_color": "&H0055C522",    # green #22C55E
+        "outline_color": "&H00000000",
+        "outline": 3,
+        "shadow": 1,
+        "alignment": 2,                     # bottom
+        "margin_v": 220,
+        "max_words_per_line": 5,
+        "all_caps": False,
+        "emoji": False,
+    },
+    # Pod P: soft amber on a translucent black box. Podcast / interview clips.
+    "podp": {
+        "font": "Arial",
+        "font_size": 78,
+        "bold": True,
+        "primary_color": "&H00FFFFFF",
+        "highlight_color": "&H0020B0FF",    # amber #FFB020
+        "outline_color": "&H99000000",      # translucent black box (BorderStyle 3)
+        "border_style": 3,                  # filled box behind text
+        "outline": 14,
+        "shadow": 0,
+        "alignment": 2,
+        "margin_v": 230,
+        "max_words_per_line": 5,
+        "all_caps": False,
+        "emoji": False,
+    },
+    # Popline: extrabold UPPERCASE with a hot-pink pop. Trendy, punchy social.
+    "popline": {
+        "font": "Arial",
+        "font_size": 110,
+        "bold": True,
+        "primary_color": "&H00FFFFFF",
+        "highlight_color": "&H00782DFF",    # hot pink #FF2D78
+        "outline_color": "&H00000000",
+        "outline": 8,
+        "shadow": 2,
+        "alignment": 5,
+        "margin_v": 40,
+        "max_words_per_line": 3,
+        "all_caps": True,
+        "emoji": True,
+    },
+    # Glitch Infinite: condensed caps, magenta stroke + cyan highlight. Gaming/edgy.
+    "glitch": {
+        "font": "Arial",
+        "font_size": 104,
+        "bold": True,
+        "primary_color": "&H00FFFFFF",
+        "highlight_color": "&H00FFFF00",    # cyan #00FFFF
+        "outline_color": "&H00FF00FF",      # magenta #FF00FF stroke (RGB-split feel)
+        "outline": 5,
+        "shadow": 2,
+        "alignment": 5,
+        "margin_v": 40,
+        "max_words_per_line": 3,
+        "all_caps": True,
+        "emoji": False,
+    },
+    # Deep Diver: cream text, teal reveal, no shout. Storytelling / documentary.
+    "deepdiver": {
+        "font": "Arial",
+        "font_size": 76,
+        "bold": False,
+        "primary_color": "&H00E6F0F5",      # cream #F5F0E6
+        "highlight_color": "&H00A6B814",    # teal #14B8A6
+        "outline_color": "&H59000000",      # faint translucent box
+        "border_style": 3,
+        "outline": 12,
+        "shadow": 0,
+        "alignment": 2,
+        "margin_v": 230,
+        "max_words_per_line": 6,
+        "all_caps": False,
+        "emoji": False,
+    },
+    # No caption: the pipeline skips all caption events for this template.
+    "none": {
+        "font": "Arial",
+        "font_size": 84,
+        "bold": False,
+        "primary_color": "&H00FFFFFF",
+        "highlight_color": "&H00FFFFFF",
+        "outline_color": "&H00000000",
+        "outline": 0,
+        "shadow": 0,
+        "alignment": 2,
+        "margin_v": 220,
+        "max_words_per_line": 5,
+        "all_caps": False,
+        "emoji": False,
+        "no_captions": True,                # skip karaoke events entirely
     },
 }
 
@@ -299,12 +414,15 @@ def _ass_header(style: dict[str, Any], rtl: bool) -> str:
         "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
         "Alignment, MarginL, MarginR, MarginV, Encoding\n"
         # SecondaryColour is the pre-sweep karaoke colour (highlight target).
-        # Bold is -1 (on) / 0 (off) in ASS.
+        # Bold is -1 (on) / 0 (off) in ASS. BorderStyle 1 = outline+shadow (the
+        # default), 3 = an opaque/translucent BOX behind the text (Pod P / Deep
+        # Diver) — the OutlineColour then acts as the box fill.
         f"Style: Karaoke,{style['font']},{style['font_size']},"
         f"{style['primary_color']},{style['highlight_color']},"
         f"{style['outline_color']},&H64000000,"
         f"{-1 if style.get('bold', True) else 0},0,0,0,"
-        f"100,100,0,0,1,{style['outline']},{style['shadow']},"
+        f"100,100,0,0,{int(style.get('border_style', 1))},"
+        f"{style['outline']},{style['shadow']},"
         f"{style['alignment']},60,60,{style['margin_v']},1\n"
         # HookTitle: the opening question/hook in an opaque WHITE box at the TOP
         # (Opus-style), shown for the first few seconds. BorderStyle 3 = filled
@@ -469,6 +587,12 @@ def build_ass(
     max_words = int(st.get("max_words_per_line", 5))
     base_size = int(st.get("font_size", 84))
     emoji_on = bool(st.get("emoji")) and not rtl  # keep RTL lines clean
+
+    # "No caption" preset: emit a valid ASS with NO karaoke events (only the hook
+    # box if the user still wants it). The clip renders with no burned subtitles.
+    if st.get("no_captions"):
+        hook_only = _hook_event(hook_title, rtl)
+        return header + ((hook_only + "\n") if hook_only else "")
 
     def _display(w: dict[str, Any], with_emoji: bool = False) -> str:
         """Displayed text for a word (caps applied; emoji only if asked)."""
