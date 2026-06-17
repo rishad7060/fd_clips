@@ -55,6 +55,19 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
   const looksLikeUrl = /^(https?:\/\/|www\.)/i.test(url.trim());
   const hasSource = looksLikeUrl || Boolean(sourceKey);
 
+  // The details (thumbnail, timeframe, config) only make sense once we actually
+  // KNOW the video — for a URL that means the duration fetch resolved with real
+  // data (so the timeframe has a real length); uploads have no fetch, so they're
+  // ready immediately. Until then the scan border runs and nothing reveals — no
+  // half-loaded details popping in before the thumbnail/timeframe exist.
+  // Reveal once the source read SETTLES (uploads: immediately; URLs: when the
+  // duration fetch resolves — success or failure, so a failed/duration-less
+  // fetch can't hang the spinner forever; the timeframe falls back to "whole
+  // video" when the duration is unknown).
+  const detailsReady = sourceKey ? true : looksLikeUrl && !durationLoading;
+  // The scanning border runs the whole time we're still reading the source.
+  const reading = looksLikeUrl && !detailsReady;
+
   useEffect(() => { onSourceChange?.(hasSource); }, [hasSource, onSourceChange]);
 
   // Fetch the source duration (for the processing-timeframe timeline). Debounced;
@@ -150,12 +163,12 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
     <div className="mx-auto w-full max-w-2xl text-left">
       {/* Source box — while the pasted link's details load, a scanning light
           traces around the WHOLE box (Opus-style), not just the input. */}
-      <ScanBorder active={durationLoading} radius="rounded-2xl">
+      <ScanBorder active={reading} radius="rounded-2xl">
         <div className="space-y-3 rounded-2xl bg-ink-900/40 p-3 shadow-rim">
           {sourceKey ? (
             <SourceChip label={fileName ?? "Uploaded video"} onRemove={() => { setSourceKey(null); setFileName(null); }} />
           ) : looksLikeUrl ? (
-            <SourceChip label={url.trim()} onRemove={() => setUrl("")} loading={durationLoading} />
+            <SourceChip label={url.trim()} onRemove={() => setUrl("")} loading={reading} />
           ) : (
             <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-ink-950 px-3 py-3.5 transition focus-within:border-brand focus-within:ring-1 focus-within:ring-brand/40">
               <LinkIcon />
@@ -195,7 +208,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
             full
             loading={submitting}
             onClick={getClips}
-            disabled={submitting || !hasSource || durationLoading}
+            disabled={submitting || !hasSource || reading}
           >
             {submitting ? "Creating clips…" : "Get clips in 1 click"}
           </Button>
@@ -204,10 +217,10 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
 
       {error && <p className="mt-3 text-center text-sm text-danger-400">{error}</p>}
 
-      {/* Details (language, credits, thumbnail, config) reveal ONLY after the
-          source is added AND its details have finished loading — nothing dumps
-          below the box while the scan border is still running. */}
-      {hasSource && !durationLoading && (
+      {/* Details (language, credits, thumbnail, config) reveal ONLY once the
+          source is fully read (duration known for URLs, immediate for uploads)
+          — nothing dumps below the box while the scan border is still running. */}
+      {detailsReady && (
         <div className="animate-[fadeIn_.25s_ease]">
           {/* Language · credit usage */}
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs text-ink-400">

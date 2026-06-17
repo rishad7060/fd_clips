@@ -71,18 +71,12 @@ const config: Config = {
           "0%,100%": { opacity: "1", transform: "scale(1)" },
           "50%": { opacity: "0.4", transform: "scale(0.7)" },
         },
-        // Rotates the --angle custom prop so a conic-gradient border traces
-        // around a rounded box (the "scanning" loading outline, Opus-style).
-        borderSpin: {
-          to: { "--angle": "360deg" },
-        },
       },
       animation: {
         shimmer: "shimmer 1.6s infinite",
         fadeIn: "fadeIn .25s cubic-bezier(0.22,1,0.36,1)",
         "fade-up": "fade-up .4s cubic-bezier(0.22,1,0.36,1) both",
         pulseDot: "pulseDot 1.4s ease-in-out infinite",
-        borderSpin: "borderSpin 2.2s linear infinite",
       },
     },
   },

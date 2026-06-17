@@ -61,31 +61,49 @@ input[type="range"]::-moz-range-thumb {
    don't jitter as they change. Apply via the .nums utility or font-mono. */
 .nums { font-variant-numeric: tabular-nums; }
 
-/* Animated "scanning" border (Opus-style): a bright light traces around a
-   rounded box while loading. A conic gradient whose start angle (--angle)
-   rotates; @property makes the angle interpolate smoothly. The element using
-   .scan-border should be the BORDER layer (an absolutely-positioned overlay or
-   a padded wrapper) so the dot rides the outline. */
-@property --angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
+/* Animated "scanning" border (Opus-style): a bright white light traces around
+   a rounded box while loading. Implemented by SPINNING a conic-gradient layer
+   via `transform: rotate()` — rock-solid across browsers (no reliance on
+   animating a registered custom property, which some engines render as a
+   discrete jump). The gradient layer is oversized (200%) and centered so the
+   rotating square always covers the box; the parent clips it to the rounded
+   rect and an inner solid surface masks all but the thin edge. */
 .scan-border {
+  position: absolute;
+  overflow: hidden;
+}
+.scan-border::before {
+  content: "";
+  position: absolute;
+  /* Center an oversized square and spin it. 200% guarantees full coverage at
+     every rotation angle (diagonal of the box stays inside). */
+  top: 50%;
+  left: 50%;
+  width: 200%;
+  height: 200%;
+  /* A bright white "comet" head with a brand-purple tail. The lit arc is wide
+     and peaks at full white, so the running light is unmistakable. */
   background:
     conic-gradient(
-      from var(--angle),
-      transparent 0%,
-      transparent 70%,
-      rgba(139, 125, 255, 0.35) 82%,
-      #b4a8ff 90%,
-      rgba(139, 125, 255, 0.35) 96%,
-      transparent 100%
+      from 0deg,
+      rgba(180, 168, 255, 0) 0deg,
+      rgba(139, 125, 255, 0.12) 150deg,
+      rgba(139, 125, 255, 0.5) 250deg,
+      rgba(205, 196, 255, 0.95) 322deg,
+      #ffffff 350deg,
+      rgba(180, 168, 255, 0) 360deg
     );
-  animation: borderSpin 2.2s linear infinite;
+  transform: translate(-50%, -50%) rotate(0deg);
+  animation: scanSpin 1.5s linear infinite;
+}
+@keyframes scanSpin {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .scan-border { animation: none; background: rgba(139, 125, 255, 0.5); }
+  .scan-border::before {
+    animation: none;
+    background: rgba(139, 125, 255, 0.5);
+  }
 }
 
 /* Respect reduced-motion: swap movement for a plain fade, keep feedback. */
