@@ -3,6 +3,7 @@
 import type { AspectRatio, ClipLength, Genre } from "@/lib/types";
 import { Select } from "@/components/ui/Select";
 import { Panel, SectionTitle } from "@/components/ui/Card";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { TimelineRange } from "@/components/config/TimelineRange";
 
 /**
@@ -42,6 +43,8 @@ interface Props {
   setRange: (v: { start: number; end: number } | null) => void;
   /** Source duration in seconds (from the preview); 0 = not known yet. */
   durationSec: number;
+  /** True while the duration fetch is in flight → show a shimmer in the box. */
+  durationLoading: boolean;
 }
 
 // Map the local {v,label} shape onto the Select primitive's {value,label}.
@@ -92,7 +95,7 @@ export function ConfigPanel(p: Props) {
 
       {/* Processing timeframe — a real draggable timeline (Opus-style) once the
           source duration is known; the AI decides how many clips itself. */}
-      <ProcessingTimeframe range={p.range} setRange={p.setRange} durationSec={p.durationSec} />
+      <ProcessingTimeframe range={p.range} setRange={p.setRange} durationSec={p.durationSec} loading={p.durationLoading} />
     </Panel>
   );
 }
@@ -108,13 +111,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 /**
  * Processing timeframe ("Credit saver"): a real draggable timeline over the
- * source's actual duration (Opus-style). Until the duration is known (preview
- * still loading) it processes the whole video. Off = whole video.
+ * source's actual duration (Opus-style). While the duration is being fetched
+ * (~1-3s after pasting) we show a shimmer skeleton of the timeline so the box
+ * reads "loading" instead of looking broken; once known it becomes draggable.
  */
-function ProcessingTimeframe({ range, setRange, durationSec }: {
+function ProcessingTimeframe({ range, setRange, durationSec, loading }: {
   range: { start: number; end: number } | null;
   setRange: (v: { start: number; end: number } | null) => void;
   durationSec: number;
+  loading: boolean;
 }) {
   const known = durationSec > 0;
   return (
@@ -122,12 +127,45 @@ function ProcessingTimeframe({ range, setRange, durationSec }: {
       <div className="flex items-center gap-2">
         <span className="text-xs font-medium text-ink-300">Processing timeframe</span>
         <span className="rounded-lg bg-success-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-success-400">Credit saver</span>
+        {loading && (
+          <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-400">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" />
+            Reading timeline…
+          </span>
+        )}
       </div>
+
       {known ? (
-        <TimelineRange durationSec={durationSec} range={range} setRange={setRange} />
+        <div className="animate-fadeIn">
+          <TimelineRange durationSec={durationSec} range={range} setRange={setRange} />
+        </div>
+      ) : loading ? (
+        <TimelineSkeleton />
       ) : (
         <p className="mt-2 text-xs text-ink-400">Processing the whole video. Paste a link to trim a range.</p>
       )}
+    </div>
+  );
+}
+
+/** Shimmer placeholder shaped like the timeline + its m:ss readouts. */
+function TimelineSkeleton() {
+  return (
+    <div className="mt-1">
+      {/* track shimmer */}
+      <div className="relative h-9">
+        <div className="absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full bg-ink-800">
+          <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-brand-400/30 to-transparent" />
+        </div>
+        {/* two ghost handles */}
+        <div className="absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2 animate-pulse rounded-full bg-ink-700" />
+        <div className="absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 animate-pulse rounded-full bg-ink-700" />
+      </div>
+      {/* readout pill shimmers */}
+      <div className="mt-1 flex items-center justify-between">
+        <Skeleton className="h-6 w-12 rounded-md" />
+        <Skeleton className="h-6 w-12 rounded-md" />
+      </div>
     </div>
   );
 }

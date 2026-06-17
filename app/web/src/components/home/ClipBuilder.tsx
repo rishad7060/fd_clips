@@ -46,6 +46,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
   const [autoHook, setAutoHook] = useState(true);
   const [range, setRange] = useState<{ start: number; end: number } | null>(null);
   const [durationSec, setDurationSec] = useState(0); // real source duration (for the timeline)
+  const [durationLoading, setDurationLoading] = useState(false); // fetch in flight
   const [templateId, setTemplateId] = useState(STYLE_TEMPLATES[0]!.id);
   const [alignment, setAlignment] = useState<NonNullable<ClipStyle["alignment"]>>("bottom");
 
@@ -56,15 +57,20 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
   useEffect(() => { onSourceChange?.(hasSource); }, [hasSource, onSourceChange]);
 
   // Fetch the source duration (for the processing-timeframe timeline). Debounced;
-  // resets the trim range when the URL changes.
+  // resets the trim range when the URL changes. `durationLoading` drives a
+  // shimmer in the timeframe box while the ~1-3s fetch is in flight.
   useEffect(() => {
     const u = url.trim();
     setRange(null);
-    setDurationSec(0); // collapse the timeline to "whole video" until the new duration loads
-    if (!looksLikeUrl) return;
+    setDurationSec(0);
+    if (!looksLikeUrl) { setDurationLoading(false); return; }
+    setDurationLoading(true);
     let alive = true;
     const t = setTimeout(() => {
-      api.getPreview(u).then((p) => { if (alive) setDurationSec(p.duration_sec || 0); }).catch(() => {});
+      api.getPreview(u)
+        .then((p) => { if (alive) setDurationSec(p.duration_sec || 0); })
+        .catch(() => {})
+        .finally(() => { if (alive) setDurationLoading(false); });
     }, 450);
     return () => { alive = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,7 +227,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
               autoHook={autoHook} setAutoHook={setAutoHook}
               includeMoments={includeMoments} setIncludeMoments={setIncludeMoments}
               range={range} setRange={setRange}
-              durationSec={durationSec}
+              durationSec={durationSec} durationLoading={durationLoading}
             />
           </div>
 
