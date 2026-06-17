@@ -148,61 +148,66 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
 
   return (
     <div className="mx-auto w-full max-w-2xl text-left">
-      {/* Source row */}
-      <div className="space-y-3">
-        {sourceKey ? (
-          <SourceChip label={fileName ?? "Uploaded video"} onRemove={() => { setSourceKey(null); setFileName(null); }} />
-        ) : looksLikeUrl ? (
-          <SourceChip label={url.trim()} onRemove={() => setUrl("")} loading={durationLoading} />
-        ) : (
-          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-ink-950 px-3 py-3.5 transition focus-within:border-brand focus-within:ring-1 focus-within:ring-brand/40">
-            <LinkIcon />
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste a video link — YouTube, TikTok, Instagram, X…"
-              className="w-full bg-transparent text-sm text-white placeholder:text-ink-400 focus:outline-none"
-              autoFocus
-            />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-ink-300 transition hover:bg-ink-800 hover:text-white disabled:opacity-50"
-            >
-              {uploading ? "Uploading…" : "Upload"}
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="video/*,.mp4,.mov,.mkv,.webm"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = "";
-                if (f) void onPickFile(f);
-              }}
-            />
-          </div>
-        )}
+      {/* Source box — while the pasted link's details load, a scanning light
+          traces around the WHOLE box (Opus-style), not just the input. */}
+      <ScanBorder active={durationLoading} radius="rounded-2xl">
+        <div className="space-y-3 rounded-2xl bg-ink-900/40 p-3 shadow-rim">
+          {sourceKey ? (
+            <SourceChip label={fileName ?? "Uploaded video"} onRemove={() => { setSourceKey(null); setFileName(null); }} />
+          ) : looksLikeUrl ? (
+            <SourceChip label={url.trim()} onRemove={() => setUrl("")} loading={durationLoading} />
+          ) : (
+            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-ink-950 px-3 py-3.5 transition focus-within:border-brand focus-within:ring-1 focus-within:ring-brand/40">
+              <LinkIcon />
+              <input
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="Paste a video link — YouTube, TikTok, Instagram, X…"
+                className="w-full bg-transparent text-sm text-white placeholder:text-ink-400 focus:outline-none"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-ink-300 transition hover:bg-ink-800 hover:text-white disabled:opacity-50"
+              >
+                {uploading ? "Uploading…" : "Upload"}
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="video/*,.mp4,.mov,.mkv,.webm"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) void onPickFile(f);
+                }}
+              />
+            </div>
+          )}
 
-        <Button
-          type="button"
-          variant="primary"
-          size="lg"
-          full
-          loading={submitting}
-          onClick={getClips}
-          disabled={submitting || !hasSource}
-        >
-          {submitting ? "Creating clips…" : "Get clips in 1 click"}
-        </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            full
+            loading={submitting}
+            onClick={getClips}
+            disabled={submitting || !hasSource || durationLoading}
+          >
+            {submitting ? "Creating clips…" : "Get clips in 1 click"}
+          </Button>
+        </div>
+      </ScanBorder>
 
-        {error && <p className="text-center text-sm text-danger-400">{error}</p>}
-      </div>
+      {error && <p className="mt-3 text-center text-sm text-danger-400">{error}</p>}
 
-      {/* Everything below reveals ONLY after a source is added. */}
-      {hasSource && (
+      {/* Details (language, credits, thumbnail, config) reveal ONLY after the
+          source is added AND its details have finished loading — nothing dumps
+          below the box while the scan border is still running. */}
+      {hasSource && !durationLoading && (
         <div className="animate-[fadeIn_.25s_ease]">
           {/* Language · credit usage */}
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs text-ink-400">
@@ -283,15 +288,13 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
 
 function SourceChip({ label, onRemove, loading = false }: { label: string; onRemove: () => void; loading?: boolean }) {
   return (
-    <ScanBorder active={loading}>
-      <div className="flex items-center gap-2 rounded-xl bg-ink-950 px-3 py-3.5 shadow-rim">
-        {loading ? <ChipSpinner /> : <LinkIcon />}
-        <span className="flex-1 truncate text-sm text-ink-100">{label}</span>
-        <button type="button" onClick={onRemove} className="text-sm font-medium text-brand-400 underline-offset-2 hover:underline">
-          Remove
-        </button>
-      </div>
-    </ScanBorder>
+    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-ink-950 px-3 py-3.5 shadow-rim">
+      {loading ? <ChipSpinner /> : <LinkIcon />}
+      <span className="flex-1 truncate text-sm text-ink-100">{label}</span>
+      <button type="button" onClick={onRemove} className="text-sm font-medium text-brand-400 underline-offset-2 hover:underline">
+        Remove
+      </button>
+    </div>
   );
 }
 
