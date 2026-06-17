@@ -7,6 +7,7 @@ import type {
   JobProgressEvent,
   JobStage,
   RenderClipInput,
+  VideoPreview,
 } from "../types";
 import { DEFAULT_STYLE } from "../templates";
 import { SAMPLE_CLIPS, captionsFor, wordsFor } from "./fixtures";
@@ -92,6 +93,19 @@ function nowIso(): string {
 
 function uid(): string {
   return "demo-job-" + Math.random().toString(36).slice(2, 8);
+}
+
+/** A friendly title derived from a URL's host + last path segment (mock preview). */
+function titleFromUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    const seg = u.pathname.split("/").filter(Boolean).pop() ?? "";
+    const slug = seg.replace(/[-_]+/g, " ").replace(/\.[a-z0-9]+$/i, "").trim();
+    return slug ? `${slug} — ${host}` : host || "Pasted URL";
+  } catch {
+    return "Pasted URL";
+  }
 }
 
 function buildClips(jobId: string): Clip[] {
@@ -235,6 +249,24 @@ export const mockStore = {
     const sourceKey = `upload-${slug || "video"}-${file.size}`;
     uploadFilenames.set(sourceKey, file.name);
     return { source_key: sourceKey };
+  },
+
+  /**
+   * Deterministic preview for a pasted URL (offline). Derives a friendly title
+   * from the URL, returns a 1080p stub with a poster data-URI so the config
+   * screen's preview card always has a thumbnail without any network/yt-dlp.
+   */
+  getPreview(url: string): VideoPreview {
+    const title = titleFromUrl(url);
+    return {
+      title,
+      thumbnail_url: posterDataUri(1, title, 88),
+      duration_sec: 525,
+      width: 1920,
+      height: 1080,
+      quality_label: "1080p",
+      note: "Mock preview (no metadata fetched).",
+    };
   },
 
   createJob(input: CreateJobInput): Job {

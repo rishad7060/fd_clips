@@ -15,6 +15,7 @@ import { DEV_USER } from "@/lib/auth";
 import { ConfigPanel } from "@/components/config/ConfigPanel";
 import { CaptionPresets } from "@/components/config/CaptionPresets";
 import { MyTemplates, type SavedConfig } from "@/components/config/MyTemplates";
+import { VideoPreviewCard } from "@/components/config/VideoPreviewCard";
 
 /**
  * Opus-style clip-generation config screen. After a URL/upload, the user tunes:
@@ -36,6 +37,7 @@ export default function NewClipsPage() {
   const [email, setEmail] = useState(DEV_USER.email);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedDefault, setSavedDefault] = useState(false);
 
   // ── Config state ──────────────────────────────────────────────────────────
   const [clipCount, setClipCount] = useState(CLIP_COUNT_DEFAULT);
@@ -190,6 +192,13 @@ export default function NewClipsPage() {
         {error && <p className="text-center text-sm text-red-300">{error}</p>}
       </div>
 
+      {/* Video preview (thumbnail + quality badge + copyright disclaimer) */}
+      {!sourceKey && url.trim() && (
+        <div className="mt-6">
+          <VideoPreviewCard url={url} />
+        </div>
+      )}
+
       {/* AI clipping config */}
       <div className="mt-8">
         <ConfigPanel
@@ -227,6 +236,23 @@ export default function NewClipsPage() {
         <p className="mt-1.5 text-xs text-ink-500">
           We&apos;ll open your project right away; add an email to also be notified when clips are ready.
         </p>
+      </div>
+
+      {/* Save current settings as the default for next time */}
+      <div className="mt-8 flex justify-center">
+        <button
+          type="button"
+          onClick={() => {
+            try {
+              localStorage.setItem("fd:lastConfig", JSON.stringify(currentConfig()));
+              setSavedDefault(true);
+              setTimeout(() => setSavedDefault(false), 2000);
+            } catch {/* ignore */}
+          }}
+          className="rounded-lg border border-ink-700 px-4 py-2 text-xs font-medium text-white/70 transition hover:border-brand hover:text-white"
+        >
+          {savedDefault ? "Saved as default ✓" : "Save settings above as default"}
+        </button>
       </div>
     </div>
   );

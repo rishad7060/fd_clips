@@ -11,6 +11,7 @@ import type {
   JobProgressEvent,
   RenderClipInput,
   SourceType,
+  VideoPreview,
 } from "./types";
 import { mockStore } from "./mock/store";
 
@@ -80,6 +81,17 @@ interface ApiClipView {
   suggestedTitle: string;
   downloadUrl: string | null;
   thumbnailUrl: string | null;
+}
+
+/** Mirrors preview.controller.ts PreviewView (camelCase boundary). */
+interface ApiPreviewView {
+  title: string;
+  thumbnailUrl: string;
+  durationSec: number;
+  width: number;
+  height: number;
+  qualityLabel: string;
+  note?: string;
 }
 
 /** Mirrors billing.controller.ts balance(): { plan, creditBalance }. */
@@ -231,6 +243,31 @@ export const api = {
       body: JSON.stringify(body),
     });
     return toJob(v);
+  },
+
+  /**
+   * Lightweight preview metadata for a pasted URL (POST /preview) — title,
+   * thumbnail, resolution badge — fetched WITHOUT downloading the video. The
+   * real API view is camelCase; we map it to the snake_case VideoPreview. Mock
+   * mode serves a deterministic stub offline. The endpoint never 500s, so a
+   * thrown error here is only a network/transport failure; callers should treat
+   * a failure as "no preview yet" and not block the flow.
+   */
+  async getPreview(url: string): Promise<VideoPreview> {
+    if (USING_MOCK_API) return delay(mockStore.getPreview(url), 300);
+    const v = await http<ApiPreviewView>("/preview", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    });
+    return {
+      title: v.title,
+      thumbnail_url: v.thumbnailUrl,
+      duration_sec: v.durationSec,
+      width: v.width,
+      height: v.height,
+      quality_label: v.qualityLabel,
+      note: v.note,
+    };
   },
 
   async getJob(jobId: string): Promise<Job> {

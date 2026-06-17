@@ -221,6 +221,26 @@ export interface ProcessRange {
   end: number;
 }
 
+/**
+ * Lightweight preview metadata for a pasted video URL (GET-equivalent of
+ * POST /preview). Fetched WITHOUT downloading the video so the config screen can
+ * show a thumbnail + title + a resolution badge (`quality_label`, e.g. "4K").
+ * snake_case on the web side; the API client maps the camelCase /preview view.
+ * `note` is an optional soft message when only a stub could be produced (mock
+ * mode, private/unsupported URL) — the UI may surface it but must not treat it
+ * as an error.
+ */
+export interface VideoPreview {
+  title: string;
+  thumbnail_url: string;
+  duration_sec: number;
+  width: number;
+  height: number;
+  /** Resolution badge derived from height: "4K" | "1080p" | "720p" | "360p". */
+  quality_label: string;
+  note?: string;
+}
+
 /** Body for POST /jobs. */
 export interface CreateJobInput {
   source_type: SourceType;

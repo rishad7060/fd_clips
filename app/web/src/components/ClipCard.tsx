@@ -243,20 +243,20 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
         )}
       </div>
 
-      {/* Score + actions row (big colored score, quick actions) */}
-      <div className="mt-2.5 flex items-center justify-between">
+      {/* Score + actions row — compact for the dense grid */}
+      <div className="mt-2 flex items-center justify-between">
         <span
-          className={`text-3xl font-extrabold leading-none ${scoreTextColor(clip.virality_score)}`}
+          className={`text-xl font-extrabold leading-none ${scoreTextColor(clip.virality_score)}`}
           title={`Virality score ${clip.virality_score}/100`}
         >
           {clip.virality_score}
         </span>
-        <div className="flex items-center gap-1 text-white/60">
+        <div className="flex items-center gap-0.5 text-white/60">
           <button
             type="button"
             title="Schedule (coming soon)"
             aria-label="Schedule clip"
-            className="grid h-8 w-8 place-items-center rounded-md hover:bg-ink-800 hover:text-white"
+            className="grid h-7 w-7 place-items-center rounded-md hover:bg-ink-800 hover:text-white"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
@@ -268,7 +268,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
               onClick={copyLink}
               title={copied ? "Copied!" : "Copy link"}
               aria-label={copied ? "Link copied" : "Copy clip link"}
-              className={`grid h-8 w-8 place-items-center rounded-md hover:bg-ink-800 hover:text-white ${
+              className={`grid h-7 w-7 place-items-center rounded-md hover:bg-ink-800 hover:text-white ${
                 copied ? "text-brand-400" : ""
               }`}
             >
@@ -290,7 +290,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
               download={safeName}
               title="Download"
               aria-label="Download clip"
-              className="grid h-8 w-8 place-items-center rounded-md hover:bg-ink-800 hover:text-white"
+              className="grid h-7 w-7 place-items-center rounded-md hover:bg-ink-800 hover:text-white"
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
@@ -300,7 +300,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
             <span
               title="Download unavailable"
               aria-label="Download unavailable"
-              className="grid h-8 w-8 cursor-not-allowed place-items-center rounded-md text-ink-600"
+              className="grid h-7 w-7 cursor-not-allowed place-items-center rounded-md text-ink-600"
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
@@ -311,7 +311,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
             href={`/jobs/${clip.job_id}/clips/${clip.rank}`}
             title="Edit (trim / captions)"
             aria-label="Edit clip"
-            className="grid h-8 w-8 place-items-center rounded-md hover:bg-ink-800 hover:text-white"
+            className="grid h-7 w-7 place-items-center rounded-md hover:bg-ink-800 hover:text-white"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
@@ -321,8 +321,8 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
         </div>
       </div>
 
-      {/* Title */}
-      <h3 className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-white">
+      {/* Title — single line, compact for the dense grid */}
+      <h3 className="mt-0.5 line-clamp-1 text-xs font-semibold leading-snug text-white" title={clip.suggested_title}>
         {clip.suggested_title}
       </h3>
     </div>
