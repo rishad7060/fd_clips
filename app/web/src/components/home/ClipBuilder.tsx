@@ -12,6 +12,7 @@ import { MyTemplates, type SavedConfig } from "@/components/config/MyTemplates";
 import { VideoPreviewCard } from "@/components/config/VideoPreviewCard";
 import { Button } from "@/components/ui/Button";
 import { Panel, SectionTitle } from "@/components/ui/Card";
+import { ScanBorder } from "@/components/ui/ScanBorder";
 
 /**
  * The home clip builder: a URL/upload box that, ONCE a source is added, reveals
@@ -152,7 +153,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
         {sourceKey ? (
           <SourceChip label={fileName ?? "Uploaded video"} onRemove={() => { setSourceKey(null); setFileName(null); }} />
         ) : looksLikeUrl ? (
-          <SourceChip label={url.trim()} onRemove={() => setUrl("")} />
+          <SourceChip label={url.trim()} onRemove={() => setUrl("")} loading={durationLoading} />
         ) : (
           <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-ink-950 px-3 py-3.5 transition focus-within:border-brand focus-within:ring-1 focus-within:ring-brand/40">
             <LinkIcon />
@@ -280,15 +281,27 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
   );
 }
 
-function SourceChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+function SourceChip({ label, onRemove, loading = false }: { label: string; onRemove: () => void; loading?: boolean }) {
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-ink-950 px-3 py-3.5 shadow-rim">
-      <LinkIcon />
-      <span className="flex-1 truncate text-sm text-ink-100">{label}</span>
-      <button type="button" onClick={onRemove} className="text-sm font-medium text-brand-400 underline-offset-2 hover:underline">
-        Remove
-      </button>
-    </div>
+    <ScanBorder active={loading}>
+      <div className="flex items-center gap-2 rounded-xl bg-ink-950 px-3 py-3.5 shadow-rim">
+        {loading ? <ChipSpinner /> : <LinkIcon />}
+        <span className="flex-1 truncate text-sm text-ink-100">{label}</span>
+        <button type="button" onClick={onRemove} className="text-sm font-medium text-brand-400 underline-offset-2 hover:underline">
+          Remove
+        </button>
+      </div>
+    </ScanBorder>
+  );
+}
+
+/** Small spinning loader shown inside the URL chip while the link is read. */
+function ChipSpinner() {
+  return (
+    <svg className="h-5 w-5 shrink-0 animate-spin text-brand-400" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" />
+      <path className="opacity-90" fill="currentColor" d="M12 3a9 9 0 0 1 9 9h-2.5a6.5 6.5 0 0 0-6.5-6.5V3z" />
+    </svg>
   );
 }
 

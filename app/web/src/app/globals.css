@@ -61,6 +61,33 @@ input[type="range"]::-moz-range-thumb {
    don't jitter as they change. Apply via the .nums utility or font-mono. */
 .nums { font-variant-numeric: tabular-nums; }
 
+/* Animated "scanning" border (Opus-style): a bright light traces around a
+   rounded box while loading. A conic gradient whose start angle (--angle)
+   rotates; @property makes the angle interpolate smoothly. The element using
+   .scan-border should be the BORDER layer (an absolutely-positioned overlay or
+   a padded wrapper) so the dot rides the outline. */
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.scan-border {
+  background:
+    conic-gradient(
+      from var(--angle),
+      transparent 0%,
+      transparent 70%,
+      rgba(139, 125, 255, 0.35) 82%,
+      #b4a8ff 90%,
+      rgba(139, 125, 255, 0.35) 96%,
+      transparent 100%
+    );
+  animation: borderSpin 2.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scan-border { animation: none; background: rgba(139, 125, 255, 0.5); }
+}
+
 /* Respect reduced-motion: swap movement for a plain fade, keep feedback. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
