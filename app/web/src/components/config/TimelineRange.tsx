@@ -2,11 +2,15 @@
 
 import { useCallback, useRef } from "react";
 
+// A window shorter than this can't produce a short clip, so the two handles can
+// never be dragged closer than MIN_WINDOW_SEC apart.
+const MIN_WINDOW_SEC = 10;
+
 /**
  * Opus-style processing-timeframe slider: a single track with TWO draggable
  * handles selecting the [start, end] window of the source to process, labelled
- * in m:ss. Replaces the manual From/To second inputs. Needs the real video
- * duration (from the preview metadata); the parent only renders this once known.
+ * in m:ss. The selected window is always >= MIN_WINDOW_SEC (10s) — below that
+ * there's nothing to clip. Needs the real video duration (from the preview).
  */
 export function TimelineRange({
   durationSec,
@@ -19,9 +23,9 @@ export function TimelineRange({
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const dur = Math.max(1, durationSec);
-  // The active window: full video when range is null.
-  const start = range ? Math.max(0, Math.min(range.start, dur)) : 0;
-  const end = range ? Math.max(start + 1, Math.min(range.end, dur)) : dur;
+  // The active window: full video when range is null. Enforce the 10s minimum.
+  const start = range ? Math.max(0, Math.min(range.start, dur - MIN_WINDOW_SEC)) : 0;
+  const end = range ? Math.max(start + MIN_WINDOW_SEC, Math.min(range.end, dur)) : dur;
   const isFull = start <= 0 && end >= dur;
 
   const pct = (s: number) => `${(s / dur) * 100}%`;
@@ -36,9 +40,11 @@ export function TimelineRange({
         const frac = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
         const sec = Math.round(frac * dur);
         if (handle === "start") {
-          setRange({ start: Math.min(sec, end - 1), end });
+          // Start can't come within 10s of end.
+          setRange({ start: Math.min(sec, end - MIN_WINDOW_SEC), end });
         } else {
-          setRange({ start, end: Math.max(sec, start + 1) });
+          // End can't come within 10s of start.
+          setRange({ start, end: Math.max(sec, start + MIN_WINDOW_SEC) });
         }
       };
       const onMove = (ev: PointerEvent) => move(ev.clientX);

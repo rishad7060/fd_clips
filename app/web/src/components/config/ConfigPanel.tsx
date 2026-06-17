@@ -121,7 +121,11 @@ function ProcessingTimeframe({ range, setRange, durationSec, loading }: {
   durationSec: number;
   loading: boolean;
 }) {
+  // The window must be >= 10s (below that there's nothing to clip), so a video
+  // needs > 20s of room before trimming a sub-range is even meaningful. Shorter
+  // videos just process whole.
   const known = durationSec > 0;
+  const trimmable = durationSec >= 20;
   return (
     <div className="mt-5 rounded-xl border border-white/10 bg-ink-950/50 p-3">
       <div className="flex items-center gap-2">
@@ -135,12 +139,14 @@ function ProcessingTimeframe({ range, setRange, durationSec, loading }: {
         )}
       </div>
 
-      {known ? (
+      {known && trimmable ? (
         <div className="animate-fadeIn">
           <TimelineRange durationSec={durationSec} range={range} setRange={setRange} />
         </div>
       ) : loading ? (
         <TimelineSkeleton />
+      ) : known ? (
+        <p className="mt-2 text-xs text-ink-400">This video is short — processing the whole thing.</p>
       ) : (
         <p className="mt-2 text-xs text-ink-400">Processing the whole video. Paste a link to trim a range.</p>
       )}
