@@ -6,6 +6,7 @@ import type {
   ClipStyle,
   ClipTranscript,
   CreateJobInput,
+  CreditBalance,
   Job,
   JobProgressEvent,
   RenderClipInput,
@@ -30,6 +31,19 @@ import { mockStore } from "./mock/store";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL?.trim();
 export const USING_MOCK_API = !API_URL;
+
+/**
+ * Monthly credit grant per plan tier — mirrors PLANS in app/api/src/billing/
+ * plans.ts. The /billing/balance endpoint returns only { plan, creditBalance },
+ * so the client derives monthly_credits here to render a quota/balance bar.
+ * Falls back to the free grant (30) for any unknown plan id.
+ */
+const MONTHLY_CREDITS: Record<string, number> = {
+  free: 30,
+  starter: 150,
+  pro: 300,
+};
+const DEFAULT_MONTHLY_CREDITS = 30;
 
 // ---- Real-API DTO shapes (camelCase boundary) -----------------------------
 
@@ -66,6 +80,12 @@ interface ApiClipView {
   suggestedTitle: string;
   downloadUrl: string | null;
   thumbnailUrl: string | null;
+}
+
+/** Mirrors billing.controller.ts balance(): { plan, creditBalance }. */
+interface ApiBalanceView {
+  plan: string;
+  creditBalance: number;
 }
 
 /** Mirrors clips.controller.ts WordView (clip-relative seconds). */
@@ -258,6 +278,46 @@ export const api = {
       body: JSON.stringify(body),
     });
     return toClip(v);
+  },
+
+  /**
+   * Current org plan + credit balance (GET /billing/balance). The real API
+   * returns { plan, creditBalance } (camelCase); we normalize to snake_case and
+   * derive monthly_credits from the web-side plan→credits map. Mock mode serves
+   * a deterministic free-plan balance offline.
+   */
+  async getBalance(): Promise<CreditBalance> {
+    if (USING_MOCK_API) return delay(mockStore.getBalance(), 120);
+    const v = await http<ApiBalanceView>("/billing/balance");
+    return {
+      plan: v.plan,
+      credit_balance: v.creditBalance,
+      monthly_credits: MONTHLY_CREDITS[v.plan] ?? DEFAULT_MONTHLY_CREDITS,
+    };
+  },
+
+  /**
+   * Upload a local video file. The real API exposes POST /uploads (multipart,
+   * field "file") and returns { sourceKey } — a workspace-relative path the
+   * pipeline ingests as a local file. We normalize to { source_key }; the
+   * caller then createJob({ source_type: "upload", source_key }). Mock mode
+   * registers a deterministic upload id so a later createJob makes a demo job.
+   */
+  async uploadFile(file: File): Promise<{ source_key: string }> {
+    if (USING_MOCK_API) return delay(mockStore.uploadFile(file), 400);
+    // Multipart form — DON'T set Content-Type (the browser adds the boundary).
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_URL}/uploads`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`API ${res.status} ${res.statusText}: ${body}`);
+    }
+    const v = (await res.json()) as { sourceKey: string };
+    return { source_key: v.sourceKey };
   },
 
   /**

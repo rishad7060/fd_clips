@@ -66,6 +66,13 @@ interface MockJobRecord {
 
 const records = new Map<string, MockJobRecord>();
 
+/**
+ * source_key -> original filename, populated by mockStore.uploadFile so a later
+ * createJob({ source_type: "upload", source_key }) can label the job with the
+ * real file name even when the caller doesn't pass source_filename.
+ */
+const uploadFilenames = new Map<string, string>();
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -165,6 +172,24 @@ function clipsReady(rec: MockJobRecord): number {
 export const mockStore = {
   orgId: ORG_ID,
 
+  /** Deterministic free-plan balance for the offline demo (24/30 credits used-ish). */
+  getBalance(): { plan: string; credit_balance: number; monthly_credits: number } {
+    return { plan: "free", credit_balance: 24, monthly_credits: 30 };
+  },
+
+  /**
+   * Mock file upload: returns a deterministic source_key derived from the file
+   * name + size so a subsequent createJob({ source_type: "upload", source_key })
+   * makes a demo job. No real bytes are stored — the offline demo just needs a
+   * stable key and a friendly filename to label the job.
+   */
+  uploadFile(file: File): { source_key: string } {
+    const slug = file.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase().slice(0, 24);
+    const sourceKey = `upload-${slug || "video"}-${file.size}`;
+    uploadFilenames.set(sourceKey, file.name);
+    return { source_key: sourceKey };
+  },
+
   createJob(input: CreateJobInput): Job {
     seed();
     const jobId = uid();
@@ -172,7 +197,9 @@ export const mockStore = {
     const title =
       input.source_type === "url"
         ? (input.source_url ?? "Pasted URL")
-        : (input.source_filename ?? "Uploaded video");
+        : (input.source_filename ??
+          (input.source_key ? uploadFilenames.get(input.source_key) : undefined) ??
+          "Uploaded video");
     const clips = buildClips(jobId).slice(0, input.clip_count);
     const job: Job = {
       job_id: jobId,
