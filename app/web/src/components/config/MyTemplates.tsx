@@ -18,7 +18,6 @@ export interface SavedConfig {
   autoHook: boolean;
   templateId: string;
   alignment: NonNullable<ClipStyle["alignment"]>;
-  clipCount: number;
 }
 
 interface NamedTemplate {

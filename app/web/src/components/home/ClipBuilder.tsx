@@ -20,7 +20,10 @@ import { Panel, SectionTitle } from "@/components/ui/Card";
  * config never dumps onto an empty screen. Submitting creates a job and routes
  * to its live-progress page.
  */
-const CLIP_COUNT_DEFAULT = 6;
+// Like Opus, we DON'T ask "how many clips" — the AI decides. We send a generous
+// cap and the scorer only emits clips that clear its quality bar, so weak/short
+// videos naturally yield fewer (3–10).
+const CLIP_COUNT_CAP = 10;
 
 export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean) => void }) {
   const router = useRouter();
@@ -36,13 +39,13 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
   const [savedDefault, setSavedDefault] = useState(false);
 
   // Config state
-  const [clipCount, setClipCount] = useState(CLIP_COUNT_DEFAULT);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("9:16");
   const [clipLength, setClipLength] = useState<ClipLength>("auto");
   const [genre, setGenre] = useState<Genre>("auto");
   const [includeMoments, setIncludeMoments] = useState("");
   const [autoHook, setAutoHook] = useState(true);
   const [range, setRange] = useState<{ start: number; end: number } | null>(null);
+  const [durationSec, setDurationSec] = useState(0); // real source duration (for the timeline)
   const [templateId, setTemplateId] = useState(STYLE_TEMPLATES[0]!.id);
   const [alignment, setAlignment] = useState<NonNullable<ClipStyle["alignment"]>>("bottom");
 
@@ -51,6 +54,21 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
   const hasSource = looksLikeUrl || Boolean(sourceKey);
 
   useEffect(() => { onSourceChange?.(hasSource); }, [hasSource, onSourceChange]);
+
+  // Fetch the source duration (for the processing-timeframe timeline). Debounced;
+  // resets the trim range when the URL changes.
+  useEffect(() => {
+    const u = url.trim();
+    setRange(null);
+    setDurationSec(0); // collapse the timeline to "whole video" until the new duration loads
+    if (!looksLikeUrl) return;
+    let alive = true;
+    const t = setTimeout(() => {
+      api.getPreview(u).then((p) => { if (alive) setDurationSec(p.duration_sec || 0); }).catch(() => {});
+    }, 450);
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, looksLikeUrl]);
 
   const creditEstimate = range ? Math.max(1, Math.ceil((range.end - range.start) / 60)) : 8;
 
@@ -64,7 +82,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
   }, []);
 
   function currentConfig(): SavedConfig {
-    return { aspectRatio, clipLength, genre, autoHook, templateId, alignment, clipCount };
+    return { aspectRatio, clipLength, genre, autoHook, templateId, alignment };
   }
   function applyConfig(c: Partial<SavedConfig>) {
     if (c.aspectRatio) setAspectRatio(c.aspectRatio);
@@ -73,7 +91,6 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
     if (typeof c.autoHook === "boolean") setAutoHook(c.autoHook);
     if (c.templateId) setTemplateId(c.templateId);
     if (c.alignment) setAlignment(c.alignment);
-    if (c.clipCount) setClipCount(c.clipCount);
   }
 
   async function onPickFile(file: File) {
@@ -105,7 +122,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
         ...(sourceKey
           ? { source_key: sourceKey, source_filename: fileName ?? undefined }
           : { source_url: url.trim() }),
-        clip_count: clipCount,
+        clip_count: CLIP_COUNT_CAP,
         style,
         aspect_ratio: aspectRatio,
         clip_length: clipLength,
@@ -204,7 +221,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
               autoHook={autoHook} setAutoHook={setAutoHook}
               includeMoments={includeMoments} setIncludeMoments={setIncludeMoments}
               range={range} setRange={setRange}
-              clipCount={clipCount} setClipCount={setClipCount}
+              durationSec={durationSec}
             />
           </div>
 

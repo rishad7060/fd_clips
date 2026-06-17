@@ -3,12 +3,13 @@
 import type { AspectRatio, ClipLength, Genre } from "@/lib/types";
 import { Select } from "@/components/ui/Select";
 import { Panel, SectionTitle } from "@/components/ui/Card";
+import { TimelineRange } from "@/components/config/TimelineRange";
 
 /**
  * Opus-style "AI clipping" config block: aspect ratio, clip length, genre,
- * auto-hook toggle, an "include specific moments" prompt, a processing-timeframe
- * range, and the clip-count slider. All controls drive the per-job config that
- * threads to the pipeline.
+ * auto-hook toggle, an "include specific moments" prompt, and a draggable
+ * processing-timeframe over the real source duration. The AI decides how many
+ * clips to produce (no count slider). All controls drive the per-job config.
  */
 const ASPECTS: { v: AspectRatio; label: string }[] = [
   { v: "9:16", label: "9:16" },
@@ -39,7 +40,8 @@ interface Props {
   includeMoments: string; setIncludeMoments: (v: string) => void;
   range: { start: number; end: number } | null;
   setRange: (v: { start: number; end: number } | null) => void;
-  clipCount: number; setClipCount: (v: number) => void;
+  /** Source duration in seconds (from the preview); 0 = not known yet. */
+  durationSec: number;
 }
 
 // Map the local {v,label} shape onto the Select primitive's {value,label}.
@@ -88,22 +90,9 @@ export function ConfigPanel(p: Props) {
         />
       </div>
 
-      {/* Number of clips */}
-      <div className="mt-5">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-ink-300">Number of clips</span>
-          <span className="font-mono text-sm font-semibold tabular-nums text-brand-400">{p.clipCount}</span>
-        </div>
-        <input
-          type="range" min={3} max={10} step={1} value={p.clipCount}
-          onChange={(e) => p.setClipCount(Number(e.target.value))}
-          aria-label="Number of clips"
-          className="mt-1.5 w-full accent-brand"
-        />
-      </div>
-
-      {/* Processing timeframe */}
-      <ProcessingTimeframe range={p.range} setRange={p.setRange} />
+      {/* Processing timeframe — a real draggable timeline (Opus-style) once the
+          source duration is known; the AI decides how many clips itself. */}
+      <ProcessingTimeframe range={p.range} setRange={p.setRange} durationSec={p.durationSec} />
     </Panel>
   );
 }
@@ -118,56 +107,27 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /**
- * Processing timeframe ("Credit saver"): a toggle + two number inputs picking
- * the [start,end] second window of the source to process. Off = whole video.
+ * Processing timeframe ("Credit saver"): a real draggable timeline over the
+ * source's actual duration (Opus-style). Until the duration is known (preview
+ * still loading) it processes the whole video. Off = whole video.
  */
-function ProcessingTimeframe({ range, setRange }: {
+function ProcessingTimeframe({ range, setRange, durationSec }: {
   range: { start: number; end: number } | null;
   setRange: (v: { start: number; end: number } | null) => void;
+  durationSec: number;
 }) {
-  const on = range !== null;
+  const known = durationSec > 0;
   return (
     <div className="mt-5 rounded-xl border border-white/10 bg-ink-950/50 p-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-ink-300">Processing timeframe</span>
-          <span className="rounded-lg bg-success-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-success-400">Credit saver</span>
-        </div>
-        <button
-          type="button"
-          onClick={() => setRange(on ? null : { start: 0, end: 300 })}
-          className="text-xs font-medium text-brand-400 hover:underline"
-        >
-          {on ? "Use whole video" : "Trim a range"}
-        </button>
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-ink-300">Processing timeframe</span>
+        <span className="rounded-lg bg-success-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-success-400">Credit saver</span>
       </div>
-      {on && (
-        <div className="mt-3 flex items-center gap-2 text-sm">
-          <TimeInput label="From" seconds={range!.start} onChange={(s) => setRange({ start: s, end: Math.max(s + 10, range!.end) })} />
-          <span className="text-ink-500">→</span>
-          <TimeInput label="To" seconds={range!.end} onChange={(e) => setRange({ start: range!.start, end: Math.max(range!.start + 10, e) })} />
-        </div>
+      {known ? (
+        <TimelineRange durationSec={durationSec} range={range} setRange={setRange} />
+      ) : (
+        <p className="mt-2 text-xs text-ink-400">Processing the whole video. Paste a link to trim a range.</p>
       )}
     </div>
-  );
-}
-
-function TimeInput({ label, seconds, onChange }: { label: string; seconds: number; onChange: (s: number) => void }) {
-  const mm = Math.floor(seconds / 60);
-  const ss = Math.floor(seconds % 60);
-  return (
-    <label className="flex items-center gap-1.5">
-      <span className="text-xs text-ink-400">{label}</span>
-      <input
-        type="text"
-        value={`${mm}:${String(ss).padStart(2, "0")}`}
-        onChange={(e) => {
-          const m = e.target.value.match(/^(\d+):(\d{1,2})$/);
-          if (m) onChange(Number(m[1]) * 60 + Number(m[2]));
-        }}
-        className="w-16 rounded-lg border border-white/10 bg-ink-950 px-2 py-1 text-center font-mono text-sm tabular-nums text-white transition focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand/40"
-        aria-label={`${label} time mm:ss`}
-      />
-    </label>
   );
 }
