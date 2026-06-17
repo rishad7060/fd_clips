@@ -5,65 +5,95 @@ import { api } from "@/lib/api";
 import type { VideoPreview } from "@/lib/types";
 
 /**
- * Opus-style video preview shown after a URL is pasted: the source thumbnail
- * with a resolution badge ("4K" / "1080p"), title, and the copyright
- * disclaimer. Fetches lightweight metadata (no download). Stays quiet on error.
+ * Opus-style video preview, shown ~instantly after a URL is pasted.
+ *
+ * THE OPUS TRICK: a YouTube thumbnail is at a fully predictable CDN URL you can
+ * build from the 11-char video id on the CLIENT — no backend round-trip. So we
+ * render `i.ytimg.com/vi/<id>/maxresdefault.jpg` immediately; if it 404s (not all
+ * videos have a maxres thumb) we fall back to `hqdefault.jpg` (always exists).
+ *
+ * The slow yt-dlp call (`api.getPreview`) runs in the BACKGROUND only to enrich
+ * the resolution badge ("4K"/"1080p") + exact title — it never blocks the image.
  */
-export function VideoPreviewCard({ url }: { url: string }) {
-  const [preview, setPreview] = useState<VideoPreview | null>(null);
-  const [loading, setLoading] = useState(false);
-  // Thumbnail load-failure handling: try a fallback URL once, then a placeholder.
-  const [triedFallback, setTriedFallback] = useState<string | null>(null);
-  const [imgFailed, setImgFailed] = useState(false);
 
+// Extract the 11-char video id from any YouTube URL form (watch / youtu.be /
+// shorts / embed / live / v). Returns null for non-YouTube or no match.
+function youTubeId(url: string): string | null {
+  const m = url.match(
+    /(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/,
+  );
+  return m ? m[1] : null;
+}
+
+const ytThumb = (id: string, q: "maxresdefault" | "hqdefault") =>
+  `https://i.ytimg.com/vi/${id}/${q}.jpg`;
+
+export function VideoPreviewCard({ url }: { url: string }) {
+  // Client-derived YouTube thumbnail (instant). Falls back maxres -> hq -> none.
+  const ytId = youTubeId(url.trim());
+  const [thumbTier, setThumbTier] = useState<"maxres" | "hq" | "fail">("maxres");
+
+  // Background enrichment (badge + title); never blocks the thumbnail.
+  const [preview, setPreview] = useState<VideoPreview | null>(null);
+
+  // Reset the thumbnail tier whenever the URL changes.
+  useEffect(() => { setThumbTier("maxres"); }, [url]);
+
+  // Fetch metadata in the background (debounced) for the quality badge + title.
   useEffect(() => {
     const u = url.trim();
-    // Reset the image fallback state whenever the URL changes.
-    setTriedFallback(null);
-    setImgFailed(false);
     if (!/^(https?:\/\/|www\.)/i.test(u)) {
       setPreview(null);
-      setLoading(false); // else a partial/edited URL leaves the skeleton spinning
       return;
     }
     let alive = true;
-    setLoading(true);
-    // Debounce so we don't fetch on every keystroke.
     const t = setTimeout(() => {
-      api
-        .getPreview(u)
-        .then((p) => alive && setPreview(p))
-        .catch(() => alive && setPreview(null))
-        .finally(() => alive && setLoading(false));
-    }, 500);
-    return () => {
-      alive = false;
-      clearTimeout(t);
-    };
+      api.getPreview(u).then((p) => alive && setPreview(p)).catch(() => alive && setPreview(null));
+    }, 400);
+    return () => { alive = false; clearTimeout(t); };
   }, [url]);
 
-  if (!loading && !preview) return null;
+  // The image src: client-side YouTube CDN URL (instant), else the backend
+  // thumbnail (non-YouTube), else nothing → placeholder.
+  const clientThumb = ytId
+    ? (thumbTier === "maxres" ? ytThumb(ytId, "maxresdefault")
+      : thumbTier === "hq" ? ytThumb(ytId, "hqdefault") : "")
+    : "";
+  const backendThumb = preview?.thumbnail_url && preview.thumbnail_url.startsWith("http")
+    ? preview.thumbnail_url : "";
+  const src = clientThumb || backendThumb;
 
-  const displayedSrc = triedFallback || preview?.thumbnail_url || "";
+  // Quality badge: the backend's real label (suppressed when it's a stub/error,
+  // signalled by `note`), else infer from the YouTube tier (maxres loaded → ≥720p
+  // → show "HD"; nothing premature otherwise). Never claims a resolution we don't know.
+  const badge = (preview && !preview.note ? preview.quality_label : "")
+    || (ytId && thumbTier === "maxres" ? "HD" : "");
+
+  // Nothing to show at all (not a URL, no client thumb, no backend thumb yet).
+  if (!url.trim() || (!src && !ytId)) return null;
 
   return (
     <div className="flex flex-col items-center text-center">
       <div className="relative w-56 overflow-hidden rounded-xl border border-ink-700 bg-ink-950">
-        {/* aspect-video poster */}
         <div className="aspect-video w-full">
-          {displayedSrc && !imgFailed ? (
+          {src ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={displayedSrc}
+              src={src}
               alt=""
               referrerPolicy="no-referrer"
               className="h-full w-full object-cover"
+              onLoad={(e) => {
+                // YouTube serves a 120x90 gray placeholder (HTTP 404) for a
+                // missing maxres — detect by natural width and downgrade.
+                const img = e.currentTarget;
+                if (thumbTier === "maxres" && ytId && img.naturalWidth > 0 && img.naturalWidth <= 121) {
+                  setThumbTier("hq");
+                }
+              }}
               onError={() => {
-                // A YouTube thumbnail can 404 (no maxres) or be hotlink-blocked.
-                // Try the always-present hqdefault.jpg once, then the placeholder.
-                const fb = hqFallback(displayedSrc);
-                if (fb && fb !== triedFallback) setTriedFallback(fb);
-                else setImgFailed(true);
+                if (thumbTier === "maxres") setThumbTier("hq");
+                else setThumbTier("fail");
               }}
             />
           ) : (
@@ -72,9 +102,9 @@ export function VideoPreviewCard({ url }: { url: string }) {
             </div>
           )}
         </div>
-        {preview?.quality_label && (
+        {badge && (
           <span className="absolute left-2 top-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-bold text-white">
-            {preview.quality_label}
+            {badge}
           </span>
         )}
       </div>
@@ -88,16 +118,4 @@ export function VideoPreviewCard({ url }: { url: string }) {
       </p>
     </div>
   );
-}
-
-/**
- * For a YouTube i.ytimg.com thumbnail that failed to load (e.g. a missing
- * maxresdefault), return the always-present hqdefault.jpg for that video id.
- * Returns null for non-YouTube/unrecognized URLs (no useful fallback).
- */
-function hqFallback(src: string): string | null {
-  const m = src.match(/i\.ytimg\.com\/vi(?:_webp)?\/([^/]+)\//);
-  if (!m) return null;
-  const hq = `https://i.ytimg.com/vi/${m[1]}/hqdefault.jpg`;
-  return hq === src ? null : hq;
 }

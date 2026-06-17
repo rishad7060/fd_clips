@@ -24,6 +24,7 @@ import captions  # noqa: E402
 import extract  # noqa: E402
 import ingest  # noqa: E402
 import reframe  # noqa: E402
+import preview as preview_mod  # noqa: E402
 import run as run_mod  # noqa: E402
 import score_clips  # noqa: E402
 import transcribe  # noqa: E402
@@ -573,6 +574,35 @@ def test_ass_timestamp_format() -> None:
     assert captions._ass_timestamp(0.0) == "0:00:00.00"
     assert captions._ass_timestamp(61.5) == "0:01:01.50"
     assert captions._ass_timestamp(3661.999) == "1:01:02.00"
+
+
+def test_preview_thumbnail_youtube_uses_guaranteed_hqdefault() -> None:
+    """For YouTube, return the always-present hqdefault.jpg (NOT 404-prone maxres)."""
+    info = {
+        "id": "EdZWPB1fIJc",
+        "webpage_url": "https://www.youtube.com/watch?v=EdZWPB1fIJc",
+        # yt-dlp lists maxresdefault even when it 404s — must NOT be picked.
+        "thumbnails": [
+            {"url": "https://i.ytimg.com/vi/EdZWPB1fIJc/maxresdefault.jpg", "width": 3840, "height": 2160},
+            {"url": "https://i.ytimg.com/vi_webp/EdZWPB1fIJc/maxresdefault.webp", "width": 3840, "height": 2160},
+        ],
+        "thumbnail": "https://i.ytimg.com/vi_webp/EdZWPB1fIJc/maxresdefault.webp",
+    }
+    assert preview_mod._pick_thumbnail(info) == "https://i.ytimg.com/vi/EdZWPB1fIJc/hqdefault.jpg"
+
+
+def test_preview_thumbnail_non_youtube_prefers_jpg_not_webp() -> None:
+    """Non-YouTube: pick the largest JPG, never a webp."""
+    info = {
+        "id": "v123",
+        "webpage_url": "https://vimeo.com/123",
+        "thumbnails": [
+            {"url": "https://cdn.vimeo.com/small.jpg", "width": 320, "height": 180},
+            {"url": "https://cdn.vimeo.com/big.webp", "width": 1920, "height": 1080},
+            {"url": "https://cdn.vimeo.com/big.jpg", "width": 1280, "height": 720},
+        ],
+    }
+    assert preview_mod._pick_thumbnail(info) == "https://cdn.vimeo.com/big.jpg"
 
 
 def test_hook_overlay_burned_for_first_seconds() -> None:

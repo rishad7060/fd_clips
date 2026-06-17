@@ -39,13 +39,16 @@ interface PreviewView {
 }
 
 /** Deterministic stub used in mock mode / when python is unavailable. */
+// Fallback when python/yt-dlp can't read the URL. qualityLabel is BLANK on
+// purpose — claiming "1080p" for an unknown video puts a false badge on the
+// preview. The web client shows no badge when this is empty.
 const STUB: PreviewView = {
   title: 'Preview',
   thumbnailUrl: '',
-  durationSec: 525,
-  width: 1920,
-  height: 1080,
-  qualityLabel: '1080p',
+  durationSec: 0,
+  width: 0,
+  height: 0,
+  qualityLabel: '',
 };
 
 /** Map a video height to a friendly resolution badge. */
@@ -67,17 +70,16 @@ export class PreviewController {
 
   /**
    * POST /preview — fetch title/thumbnail/resolution for a URL WITHOUT
-   * downloading. In mock mode (or when python/yt-dlp is unavailable, or the
-   * extract fails) returns a deterministic stub with a `note` so the UI always
-   * has something and never breaks. Never 500s.
+   * downloading. yt-dlp metadata extraction needs NO API keys, so this runs
+   * REGARDLESS of mockMode — gating it on mockMode (which is true whenever any
+   * unrelated cred like PayPal is missing) was leaving the preview permanently
+   * empty. When python/yt-dlp is genuinely unavailable or the extract fails, we
+   * fall back to a deterministic stub with a `note` so the UI never breaks.
+   * Never 500s.
    */
   @Post()
   @HttpCode(200)
   async preview(@Body() dto: PreviewDto): Promise<PreviewView> {
-    if (this.config.flags.mockMode) {
-      return { ...STUB, note: 'Mock preview (no metadata fetched).' };
-    }
-
     let py: PreviewPy;
     try {
       py = await this.runPreviewPy(dto.url);

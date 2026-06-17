@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -54,14 +55,23 @@ def _best_height(info: dict[str, Any]) -> tuple[int, int]:
 
 
 def _pick_thumbnail(info: dict[str, Any]) -> str:
-    """A browser-loadable thumbnail URL.
+    """A GUARANTEED-loadable thumbnail URL.
 
-    Prefers a JPG over a WEBP: YouTube's ``i.ytimg.com/vi_webp/...`` URLs (which
-    yt-dlp often returns as ``info["thumbnail"]``) frequently fail to load in a
-    browser ``<img>`` (hotlink/referrer/format), while the ``/vi/.../*.jpg``
-    variants load reliably. So we scan the thumbnails list for the largest JPG
-    first, fall back to the largest of any type, then the top-level thumbnail.
+    For YouTube, return ``i.ytimg.com/vi/<id>/hqdefault.jpg`` — the ONLY
+    thumbnail that ALWAYS exists (``maxresdefault.jpg`` 404s for any video
+    without a high-res thumb, and ``vi_webp/*.webp`` often fails in a browser
+    <img>). The web client independently tries maxres and downgrades to hq, so
+    the badge/duration we add is what matters here. For non-YouTube sources,
+    return the largest JPG (avoiding webp), then the largest of any type.
     """
+    # YouTube ONLY when the page url is YouTube AND the id looks like a real
+    # 11-char YouTube id — so a non-YouTube source whose metadata merely mentions
+    # "youtube.com" isn't misclassified into a broken ytimg URL.
+    vid = info.get("id")
+    webpage = info.get("webpage_url") or ""
+    if vid and _is_youtube(webpage) and re.fullmatch(r"[A-Za-z0-9_-]{11}", str(vid)):
+        return f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+
     best_jpg, best_jpg_area = "", -1
     best_any, best_any_area = "", -1
     for t in info.get("thumbnails") or []:
@@ -76,13 +86,8 @@ def _pick_thumbnail(info: dict[str, Any]) -> str:
             best_jpg_area, best_jpg = area, url
     if best_jpg:
         return best_jpg
-    # Derive a reliable JPG from a YouTube webp/maxres URL when that's all we have.
     top = info.get("thumbnail")
-    if isinstance(top, str) and top:
-        if "i.ytimg.com" in top:
-            vid = info.get("id")
-            if vid:
-                return f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+    if isinstance(top, str) and top and "vi_webp" not in top:
         return top
     return best_any
 
