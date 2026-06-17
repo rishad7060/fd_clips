@@ -54,22 +54,37 @@ def _best_height(info: dict[str, Any]) -> tuple[int, int]:
 
 
 def _pick_thumbnail(info: dict[str, Any]) -> str:
-    """A usable thumbnail URL: the top-level one, else the largest in the list."""
-    thumb = info.get("thumbnail")
-    if isinstance(thumb, str) and thumb:
-        return thumb
-    best = ""
-    best_area = -1
+    """A browser-loadable thumbnail URL.
+
+    Prefers a JPG over a WEBP: YouTube's ``i.ytimg.com/vi_webp/...`` URLs (which
+    yt-dlp often returns as ``info["thumbnail"]``) frequently fail to load in a
+    browser ``<img>`` (hotlink/referrer/format), while the ``/vi/.../*.jpg``
+    variants load reliably. So we scan the thumbnails list for the largest JPG
+    first, fall back to the largest of any type, then the top-level thumbnail.
+    """
+    best_jpg, best_jpg_area = "", -1
+    best_any, best_any_area = "", -1
     for t in info.get("thumbnails") or []:
         url = t.get("url")
-        if not url:
+        if not url or not isinstance(url, str):
             continue
         area = int(t.get("width") or 0) * int(t.get("height") or 0)
-        # Prefer the largest; thumbnails with no dims (area 0) still beat nothing.
-        if area >= best_area:
-            best_area = area
-            best = url
-    return best
+        is_jpg = ".jpg" in url.lower() and "vi_webp" not in url.lower()
+        if area >= best_any_area:
+            best_any_area, best_any = area, url
+        if is_jpg and area >= best_jpg_area:
+            best_jpg_area, best_jpg = area, url
+    if best_jpg:
+        return best_jpg
+    # Derive a reliable JPG from a YouTube webp/maxres URL when that's all we have.
+    top = info.get("thumbnail")
+    if isinstance(top, str) and top:
+        if "i.ytimg.com" in top:
+            vid = info.get("id")
+            if vid:
+                return f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+        return top
+    return best_any
 
 
 def preview(url: str) -> dict[str, Any]:
