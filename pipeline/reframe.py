@@ -69,6 +69,34 @@ SRC_W = 1920
 SRC_H = 1080
 CROP_W = int(round(SRC_H * TARGET_W / TARGET_H))  # 1080 * 1080/1920 = 607.5 -> 608
 
+# Per-job aspect-ratio override (set by run.py via set_aspect_ratio before
+# reframe_clips runs). Maps the web/pipeline "9:16" | "1:1" | "16:9" choice to the
+# rendered (TARGET_W, TARGET_H). 9:16 is the default and reproduces the original
+# hardcoded 1080x1920 EXACTLY. Because every geometry helper reads the module-level
+# TARGET_W/TARGET_H/CROP_W, switching the target is a single in-place rebind of
+# those globals at the top of a run (each job runs in its own process).
+ASPECT_TARGETS: dict[str, tuple[int, int]] = {
+    "9:16": (1080, 1920),
+    "1:1": (1080, 1080),
+    "16:9": (1920, 1080),
+}
+
+
+def set_aspect_ratio(aspect_ratio: Optional[str]) -> tuple[int, int]:
+    """Rebind TARGET_W/TARGET_H/CROP_W for the chosen output aspect ratio.
+
+    ``aspect_ratio`` is one of ``ASPECT_TARGETS`` ("9:16" default | "1:1" |
+    "16:9"); anything unknown/None keeps the 9:16 default (current behavior).
+    CROP_W (the 16:9-source crop width used by the deterministic mock plan) is
+    recomputed from the new target so the mock plan stays target-consistent.
+    Returns the resolved (TARGET_W, TARGET_H).
+    """
+    global TARGET_W, TARGET_H, CROP_W
+    tw, th = ASPECT_TARGETS.get((aspect_ratio or "9:16").strip(), (1080, 1920))
+    TARGET_W, TARGET_H = tw, th
+    CROP_W = int(round(SRC_H * TARGET_W / TARGET_H))
+    return TARGET_W, TARGET_H
+
 # ── MediaPipe smart-crop tuning (real branch only) ──────────────────────────
 FRAME_SAMPLE_STRIDE = 5     # run face detection on every Nth decoded frame
 EMA_ALPHA = 0.25            # crop-center smoothing weight (0.2-0.3 = calm camera)
@@ -257,8 +285,19 @@ def _deterministic_plan(
     return mode, scene_cuts, keyframes, notes
 
 
-def reframe_clips(job_id: str, top_n: Optional[int] = None) -> list[CropPlan]:
-    """Plan (mock) or render (real) vertical reframes for a job's clips."""
+def reframe_clips(
+    job_id: str, top_n: Optional[int] = None, *, aspect_ratio: Optional[str] = None
+) -> list[CropPlan]:
+    """Plan (mock) or render (real) vertical reframes for a job's clips.
+
+    ``aspect_ratio`` ("9:16" default | "1:1" | "16:9") rebinds the output
+    target dims before any geometry is computed; the default reproduces the
+    original 1080x1920 behavior exactly.
+    """
+    # Always normalize (None/unknown → "9:16" default). UNCONDITIONAL on purpose:
+    # set_aspect_ratio rebinds TARGET_W/H/CROP_W globals, so a config-less call
+    # MUST reset to 9:16 rather than inherit a prior job's target (in-process reuse).
+    set_aspect_ratio(aspect_ratio)
     settings = get_settings()
     ws = settings.workspace(job_id)
     clips_doc = json.loads((ws / "clips.json").read_text(encoding="utf-8"))

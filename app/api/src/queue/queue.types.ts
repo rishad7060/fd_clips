@@ -10,6 +10,12 @@ export interface JobQueuePayload {
   source_key: string | null;
   clip_count: number;
   style: Record<string, unknown> | null;
+  /**
+   * Opus-style per-job clip-generation config in the SNAKE_CASE shape run.py
+   * --config-json expects: { aspect_ratio, clip_length, genre, include_moments,
+   * process_range:{start,end} }. Null/omitted = all defaults (current behavior).
+   */
+  config?: Record<string, unknown> | null;
   /** MVP: delivery email so the worker can email finished clips (Resend). */
   email?: string | null;
 }

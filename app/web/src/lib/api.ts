@@ -219,6 +219,13 @@ export const api = {
       body.style =
         typeof input.style === "object" ? input.style : { template: input.style };
     }
+    // Opus-style config: map the snake_case web fields to the camelCase DTO and
+    // send only the ones that are set (forbidNonWhitelisted strips unknowns).
+    if (input.aspect_ratio) body.aspectRatio = input.aspect_ratio;
+    if (input.clip_length) body.clipLength = input.clip_length;
+    if (input.genre) body.genre = input.genre;
+    if (input.include_moments) body.includeMoments = input.include_moments;
+    if (input.process_range) body.processRange = input.process_range;
     const v = await http<ApiJobView>("/jobs", {
       method: "POST",
       body: JSON.stringify(body),

@@ -48,6 +48,75 @@ IDEAL_MIN_SEC = 30.0
 IDEAL_MAX_SEC = 60.0
 MOCK_MODEL = "mock-heuristic-v1"
 
+# ── Per-job clip-length bias (set by run.py via set_clip_length) ─────────────
+# Maps the web/pipeline "auto" | "short" | "medium" | "long" choice to the
+# (MIN, MAX, IDEAL_MIN, IDEAL_MAX) second bounds. "auto" is the default and
+# reproduces the original 15-90s / 30-60s ideal band EXACTLY. Every length
+# helper (_length_multiplier, _enforce_length_bounds, _score_mock,
+# _adaptive_min_clip) reads the module-level bounds, so one in-place rebind at
+# the top of a run biases selection length without touching call sites.
+CLIP_LENGTH_BOUNDS: dict[str, tuple[float, float, float, float]] = {
+    # name:        (MIN,  MAX,  IDEAL_MIN, IDEAL_MAX)
+    "auto":        (15.0, 90.0, 30.0, 60.0),   # current behavior
+    "short":       (10.0, 30.0, 15.0, 25.0),
+    "medium":      (30.0, 60.0, 35.0, 55.0),
+    "long":        (60.0, 90.0, 65.0, 85.0),
+}
+
+
+def set_clip_length(clip_length: Optional[str]) -> tuple[float, float, float, float]:
+    """Rebind the clip-length bounds for the chosen length bias.
+
+    ``clip_length`` is one of ``CLIP_LENGTH_BOUNDS`` ("auto" default | "short" |
+    "medium" | "long"); anything unknown/None keeps "auto" (current behavior).
+    Returns the resolved (MIN_CLIP_SEC, MAX_CLIP_SEC, IDEAL_MIN_SEC, IDEAL_MAX_SEC).
+    """
+    global MIN_CLIP_SEC, MAX_CLIP_SEC, IDEAL_MIN_SEC, IDEAL_MAX_SEC
+    mn, mx, imn, imx = CLIP_LENGTH_BOUNDS.get(
+        (clip_length or "auto").strip().lower(), CLIP_LENGTH_BOUNDS["auto"]
+    )
+    MIN_CLIP_SEC, MAX_CLIP_SEC = mn, mx
+    IDEAL_MIN_SEC, IDEAL_MAX_SEC = imn, imx
+    return MIN_CLIP_SEC, MAX_CLIP_SEC, IDEAL_MIN_SEC, IDEAL_MAX_SEC
+
+
+# ── Per-job scoring-bias instruction (genre + include_moments) ───────────────
+# Appended to the LLM (OpenAI/Gemini) prompt to bias selection/hook style.
+# Empty by default → prompt is byte-for-byte the original (current behavior).
+_GENRE_HINTS: dict[str, str] = {
+    "podcast": "favor conversational hot takes, debates, and standalone stories",
+    "marketing": "favor product value props, benefits, objections, and CTAs",
+    "motivational": "favor inspiring, high-energy, emotionally resonant moments",
+    "webinar": "favor key insights, frameworks, and actionable takeaways",
+    "educational": "favor clear explanations, surprising facts, and how-tos",
+    "comedy": "favor funny, punchy, unexpected, and quotable moments",
+}
+
+
+def _scoring_bias_instruction(
+    genre: Optional[str], include_moments: Optional[str]
+) -> str:
+    """Build the optional GENRE/FOCUS instruction appended to the LLM prompt.
+
+    Returns "" when neither is set, so the prompt is unchanged (current
+    behavior). ``genre`` "auto"/unknown contributes nothing; ``include_moments``
+    is a free-text focus instruction.
+    """
+    parts: list[str] = []
+    g = (genre or "").strip().lower()
+    if g and g != "auto":
+        hint = _GENRE_HINTS.get(g)
+        if hint:
+            parts.append(f"GENRE: this is a {g} video — {hint} and pick "
+                         f"{g}-appropriate hooks.")
+        else:
+            parts.append(f"GENRE: this is a {g} video — favor "
+                         f"{g}-appropriate hooks.")
+    focus = (include_moments or "").strip()
+    if focus:
+        parts.append(f"FOCUS: prioritize moments about: {focus}.")
+    return ("\n\n" + " ".join(parts)) if parts else ""
+
 # Penalty applied to a clip the LLM couldn't give a payoff_line for (an
 # "orphaned hook" — the #1 reason a clip fails). Heavy so these drop in ranking.
 NO_PAYOFF_PENALTY = 25
@@ -66,17 +135,36 @@ _PRACTICAL_WORDS = {"talk", "before", "write", "code", "find", "ten", "customers
 _CONTROVERSY_WORDS = {"wrong", "isn't", "killer", "nobody", "myth"}
 
 
-def score_clips(job_id: str, top_n: Optional[int] = None) -> dict[str, Any]:
-    """Score clip candidates for a job and write ``clips.json``."""
+def score_clips(
+    job_id: str,
+    top_n: Optional[int] = None,
+    *,
+    clip_length: Optional[str] = None,
+    genre: Optional[str] = None,
+    include_moments: Optional[str] = None,
+) -> dict[str, Any]:
+    """Score clip candidates for a job and write ``clips.json``.
+
+    ``clip_length`` ("auto" default | "short" | "medium" | "long") biases the
+    selected clip length by rebinding the module length bounds. ``genre`` and
+    ``include_moments`` append a short bias instruction to the LLM scoring prompt
+    (no-op for the mock heuristic). All default to current behavior.
+    """
+    # Always normalize (None/unknown → "auto" defaults). UNCONDITIONAL on purpose:
+    # set_clip_length rebinds module globals, so a config-less call MUST reset them
+    # to defaults rather than inherit a prior job's bounds (in-process reuse / tests).
+    set_clip_length(clip_length)
+    bias = _scoring_bias_instruction(genre, include_moments)
+
     settings = get_settings()
     ws = settings.workspace(job_id)
     transcript = json.loads((ws / "transcript.json").read_text(encoding="utf-8"))
 
     provider = settings.resolved_scoring_provider()
     if provider == "gemini":
-        result = _score_gemini(job_id, transcript)
+        result = _score_gemini(job_id, transcript, bias=bias)
     elif provider == "openai":
-        result = _score_real(job_id, transcript)
+        result = _score_real(job_id, transcript, bias=bias)
     else:  # "mock"
         result = _score_mock(job_id, transcript)
 
@@ -762,8 +850,14 @@ def _resolve_index_candidates(
 
 # ── Real GPT-4o-mini scorer ──────────────────────────────────────────────────
 
-def _score_real(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
-    """Score with GPT-4o-mini in JSON mode against the rubric file."""
+def _score_real(
+    job_id: str, transcript: dict[str, Any], *, bias: str = ""
+) -> dict[str, Any]:
+    """Score with GPT-4o-mini in JSON mode against the rubric file.
+
+    ``bias`` is an optional GENRE/FOCUS instruction appended to the user prompt
+    (empty by default → prompt unchanged).
+    """
     from openai import OpenAI  # lazy import; never needed in MOCK_MODE
 
     settings = get_settings()
@@ -772,7 +866,7 @@ def _score_real(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
     user_payload = (
         _build_sentence_prompt(transcript, sentences) if sentences
         else _build_transcript_prompt(transcript)
-    )
+    ) + bias
 
     client = OpenAI(api_key=settings.openai_api_key)
     resp = client.chat.completions.create(
@@ -796,12 +890,15 @@ def _score_real(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
 
 # ── Real Gemini scorer (free tier) ───────────────────────────────────────────
 
-def _score_gemini(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
+def _score_gemini(
+    job_id: str, transcript: dict[str, Any], *, bias: str = ""
+) -> dict[str, Any]:
     """Score with Google Gemini in JSON mode against the rubric file.
 
     Uses the new google-genai SDK. Builds the SAME prompt as ``_score_real``
     (rubric as the system instruction + the compact transcript), asks for a JSON
     response, parses it, and returns the same {job_id, model, candidates} shape.
+    ``bias`` is an optional GENRE/FOCUS instruction appended to the user prompt.
     """
     import time
 
@@ -817,7 +914,7 @@ def _score_gemini(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
     user_payload = (
         _build_sentence_prompt(transcript, sentences) if sentences
         else _build_transcript_prompt(transcript)
-    )
+    ) + bias
     client = genai.Client(api_key=settings.gemini_api_key)
 
     config = {

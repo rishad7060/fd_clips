@@ -74,6 +74,10 @@ model Job {
   clipCount      Int        @map("clip_count")
   // JSON caption/template style (CONTRACTS.md §1 style).
   style          Json?
+  // JSON Opus-style per-job clip-generation config (aspectRatio, clipLength,
+  // genre, includeMoments, processRange). Null = all defaults. Forwarded to
+  // run.py --config-json by the worker.
+  config         Json?
   status         JobStatus  @default(queued)
   progress       Int        @default(0)
   stage          JobStage   @default(ingest)

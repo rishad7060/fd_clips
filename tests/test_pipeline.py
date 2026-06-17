@@ -279,6 +279,78 @@ def test_reframe_plans_vertical(job_id: str) -> None:
         assert p.mode in {"active-speaker", "two-face", "center-fallback"}
 
 
+def test_reframe_aspect_ratio_changes_target_dims(job_id: str) -> None:
+    """aspect_ratio controls the reframe output target dims; 9:16 = default.
+
+    Verifies the reframe math: 9:16 -> 1080x1920 (current behavior, unchanged),
+    1:1 -> 1080x1080, 16:9 -> 1920x1080. Restores the default afterward so other
+    tests (which assume 9:16) aren't affected by the module-global rebind.
+    """
+    _score(job_id, top=3)
+    extract.extract_clips(job_id, top_n=3)
+    try:
+        for aspect, (tw, th) in (
+            ("9:16", (1080, 1920)),
+            ("1:1", (1080, 1080)),
+            ("16:9", (1920, 1080)),
+        ):
+            plans = reframe.reframe_clips(job_id, top_n=3, aspect_ratio=aspect)
+            assert reframe.TARGET_W == tw and reframe.TARGET_H == th
+            for p in plans:
+                assert p.target_width == tw and p.target_height == th
+        # Default (no aspect_ratio) keeps 9:16 = original behavior EXACTLY.
+        reframe.set_aspect_ratio(None)
+        assert (reframe.TARGET_W, reframe.TARGET_H) == (1080, 1920)
+    finally:
+        reframe.set_aspect_ratio("9:16")  # restore default for other tests
+
+
+def test_clip_length_changes_score_bounds() -> None:
+    """clip_length rebinds the score MIN/MAX/IDEAL bounds; auto = current 15-90."""
+    try:
+        # Default / "auto" reproduces the original bounds exactly.
+        score_clips.set_clip_length("auto")
+        assert (score_clips.MIN_CLIP_SEC, score_clips.MAX_CLIP_SEC) == (15.0, 90.0)
+        assert (score_clips.IDEAL_MIN_SEC, score_clips.IDEAL_MAX_SEC) == (30.0, 60.0)
+        # short <= 30s
+        score_clips.set_clip_length("short")
+        assert score_clips.MAX_CLIP_SEC == 30.0
+        assert score_clips.MIN_CLIP_SEC <= 30.0
+        # medium 30-60s
+        score_clips.set_clip_length("medium")
+        assert (score_clips.MIN_CLIP_SEC, score_clips.MAX_CLIP_SEC) == (30.0, 60.0)
+        # long 60-90s
+        score_clips.set_clip_length("long")
+        assert (score_clips.MIN_CLIP_SEC, score_clips.MAX_CLIP_SEC) == (60.0, 90.0)
+        # unknown / None falls back to auto (current behavior)
+        score_clips.set_clip_length("bogus")
+        assert (score_clips.MIN_CLIP_SEC, score_clips.MAX_CLIP_SEC) == (15.0, 90.0)
+    finally:
+        score_clips.set_clip_length("auto")  # restore default for other tests
+
+
+def test_scoring_bias_instruction_optional() -> None:
+    """genre + include_moments build an appended prompt instruction; empty by default."""
+    assert score_clips._scoring_bias_instruction(None, None) == ""
+    assert score_clips._scoring_bias_instruction("auto", "") == ""
+    bias = score_clips._scoring_bias_instruction("podcast", "pricing")
+    assert "GENRE" in bias and "podcast" in bias
+    assert "FOCUS" in bias and "pricing" in bias
+
+
+def test_clip_length_biases_mock_selection(job_id: str) -> None:
+    """A 'short' bias caps mock clip length at its 30s max (bounds actually apply)."""
+    ingest.ingest("mock://podcast", job_id)
+    transcribe.transcribe(job_id)
+    try:
+        short = score_clips.score_clips(job_id, clip_length="short")["candidates"]
+        if short:
+            max_short = max(c["end"] - c["start"] for c in short)
+            assert max_short <= 30.0 + 1e-6  # short never exceeds its 30s max
+    finally:
+        score_clips.set_clip_length("auto")
+
+
 def _two_shot_window(left_open, right_open):
     """Build a 10-sample two-shot window: LEFT face at x=0.25, RIGHT at x=0.75.
 

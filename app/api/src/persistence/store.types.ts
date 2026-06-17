@@ -29,6 +29,12 @@ export interface JobRecord {
   sourceKey: string | null;
   clipCount: number;
   style: Record<string, unknown> | null;
+  /**
+   * Opus-style per-job clip-generation config (aspectRatio, clipLength, genre,
+   * includeMoments, processRange). Null = all defaults (current behavior). The
+   * worker forwards this to run.py --config-json (snake_case).
+   */
+  config: Record<string, unknown> | null;
   status: JobStatus;
   progress: number;
   stage: JobStage;
@@ -75,6 +81,8 @@ export interface CreateJobInput {
   sourceKey?: string | null;
   clipCount: number;
   style?: Record<string, unknown> | null;
+  /** Opus-style per-job config (aspectRatio/clipLength/genre/includeMoments/processRange). */
+  config?: Record<string, unknown> | null;
   creditsCharged: number;
 }
 

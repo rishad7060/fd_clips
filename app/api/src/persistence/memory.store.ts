@@ -122,6 +122,7 @@ export class MemoryStore implements DataStore {
       sourceKey: input.sourceKey ?? null,
       clipCount: input.clipCount,
       style: input.style ?? null,
+      config: input.config ?? null,
       status: 'queued',
       progress: 0,
       stage: 'ingest',

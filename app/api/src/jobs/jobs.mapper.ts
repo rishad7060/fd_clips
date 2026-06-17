@@ -9,6 +9,8 @@ export interface JobView {
   sourceKey: string | null;
   clipCount: number;
   style: Record<string, unknown> | null;
+  /** Opus-style per-job clip-generation config (null = all defaults). */
+  config: Record<string, unknown> | null;
   status: JobRecord['status'];
   progress: number;
   stage: JobRecord['stage'];
@@ -34,6 +36,7 @@ export function toJobView(job: JobRecord, clipsProduced = 0): JobView {
     sourceKey: job.sourceKey,
     clipCount: job.clipCount,
     style: job.style,
+    config: job.config,
     status: job.status,
     progress: job.progress,
     stage: job.stage,

@@ -95,6 +95,27 @@ def _emit_progress(stage: str, status: str, message: str) -> None:
     print("@@PROGRESS@@ " + json.dumps(event), flush=True)
 
 
+def _parse_process_range(
+    raw: Any,
+) -> Optional[tuple[float, float]]:
+    """Coerce a config ``process_range`` into a (start, end) tuple, or None.
+
+    Accepts ``{"start": s, "end": e}`` (the web/queue shape) or a ``[s, e]``
+    list/tuple. Returns None (whole video) for anything missing/malformed so a
+    bad value never breaks the run — ingest re-validates the window too.
+    """
+    if not raw:
+        return None
+    try:
+        if isinstance(raw, dict):
+            start, end = float(raw["start"]), float(raw["end"])
+        else:
+            start, end = float(raw[0]), float(raw[1])
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
+    return start, end
+
+
 def _load_state(ws: Path) -> dict[str, Any]:
     f = ws / "run_state.json"
     if f.exists():
@@ -159,10 +180,32 @@ def run_pipeline(
     clip_count: int,
     *,
     force: bool = False,
+    config: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Execute all stages and return a summary dict."""
+    """Execute all stages and return a summary dict.
+
+    ``config`` is the optional Opus-style per-job config (all keys optional;
+    omitted/None = current behavior):
+        aspect_ratio:    "9:16" (default) | "1:1" | "16:9"   -> reframe target dims
+        clip_length:     "auto" (default) | "short" | "medium" | "long" -> score bounds
+        genre:           "auto" (default) | podcast | marketing | ...   -> score prompt
+        include_moments: free-text focus instruction                    -> score prompt
+        process_range:   {start, end} seconds (default whole video)     -> ingest trim
+    """
+    config = config or {}
+    aspect_ratio = config.get("aspect_ratio") or None
+    clip_length = config.get("clip_length") or None
+    genre = config.get("genre") or None
+    include_moments = config.get("include_moments") or None
+    process_range = _parse_process_range(config.get("process_range"))
+
     settings = get_settings()
     ws = settings.workspace(job_id)
+    ws.mkdir(parents=True, exist_ok=True)
+    # Persist the per-job config so a later single-clip re-render (render_one.py)
+    # reproduces the SAME aspect ratio etc. instead of falling back to 9:16.
+    if config:
+        (ws / "config.json").write_text(json.dumps(config), encoding="utf-8")
     state = _load_state(ws)
     if force:
         state = {"completed": {}, "timings": {}}
@@ -173,9 +216,18 @@ def run_pipeline(
           f"mock={settings.mock_mode}")
     print(f"source: {source}")
     print(f"workspace: {ws}")
+    if config:
+        print(f"config: aspect_ratio={aspect_ratio or '9:16'} "
+              f"clip_length={clip_length or 'auto'} genre={genre or 'auto'} "
+              f"include_moments={'yes' if include_moments else 'no'} "
+              f"process_range={process_range or 'whole'}")
     print("=" * 70)
 
-    _run_stage("ingest", lambda: ingest.ingest(source, job_id), ws, state, force)
+    _run_stage(
+        "ingest",
+        lambda: ingest.ingest(source, job_id, process_range=process_range),
+        ws, state, force,
+    )
 
     # Free-plan length gate: long videos exceed the free transcription upload
     # limit. Fail early (right after ingest, before the slow audio extract +
@@ -185,7 +237,11 @@ def run_pipeline(
 
     _run_stage("transcribe", lambda: transcribe.transcribe(job_id), ws, state, force)
     _run_stage(
-        "score", lambda: score_clips.score_clips(job_id, top_n=clip_count),
+        "score",
+        lambda: score_clips.score_clips(
+            job_id, top_n=clip_count, clip_length=clip_length,
+            genre=genre, include_moments=include_moments,
+        ),
         ws, state, force,
     )
     _run_stage(
@@ -193,7 +249,10 @@ def run_pipeline(
         ws, state, force,
     )
     _run_stage(
-        "reframe", lambda: reframe.reframe_clips(job_id, top_n=clip_count),
+        "reframe",
+        lambda: reframe.reframe_clips(
+            job_id, top_n=clip_count, aspect_ratio=aspect_ratio
+        ),
         ws, state, force,
     )
     _run_stage(
@@ -318,6 +377,12 @@ def _main() -> None:
                              "{template,font,highlight_color,alignment}); written "
                              "to workspace/{job_id}/captions_style.json for the "
                              "captions stage.")
+    parser.add_argument("--config-json", default=None,
+                        help="Opus-style per-job config as a JSON string: "
+                             "{aspect_ratio, clip_length, genre, include_moments, "
+                             "process_range:{start,end}}. All keys optional; "
+                             "omitted = current behavior (9:16, auto length, auto "
+                             "genre, no focus, whole video).")
     args = parser.parse_args()
 
     global _JSON_PROGRESS
@@ -342,8 +407,20 @@ def _main() -> None:
         except (json.JSONDecodeError, OSError) as exc:
             print(f"[run] ignoring --style-json ({exc})")
 
+    # Parse the Opus-style per-job config (aspect_ratio/clip_length/genre/
+    # include_moments/process_range). Bad JSON falls back to {} = current behavior.
+    config: dict[str, Any] = {}
+    if args.config_json:
+        try:
+            parsed = json.loads(args.config_json)
+            if isinstance(parsed, dict):
+                config = parsed
+        except json.JSONDecodeError as exc:
+            print(f"[run] ignoring --config-json ({exc})")
+
     try:
-        run_pipeline(source, args.job_id, clip_count, force=args.force)
+        run_pipeline(source, args.job_id, clip_count, force=args.force,
+                     config=config)
     except PipelineUserError as exc:
         # A clean, user-facing failure (e.g. video too long). Emit a structured
         # @@ERROR@@ line the worker forwards to the UI, then exit non-zero.

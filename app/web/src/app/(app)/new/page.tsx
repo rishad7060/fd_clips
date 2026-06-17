@@ -1,261 +1,259 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import {
-  STYLE_TEMPLATES,
-  ALIGNMENT_OPTIONS,
-  FONT_SIZE_OPTIONS,
-  templateById,
-} from "@/lib/templates";
-import type { ClipStyle, CreateJobInput } from "@/lib/types";
+import { STYLE_TEMPLATES, templateById } from "@/lib/templates";
+import type {
+  AspectRatio,
+  ClipLength,
+  ClipStyle,
+  CreateJobInput,
+  Genre,
+} from "@/lib/types";
 import { DEV_USER } from "@/lib/auth";
+import { ConfigPanel } from "@/components/config/ConfigPanel";
+import { CaptionPresets } from "@/components/config/CaptionPresets";
+import { MyTemplates, type SavedConfig } from "@/components/config/MyTemplates";
 
 /**
- * v2 MVP submit form (fd_clips_v2.md Prompt 6).
- *
- * The MVP flow is intentionally narrow: paste a YouTube URL + an email, submit,
- * and see a confirmation ("your 3 clips arrive by email in ~30 min"). We do NOT
- * route into the live editor/progress flow on submit — that matches the MVP
- * promise of an async, emailed delivery.
- *
- * PHASE 2 (see fd_clips_v2.md Part 1 / Part 5):
- *   - File UPLOAD source is cut from the MVP (YouTube URL only = no storage cost,
- *     no big-file handling). The CreateJobInput "upload" branch + R2 staging are
- *     preserved in the types/API for when uploads are turned back on.
- *   - Caption STYLE templates picker is cut from the MVP UI (one clean style
- *     ships by default). templateById("default") is sent so the contract shape
- *     is unchanged; re-expose STYLE_TEMPLATES here to bring the picker back.
- *   - Clip COUNT is user-selectable (range 3–10, default 6) via the slider below.
+ * Opus-style clip-generation config screen. After a URL/upload, the user tunes:
+ * speech language + credit estimate, AI-clipping config (model/genre/length/
+ * auto-hook + "include moments" + processing timeframe), caption presets, and
+ * aspect ratio — then "Get clips in 1 click". All config is OPTIONAL and threads
+ * through to the pipeline; omitted = current default behavior.
  */
-
-// Clip-count range the API/pipeline accept (CreateJobInput.clip_count, --clips).
-const CLIP_COUNT_MIN = 3;
-const CLIP_COUNT_MAX = 10;
 const CLIP_COUNT_DEFAULT = 6;
 
 export default function NewClipsPage() {
-  const [url, setUrl] = useState("");
-  // Prefill with the dev-mode user's email; with real Clerk wired the user can
-  // still override the delivery address.
-  const [email, setEmail] = useState(DEV_USER.email);
   const router = useRouter();
+  const [url, setUrl] = useState("");
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [sourceKey, setSourceKey] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const [email, setEmail] = useState(DEV_USER.email);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Caption look: template (default Hype/Hormozi) + placement + size.
-  const [templateId, setTemplateId] = useState<string>(STYLE_TEMPLATES[0]!.id);
-  // Default to BOTTOM placement (safest for faces; user can change).
+
+  // ── Config state ──────────────────────────────────────────────────────────
+  const [clipCount, setClipCount] = useState(CLIP_COUNT_DEFAULT);
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>("9:16");
+  const [clipLength, setClipLength] = useState<ClipLength>("auto");
+  const [genre, setGenre] = useState<Genre>("auto");
+  const [includeMoments, setIncludeMoments] = useState("");
+  const [autoHook, setAutoHook] = useState(true);
+  const [range, setRange] = useState<{ start: number; end: number } | null>(null);
+  // Caption look
+  const [templateId, setTemplateId] = useState(STYLE_TEMPLATES[0]!.id);
   const [alignment, setAlignment] =
     useState<NonNullable<ClipStyle["alignment"]>>("bottom");
-  const [fontSize, setFontSize] = useState<number>(0); // 0 = template default
-  // How many clips to generate (range 3–10, default 6).
-  const [clipCount, setClipCount] = useState<number>(CLIP_COUNT_DEFAULT);
 
-  // Email is OPTIONAL now — submitting goes straight to the live project view;
-  // an email is only attached (for the optional Resend notification) if valid.
-  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const canSubmit = !submitting && url.trim().length > 4;
+  const hasSource = url.trim().length > 4 || Boolean(sourceKey);
+  // ~1 credit per source-minute; we don't know duration pre-ingest, so show a
+  // friendly estimate that respects the processing window when set.
+  const creditEstimate = range
+    ? Math.max(1, Math.ceil((range.end - range.start) / 60))
+    : 8;
 
-  async function submit() {
+  // Restore the last-used config so the screen feels persistent (Opus-like).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("fd:lastConfig");
+      if (raw) applyConfig(JSON.parse(raw));
+    } catch {/* ignore */}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function currentConfig(): SavedConfig {
+    return { aspectRatio, clipLength, genre, autoHook, templateId, alignment, clipCount };
+  }
+  function applyConfig(c: Partial<SavedConfig>) {
+    if (c.aspectRatio) setAspectRatio(c.aspectRatio);
+    if (c.clipLength) setClipLength(c.clipLength);
+    if (c.genre) setGenre(c.genre);
+    if (typeof c.autoHook === "boolean") setAutoHook(c.autoHook);
+    if (c.templateId) setTemplateId(c.templateId);
+    if (c.alignment) setAlignment(c.alignment);
+    if (c.clipCount) setClipCount(c.clipCount);
+  }
+
+  async function onPickFile(file: File) {
+    setUploading(true);
+    setError(null);
+    setFileName(file.name);
+    try {
+      const { source_key } = await api.uploadFile(file);
+      setSourceKey(source_key);
+      setUrl("");
+    } catch (e) {
+      setError(friendly(e));
+      setFileName(null);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function getClips() {
+    if (submitting || !hasSource) return;
     setError(null);
     setSubmitting(true);
     try {
-      // User-chosen caption template + placement + (optional) size override.
-      const style: ClipStyle = { ...templateById(templateId).style, alignment };
-      if (fontSize > 0) style.font_size = fontSize;
+      localStorage.setItem("fd:lastConfig", JSON.stringify(currentConfig()));
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+      const style: ClipStyle = {
+        ...templateById(templateId).style,
+        alignment,
+        hook_overlay: autoHook,
+      };
       const input: CreateJobInput = {
-        source_type: "url",
-        source_url: url.trim(),
+        source_type: sourceKey ? "upload" : "url",
+        ...(sourceKey ? { source_key: sourceKey, source_filename: fileName ?? undefined } : { source_url: url.trim() }),
         clip_count: clipCount,
         style,
-        // Only attach the email if it's valid — it's an optional notification.
+        aspect_ratio: aspectRatio,
+        clip_length: clipLength,
+        genre,
+        ...(includeMoments.trim() ? { include_moments: includeMoments.trim() } : {}),
+        ...(range ? { process_range: range } : {}),
         ...(emailOk ? { email: email.trim() } : {}),
       };
       const job = await api.createJob(input);
-      // Go straight to the project: the progress page shows live status and
-      // auto-opens the clips gallery when the job completes (no email-wait
-      // screen, no landing on an empty /clips before the job has finished).
       router.push(`/jobs/${job.job_id}`);
     } catch (e) {
-      setError(String(e));
+      setError(friendly(e));
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Create clips</h1>
-        <p className="text-sm text-white/60">
-          Paste any video link and we&apos;ll turn it into your{" "}
-          {clipCount} best moments as captioned vertical clips.
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-ink-700 bg-ink-900/60 p-6">
-        {/* Video URL — any supported platform */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-white/80">
-            Video URL
-          </label>
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="Paste any video link — YouTube, TikTok, Instagram, X…"
-            className="w-full rounded-lg border border-ink-600 bg-ink-950 px-3 py-2.5 text-sm text-white placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
-          />
-          <p className="mt-1.5 text-xs text-ink-500">
-            Works with YouTube, TikTok, Instagram, X/Twitter, Vimeo, Facebook & more.
-          </p>
-        </div>
-
-        {/* Delivery email (optional) */}
-        <div className="mt-6">
-          <label className="mb-1.5 block text-sm font-medium text-white/80">
-            Email <span className="font-normal text-ink-500">(optional)</span>
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="w-full rounded-lg border border-ink-600 bg-ink-950 px-3 py-2.5 text-sm text-white placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
-          />
-          <p className="mt-1.5 text-xs text-ink-500">
-            We&apos;ll open your project right away. Add an email to also get
-            notified when the clips are ready.
-          </p>
-        </div>
-
-        {/* Clip count — user picks how many top moments (3–10). */}
-        <div className="mt-6 rounded-lg border border-ink-700 bg-ink-850 px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-white/80">Number of clips</p>
-              <p className="text-xs text-ink-500">
-                We&apos;ll deliver your top {clipCount} ranked moments.
-              </p>
-            </div>
-            <span className="text-lg font-bold text-brand-400">
-              {clipCount} clips
-            </span>
+    <div className="mx-auto max-w-2xl px-4 py-8">
+      {/* Source row: URL chip / upload + Get clips */}
+      <div className="space-y-3">
+        {sourceKey ? (
+          <SourceChip label={fileName ?? "Uploaded video"} onRemove={() => { setSourceKey(null); setFileName(null); }} />
+        ) : url.trim() ? (
+          <SourceChip label={url.trim()} onRemove={() => setUrl("")} />
+        ) : (
+          <div className="flex items-center gap-2 rounded-xl border border-ink-700 bg-ink-950 px-3 py-3 focus-within:border-brand">
+            <LinkIcon />
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Paste a video link — YouTube, TikTok, Instagram, X…"
+              className="w-full bg-transparent text-sm text-white placeholder:text-ink-500 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-white/70 hover:bg-ink-800 hover:text-white disabled:opacity-50"
+            >
+              {uploading ? "Uploading…" : "Upload"}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="video/*,.mp4,.mov,.mkv,.webm"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void onPickFile(f);
+              }}
+            />
           </div>
-          <input
-            type="range"
-            min={CLIP_COUNT_MIN}
-            max={CLIP_COUNT_MAX}
-            step={1}
-            value={clipCount}
-            onChange={(e) => setClipCount(Number(e.target.value))}
-            aria-label="Number of clips"
-            className="mt-3 w-full accent-brand"
-          />
-          <div className="mt-1 flex justify-between text-[11px] text-ink-500">
-            <span>{CLIP_COUNT_MIN}</span>
-            <span>{CLIP_COUNT_MAX}</span>
-          </div>
-        </div>
-
-        {/* Caption style picker */}
-        <div className="mt-6">
-          <label className="mb-2 block text-sm font-medium text-white/80">
-            Caption style
-          </label>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {STYLE_TEMPLATES.map((t) => {
-              const active = t.id === templateId;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTemplateId(t.id)}
-                  title={t.description}
-                  className={`rounded-lg border p-2 text-left transition ${
-                    active
-                      ? "border-brand ring-1 ring-brand"
-                      : "border-ink-600 hover:border-ink-500"
-                  }`}
-                >
-                  <div
-                    className={`grid h-12 place-items-center rounded ${t.previewClass}`}
-                  >
-                    <span className="text-[11px] leading-none">
-                      Aa<span style={{ color: t.style.highlight_color }}>Bb</span>
-                    </span>
-                  </div>
-                  <p className="mt-1.5 truncate text-xs font-medium text-white/80">
-                    {t.name}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Caption placement */}
-        <div className="mt-5">
-          <label className="mb-2 block text-sm font-medium text-white/80">
-            Caption position
-          </label>
-          <div className="inline-flex rounded-lg border border-ink-600 bg-ink-950 p-1">
-            {ALIGNMENT_OPTIONS.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setAlignment(opt.id)}
-                className={`rounded-md px-4 py-1.5 text-xs font-medium transition ${
-                  alignment === opt.id
-                    ? "bg-brand text-white"
-                    : "text-white/60 hover:text-white"
-                }`}
-              >
-                {opt.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Caption size */}
-        <div className="mt-5">
-          <label className="mb-2 block text-sm font-medium text-white/80">
-            Caption size
-          </label>
-          <div className="inline-flex rounded-lg border border-ink-600 bg-ink-950 p-1">
-            {FONT_SIZE_OPTIONS.map((opt) => (
-              <button
-                key={opt.label}
-                type="button"
-                onClick={() => setFontSize(opt.value)}
-                className={`rounded-md px-4 py-1.5 text-xs font-medium transition ${
-                  fontSize === opt.value
-                    ? "bg-brand text-white"
-                    : "text-white/60 hover:text-white"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          <p className="mt-1.5 text-xs text-ink-500">
-            Big text auto-shrinks per line so it never runs off the edges.
-          </p>
-        </div>
-
-        {error && (
-          <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
-            {error}
-          </p>
         )}
 
         <button
-          disabled={!canSubmit}
-          onClick={submit}
-          className="mt-6 w-full rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white shadow-glow transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+          type="button"
+          onClick={getClips}
+          disabled={submitting || !hasSource}
+          className="w-full rounded-xl bg-white py-3 text-sm font-bold text-ink-950 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {submitting ? "Submitting…" : `Generate ${clipCount} clips`}
+          {submitting ? "Creating clips…" : "Get clips in 1 click"}
         </button>
+
+        {/* Language · credit usage */}
+        <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs text-ink-400">
+          <span>
+            Speech language: <span className="font-semibold text-white">English</span>
+          </span>
+          <span className="inline-flex items-center gap-1">
+            Credit usage:
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-brand-400" fill="currentColor"><path d="M13 2L3 14h7l-1 8 10-12h-7z" /></svg>
+            <span className="font-semibold text-white">{creditEstimate}</span>
+          </span>
+        </div>
+
+        {error && <p className="text-center text-sm text-red-300">{error}</p>}
+      </div>
+
+      {/* AI clipping config */}
+      <div className="mt-8">
+        <ConfigPanel
+          aspectRatio={aspectRatio} setAspectRatio={setAspectRatio}
+          clipLength={clipLength} setClipLength={setClipLength}
+          genre={genre} setGenre={setGenre}
+          autoHook={autoHook} setAutoHook={setAutoHook}
+          includeMoments={includeMoments} setIncludeMoments={setIncludeMoments}
+          range={range} setRange={setRange}
+          clipCount={clipCount} setClipCount={setClipCount}
+        />
+      </div>
+
+      {/* Caption presets + My templates */}
+      <div className="mt-8 space-y-6">
+        <CaptionPresets
+          templateId={templateId} setTemplateId={setTemplateId}
+          alignment={alignment} setAlignment={setAlignment}
+        />
+        <MyTemplates current={currentConfig()} onApply={applyConfig} />
+      </div>
+
+      {/* Delivery email (optional) */}
+      <div className="mt-8 rounded-xl border border-ink-700 bg-ink-900/50 p-4">
+        <label className="mb-1.5 block text-sm font-medium text-white/80">
+          Email <span className="font-normal text-ink-500">(optional)</span>
+        </label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="w-full rounded-lg border border-ink-600 bg-ink-950 px-3 py-2.5 text-sm text-white placeholder:text-ink-500 focus:border-brand focus:outline-none"
+        />
+        <p className="mt-1.5 text-xs text-ink-500">
+          We&apos;ll open your project right away; add an email to also be notified when clips are ready.
+        </p>
       </div>
     </div>
   );
+}
+
+function SourceChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-ink-700 bg-ink-950 px-3 py-3">
+      <LinkIcon />
+      <span className="flex-1 truncate text-sm text-white/90">{label}</span>
+      <button type="button" onClick={onRemove} className="text-sm font-medium text-brand-400 underline-offset-2 hover:underline">
+        Remove
+      </button>
+    </div>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-ink-500" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1" />
+    </svg>
+  );
+}
+
+function friendly(e: unknown): string {
+  const msg = String(e instanceof Error ? e.message : e);
+  if (/413|too large|payload/i.test(msg)) return "That file is too large. Try a shorter clip or a link.";
+  return msg.replace(/^Error:\s*/, "");
 }

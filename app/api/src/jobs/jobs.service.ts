@@ -22,6 +22,11 @@ export class JobsService {
   async create(organizationId: string, dto: CreateJobDto): Promise<JobRecord> {
     const credits = this.billing.creditsForDuration(dto.durationSec ?? 0);
 
+    // Opus-style per-job config. Persist the camelCase DTO fields (only those
+    // actually set) on the job record; null when none were supplied so existing
+    // jobs/behavior are unchanged.
+    const jobConfig = buildJobConfig(dto);
+
     // 1) Persist the job first (status=queued) so the ledger can reference it.
     const job = await this.store.createJob({
       organizationId,
@@ -30,6 +35,7 @@ export class JobsService {
       sourceKey: dto.sourceKey ?? null,
       clipCount: dto.clipCount,
       style: dto.style ?? null,
+      config: jobConfig,
       creditsCharged: credits,
     });
 
@@ -54,6 +60,9 @@ export class JobsService {
       source_key: job.sourceKey,
       clip_count: job.clipCount,
       style: job.style,
+      // Opus-style config in run.py's SNAKE_CASE --config-json shape (null when
+      // none was set → run.py applies all defaults = current behavior).
+      config: toPipelineConfig(jobConfig),
       // MVP: carry the delivery email so the worker can email finished clips.
       email: dto.email ?? null,
     };
@@ -102,4 +111,40 @@ export class JobsService {
     }
     return jobs.map((job) => ({ job, clipsProduced: counts.get(job.id) ?? 0 }));
   }
+}
+
+/**
+ * Collect the Opus-style per-job config fields actually present on the DTO into
+ * a camelCase object stored on the job record. Returns null when none were set
+ * so jobs without a config are byte-for-byte unchanged (current behavior).
+ */
+function buildJobConfig(dto: CreateJobDto): Record<string, unknown> | null {
+  const config: Record<string, unknown> = {};
+  if (dto.aspectRatio !== undefined) config.aspectRatio = dto.aspectRatio;
+  if (dto.clipLength !== undefined) config.clipLength = dto.clipLength;
+  if (dto.genre !== undefined) config.genre = dto.genre;
+  if (dto.includeMoments !== undefined) config.includeMoments = dto.includeMoments;
+  if (dto.processRange !== undefined) {
+    config.processRange = { start: dto.processRange.start, end: dto.processRange.end };
+  }
+  return Object.keys(config).length > 0 ? config : null;
+}
+
+/**
+ * Map the stored camelCase job config to the SNAKE_CASE shape run.py's
+ * --config-json expects ({ aspect_ratio, clip_length, genre, include_moments,
+ * process_range:{start,end} }). Returns null when there's no config so the
+ * worker omits --config-json entirely and run.py applies all defaults.
+ */
+function toPipelineConfig(
+  config: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!config) return null;
+  const out: Record<string, unknown> = {};
+  if (config.aspectRatio !== undefined) out.aspect_ratio = config.aspectRatio;
+  if (config.clipLength !== undefined) out.clip_length = config.clipLength;
+  if (config.genre !== undefined) out.genre = config.genre;
+  if (config.includeMoments !== undefined) out.include_moments = config.includeMoments;
+  if (config.processRange !== undefined) out.process_range = config.processRange;
+  return Object.keys(out).length > 0 ? out : null;
 }

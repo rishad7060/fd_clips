@@ -65,6 +65,7 @@ export class PrismaStore implements DataStore {
       sourceKey: j.sourceKey ?? null,
       clipCount: j.clipCount,
       style: (j.style as Record<string, unknown>) ?? null,
+      config: (j.config as Record<string, unknown>) ?? null,
       status: j.status,
       progress: j.progress,
       stage: j.stage,
@@ -182,6 +183,7 @@ export class PrismaStore implements DataStore {
         sourceKey: input.sourceKey ?? null,
         clipCount: input.clipCount,
         style: (input.style ?? undefined) as any,
+        config: (input.config ?? undefined) as any,
         creditsCharged: input.creditsCharged,
       },
     });

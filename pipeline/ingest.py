@@ -111,6 +111,26 @@ def _ffmpeg_available() -> bool:
     return _ffmpeg_bin() is not None
 
 
+def _clean_range(
+    process_range: Optional[tuple[float, float]],
+) -> Optional[tuple[float, float]]:
+    """Validate/normalize a (start, end) window, or None for the whole video.
+
+    Returns None (whole video) when the range is absent or not a positive,
+    well-ordered window (end > start >= 0) so a junk range never breaks ingest.
+    """
+    if not process_range:
+        return None
+    try:
+        start, end = float(process_range[0]), float(process_range[1])
+    except (TypeError, ValueError, IndexError):
+        return None
+    start = max(0.0, start)
+    if end <= start:
+        return None
+    return start, end
+
+
 def _is_url(source: str) -> bool:
     return source.startswith(("http://", "https://", "www."))
 
@@ -137,21 +157,28 @@ def ingest(
     job_id: str,
     *,
     source_type: Optional[str] = None,
+    process_range: Optional[tuple[float, float]] = None,
 ) -> SourceMetadata:
     """Ingest ``source`` for ``job_id`` and return its normalized metadata.
 
     The metadata JSON is written to ``workspace/{job_id}/source.meta.json`` and a
     (real or placeholder) ``source.mp4`` is created in the same dir.
+
+    ``process_range`` (start, end) in seconds, when set, limits ingest to that
+    time window of the source ("Credit saver"): yt-dlp ``download_ranges`` for
+    URLs, ffmpeg ``-ss``/``-to`` at the normalize step otherwise. Default (None)
+    processes the whole video (current behavior).
     """
     settings = get_settings()
     ws = settings.workspace(job_id)
     out_path = ws / "source.mp4"
     inferred_type = source_type or ("url" if _is_url(source) else "file")
+    window = _clean_range(process_range)
 
     if settings.mock_mode:
         meta = _ingest_mock(source, job_id, inferred_type, out_path)
     else:
-        meta = _ingest_real(source, job_id, inferred_type, out_path, ws)
+        meta = _ingest_real(source, job_id, inferred_type, out_path, ws, window)
 
     (ws / "source.meta.json").write_text(
         json.dumps(meta.to_json(), indent=2), encoding="utf-8"
@@ -188,10 +215,18 @@ def _ingest_mock(
 
 
 def _ingest_real(
-    source: str, job_id: str, source_type: str, out_path: Path, ws: Path
+    source: str, job_id: str, source_type: str, out_path: Path, ws: Path,
+    window: Optional[tuple[float, float]] = None,
 ) -> SourceMetadata:
-    """Real ingest via yt-dlp + ffprobe + ffmpeg (runs on the GPU/full box)."""
+    """Real ingest via yt-dlp + ffprobe + ffmpeg (runs on the GPU/full box).
+
+    ``window`` (start, end) seconds, when set, limits ingest to that time range
+    of the source: yt-dlp ``download_ranges`` for URLs (so only that window is
+    downloaded), else ffmpeg ``-ss``/``-to`` at the normalize step. ``trimmed``
+    tracks whether the download was already range-limited so we don't re-trim.
+    """
     info: dict[str, Any] = {}  # yt-dlp metadata (heatmap/view_count); {} for local files
+    trimmed_on_download = False
     if source_type == "url":
         import yt_dlp  # imported lazily so MOCK_MODE never needs it
 
@@ -249,6 +284,18 @@ def _ingest_real(
         elif cookie_browser:
             # yt-dlp expects a tuple: (browser, profile?, keyring?, container?)
             ydl_opts["cookiesfrombrowser"] = (cookie_browser,)
+        # "Credit saver": when a process_range is set, download ONLY that window
+        # (yt-dlp download_ranges) instead of the whole video — so a 2h podcast
+        # trimmed to a 5-min window neither downloads nor transcribes the rest.
+        # force_keyframes_at_cuts gives clean cut points. Marks the download as
+        # already-trimmed so the normalize step doesn't trim a second time.
+        if window is not None:
+            w_start, w_end = window
+            ydl_opts["download_ranges"] = yt_dlp.utils.download_range_func(
+                None, [(w_start, w_end)]
+            )
+            ydl_opts["force_keyframes_at_cuts"] = True
+            trimmed_on_download = True
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 # extract_info(download=True) both downloads AND returns the
@@ -316,9 +363,21 @@ def _ingest_real(
     except (subprocess.CalledProcessError, StopIteration, KeyError, OSError):
         needs_reencode = True  # if we can't probe, be safe and re-encode
 
+    # "Credit saver": trim to [start,end] at normalize time when the download
+    # itself wasn't already range-limited (local files, or non-URL sources). For
+    # URLs the download_ranges download already produced just the window, so we
+    # must NOT trim again. ``-ss``/``-to`` are placed BEFORE ``-i`` for fast,
+    # keyframe-accurate input seeking; a stream-copy remux can't trim mid-GOP, so
+    # a windowed copy is forced to re-encode for frame-accurate cut points.
+    trim_args: list[str] = []
+    if window is not None and not trimmed_on_download:
+        w_start, w_end = window
+        trim_args = ["-ss", f"{w_start:.3f}", "-to", f"{w_end:.3f}"]
+        needs_reencode = True
+
     if needs_reencode:
         norm_cmd = [
-            ffmpeg, "-y", "-i", str(downloaded),
+            ffmpeg, "-y", *trim_args, "-i", str(downloaded),
             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30",
             "-c:a", "aac", "-movflags", "+faststart",
             str(norm_target),

@@ -199,6 +199,28 @@ export interface CreditBalance {
   monthly_credits: number;
 }
 
+/** Output aspect ratio for the reframe stage. */
+export type AspectRatio = "9:16" | "1:1" | "16:9";
+
+/** Clip-length bias for selection. */
+export type ClipLength = "auto" | "short" | "medium" | "long";
+
+/** Content genre biasing the AI scoring/hook style. */
+export type Genre =
+  | "auto"
+  | "podcast"
+  | "marketing"
+  | "motivational"
+  | "webinar"
+  | "educational"
+  | "comedy";
+
+/** Time window (seconds) of the source to process ("Credit saver"). */
+export interface ProcessRange {
+  start: number;
+  end: number;
+}
+
 /** Body for POST /jobs. */
 export interface CreateJobInput {
   source_type: SourceType;
@@ -215,6 +237,19 @@ export interface CreateJobInput {
    * the recipient from the authenticated Clerk user.
    */
   email?: string;
+  // ── Opus-style clip-generation config (all optional; omitted = current
+  // behavior: 9:16, auto length, auto genre, no focus, whole video). snake_case
+  // on the web side; the API client maps these to the camelCase DTO. ─────────
+  /** Output dimensions for the reframe stage. Default "9:16". */
+  aspect_ratio?: AspectRatio;
+  /** Bias the selected clip length. Default "auto". */
+  clip_length?: ClipLength;
+  /** Bias the AI scoring/hook style by genre. Default "auto". */
+  genre?: Genre;
+  /** Free-text instruction biasing selection (e.g. "find clips about pricing"). */
+  include_moments?: string;
+  /** Only process this [start,end] second window of the source. Default: whole. */
+  process_range?: ProcessRange;
 }
 
 /** Body for a re-render of a single clip (10c). */

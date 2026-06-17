@@ -145,9 +145,17 @@ def _render_single_stage_passthrough(
     single = {**full_doc, "candidates": [cand]}
     backup = clips_path.read_text(encoding="utf-8")
     clips_path.write_text(json.dumps(single, ensure_ascii=False), encoding="utf-8")
+    # Preserve the job's chosen aspect ratio on re-render (else it reverts to 9:16).
+    aspect_ratio = None
+    cfg_file = ws / "config.json"
+    if cfg_file.exists():
+        try:
+            aspect_ratio = json.loads(cfg_file.read_text(encoding="utf-8")).get("aspect_ratio")
+        except (json.JSONDecodeError, OSError):
+            aspect_ratio = None
     try:
         extract.extract_clips(ws.name, top_n=1)
-        reframe.reframe_clips(ws.name, top_n=1)
+        reframe.reframe_clips(ws.name, top_n=1, aspect_ratio=aspect_ratio)
         captions.caption_clips(ws.name, top_n=1)
     finally:
         clips_path.write_text(backup, encoding="utf-8")

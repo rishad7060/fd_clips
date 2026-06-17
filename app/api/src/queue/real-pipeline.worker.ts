@@ -169,6 +169,11 @@ export class RealPipelineWorker implements JobWorker {
       if (payload.style) {
         args.push('--style-json', JSON.stringify(payload.style));
       }
+      // Forward the Opus-style per-job config (already in run.py's snake_case
+      // shape). Omitted when null so run.py applies all defaults (current behavior).
+      if (payload.config) {
+        args.push('--config-json', JSON.stringify(payload.config));
+      }
       this.logger.log(`Spawning ${this.pythonBin} ${args.join(' ')} (cwd=${this.repoRoot})`);
 
       const child = spawn(this.pythonBin, args, { cwd: this.repoRoot });
