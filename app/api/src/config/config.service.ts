@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 /**
- * Resolved feature flags. Each external dependency (DB, Redis, Clerk, Stripe)
+ * Resolved feature flags. Each external dependency (DB, Redis, Clerk, PayPal)
  * has a mock fallback so the API boots locally with an empty .env.
  */
 export interface ResolvedFlags {
@@ -14,8 +14,9 @@ export interface ResolvedFlags {
   mockQueue: boolean;
   /** When true, the in-memory store is used instead of Prisma/Postgres. */
   mockDb: boolean;
-  /** When true, signed URLs are faked and Stripe is stubbed. */
+  /** When true, signed URLs are faked. */
   mockStorage: boolean;
+  /** When true, PayPal is stubbed (no client id/secret); checkout grants locally. */
   mockBilling: boolean;
   /**
    * When true, clip keys are served as local-disk files over HTTP via the
@@ -67,12 +68,31 @@ export class AppConfigService {
     return this.get<string>('CLERK_JWKS_URL', undefined);
   }
 
-  get stripeSecretKey(): string | undefined {
-    return this.get<string>('STRIPE_SECRET_KEY', undefined);
+  get paypalClientId(): string | undefined {
+    return this.get<string>('PAYPAL_CLIENT_ID', undefined);
   }
 
-  get stripeWebhookSecret(): string | undefined {
-    return this.get<string>('STRIPE_WEBHOOK_SECRET', undefined);
+  get paypalSecret(): string | undefined {
+    return this.get<string>('PAYPAL_SECRET', undefined);
+  }
+
+  /** PayPal REST API base. Defaults to the sandbox host. */
+  get paypalBaseUrl(): string {
+    return this.get<string>('PAYPAL_BASE_URL', 'https://api-m.sandbox.paypal.com');
+  }
+
+  /** 'sandbox' | 'live' — informational; the base URL drives the actual host. */
+  get paypalMode(): string {
+    return this.get<string>('PAYPAL_MODE', 'sandbox');
+  }
+
+  /** Where PayPal returns the buyer after approve/cancel. */
+  get billingReturnUrl(): string {
+    return this.get<string>('PAYPAL_RETURN_URL', 'http://localhost:3000/billing?ok=1');
+  }
+
+  get billingCancelUrl(): string {
+    return this.get<string>('PAYPAL_CANCEL_URL', 'http://localhost:3000/billing?canceled=1');
   }
 
   get r2Bucket(): string {
@@ -111,11 +131,11 @@ export class AppConfigService {
     const hasDb = this.hasValue('DATABASE_URL');
     const hasRedis = this.hasValue('REDIS_URL');
     const hasClerk = this.hasValue('CLERK_SECRET_KEY');
-    const hasStripe = this.hasValue('STRIPE_SECRET_KEY');
+    const hasPaypal = this.hasValue('PAYPAL_CLIENT_ID') && this.hasValue('PAYPAL_SECRET');
     const hasR2 = this.hasValue('R2_ACCESS_KEY_ID') && this.hasValue('R2_ENDPOINT');
 
     // auto => mock when the relevant cred is missing. Forced overrides everything.
-    const mockMode = forced ?? !(hasDb && hasRedis && hasClerk && hasStripe);
+    const mockMode = forced ?? !(hasDb && hasRedis && hasClerk && hasPaypal);
 
     // MOCK_AUTH explicit flag wins; otherwise mock when Clerk key absent.
     const mockAuthRaw = (this.config.get<string>('MOCK_AUTH') ?? '').toLowerCase();
@@ -134,7 +154,10 @@ export class AppConfigService {
       mockQueue: forced === true ? true : !hasRedis,
       mockDb: forced === true ? true : !hasDb,
       mockStorage: forced === true ? true : !hasR2,
-      mockBilling: forced === true ? true : !hasStripe,
+      // Billing is money — never force MOCK when real PayPal keys are present
+      // (a stray MOCK_MODE=true in prod must NOT enable the forgeable mock-grant
+      // path). Mock only when keys are genuinely absent.
+      mockBilling: hasPaypal ? false : true,
       localFiles,
       useRealPipeline,
     };
@@ -142,14 +165,14 @@ export class AppConfigService {
 
   private logBanner(): void {
     const f = this.flags;
-    this.logger.log('FocalDive Clips API — feature flags resolved:');
+    this.logger.log('YT Shorts Clips API — feature flags resolved:');
     this.logger.log(`  MOCK_MODE   = ${f.mockMode}`);
     this.logger.log(`  auth        = ${f.mockAuth ? 'MOCK (fake org injected)' : 'Clerk JWT'}`);
     this.logger.log(`  database    = ${f.mockDb ? 'IN-MEMORY (no Postgres)' : 'Postgres via Prisma'}`);
     this.logger.log(`  queue       = ${f.mockQueue ? 'IN-MEMORY (no Redis)' : 'BullMQ/Redis'}`);
     this.logger.log(`  storage     = ${f.mockStorage ? 'MOCK signed URLs' : 'Cloudflare R2'}`);
     this.logger.log(`  localFiles  = ${f.localFiles ? `LOCAL disk via ${this.apiPublicUrl}/files` : 'off'}`);
-    this.logger.log(`  billing     = ${f.mockBilling ? 'STUBBED (no Stripe)' : 'Stripe'}`);
+    this.logger.log(`  billing     = ${f.mockBilling ? 'STUBBED (no PayPal)' : `PayPal (${this.paypalMode})`}`);
     this.logger.log(`  pipeline    = ${f.useRealPipeline ? 'REAL (spawns pipeline/run.py)' : 'MOCK worker'}`);
     if (f.mockMode) {
       this.logger.warn('Running in MOCK MODE — no external services required.');

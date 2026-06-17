@@ -8,17 +8,20 @@ import type { CreditBalance } from "@/lib/types";
 /**
  * Billing / plans page (the "Add credits" target). Shows the current plan + credit
  * balance and the three tiers. Credits are source-MINUTES (1 credit = 1 minute).
- * Upgrade buttons hit the checkout flow when wired (Stripe); in mock/MVP they are
- * marked clearly so nothing is a silent dead-end.
+ * Pricing is half of Opus Clip's (Starter $15, Pro $29) for the same minutes.
+ * Upgrade buttons run the PayPal checkout flow (createOrder -> capture); in
+ * mock/MVP the capture grants credits locally so the balance bar updates live.
  */
 const PLANS = [
   { tier: "free", label: "Free", price: 0, credits: 30, features: ["30 source-minutes / mo", "6 clips per video", "Auto captions + hooks"] },
-  { tier: "starter", label: "Starter", price: 12, credits: 150, features: ["150 source-minutes / mo", "All Free features", "1080p exports", "Priority queue"] },
-  { tier: "pro", label: "Pro", price: 25, credits: 300, features: ["300 source-minutes / mo", "All Starter features", "Active-speaker reframe", "No watermark"] },
+  { tier: "starter", label: "Starter", price: 7.5, credits: 150, features: ["150 source-minutes / mo", "All Free features", "1080p exports", "Priority queue"] },
+  { tier: "pro", label: "Pro", price: 14.5, credits: 300, features: ["300 source-minutes / mo", "All Starter features", "Active-speaker reframe", "No watermark"] },
 ];
 
 export default function BillingPage() {
   const [bal, setBal] = useState<CreditBalance | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -27,6 +30,29 @@ export default function BillingPage() {
   }, []);
 
   const current = bal?.plan ?? "free";
+
+  async function upgrade(tier: "starter" | "pro") {
+    if (pending) return; // guard the double-click window (state update is async)
+    setError(null);
+    setPending(tier);
+    try {
+      const order = await api.createOrder(tier);
+      if (order.mock) {
+        // Mock/MVP: no real PayPal redirect — capture immediately to simulate a
+        // completed purchase, which grants credits and moves the balance bar.
+        await api.captureOrder(order.order_id);
+        const fresh = await api.getBalance();
+        setBal(fresh);
+      } else {
+        // Real PayPal: hand off to the approval URL; capture happens on return.
+        window.location.href = order.url;
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Checkout failed. Please try again.");
+    } finally {
+      setPending(null);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-8">
@@ -86,23 +112,36 @@ export default function BillingPage() {
               </ul>
               <button
                 type="button"
-                disabled={isCurrent || p.tier === "free"}
+                disabled={isCurrent || p.tier === "free" || pending !== null}
+                onClick={() => {
+                  if (p.tier === "starter" || p.tier === "pro") upgrade(p.tier);
+                }}
                 className={`mt-5 rounded-xl py-2.5 text-sm font-semibold transition ${
                   isCurrent || p.tier === "free"
                     ? "cursor-not-allowed bg-ink-800 text-ink-500"
-                    : "bg-white text-ink-950 hover:bg-white/90"
+                    : "bg-white text-ink-950 hover:bg-white/90 disabled:opacity-60"
                 }`}
-                title={p.tier === "free" ? "Free plan" : isCurrent ? "Your current plan" : "Checkout requires Stripe keys"}
+                title={p.tier === "free" ? "Free plan" : isCurrent ? "Your current plan" : `Pay with PayPal`}
               >
-                {isCurrent ? "Your plan" : p.tier === "free" ? "Included" : `Upgrade to ${p.label}`}
+                {pending === p.tier
+                  ? "Processing…"
+                  : isCurrent
+                    ? "Your plan"
+                    : p.tier === "free"
+                      ? "Included"
+                      : `Upgrade to ${p.label}`}
               </button>
             </div>
           );
         })}
       </div>
 
+      {error && (
+        <p className="mt-6 text-xs text-red-400">{error}</p>
+      )}
       <p className="mt-6 text-xs text-ink-500">
-        Checkout is processed by Stripe. In this demo build, upgrades are disabled until billing keys are configured.
+        Checkout is processed by PayPal. Pricing is half of Opus Clip&apos;s for the same minutes.
+        In this demo build (no PayPal keys), upgrades grant credits locally so you can try the flow.
       </p>
     </div>
   );

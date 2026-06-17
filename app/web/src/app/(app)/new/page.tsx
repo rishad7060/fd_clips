@@ -27,12 +27,13 @@ import { DEV_USER } from "@/lib/auth";
  *   - Caption STYLE templates picker is cut from the MVP UI (one clean style
  *     ships by default). templateById("default") is sent so the contract shape
  *     is unchanged; re-expose STYLE_TEMPLATES here to bring the picker back.
- *   - Clip COUNT is fixed at 3 for the MVP. The Phase-2 range is 5–10; raise the
- *     slider max below and re-enable the control when that ships.
+ *   - Clip COUNT is user-selectable (range 3–10, default 6) via the slider below.
  */
 
-// MVP clip count: top 3 only (fd_clips_v2.md Part 1). PHASE 2: 5–10 ranked clips.
-const MVP_CLIP_COUNT = 3;
+// Clip-count range the API/pipeline accept (CreateJobInput.clip_count, --clips).
+const CLIP_COUNT_MIN = 3;
+const CLIP_COUNT_MAX = 10;
+const CLIP_COUNT_DEFAULT = 6;
 
 export default function NewClipsPage() {
   const [url, setUrl] = useState("");
@@ -48,6 +49,8 @@ export default function NewClipsPage() {
   const [alignment, setAlignment] =
     useState<NonNullable<ClipStyle["alignment"]>>("bottom");
   const [fontSize, setFontSize] = useState<number>(0); // 0 = template default
+  // How many clips to generate (range 3–10, default 6).
+  const [clipCount, setClipCount] = useState<number>(CLIP_COUNT_DEFAULT);
 
   // Email is OPTIONAL now — submitting goes straight to the live project view;
   // an email is only attached (for the optional Resend notification) if valid.
@@ -64,7 +67,7 @@ export default function NewClipsPage() {
       const input: CreateJobInput = {
         source_type: "url",
         source_url: url.trim(),
-        clip_count: MVP_CLIP_COUNT,
+        clip_count: clipCount,
         style,
         // Only attach the email if it's valid — it's an optional notification.
         ...(emailOk ? { email: email.trim() } : {}),
@@ -86,7 +89,7 @@ export default function NewClipsPage() {
         <h1 className="text-2xl font-bold text-white">Create clips</h1>
         <p className="text-sm text-white/60">
           Paste any video link and we&apos;ll turn it into your{" "}
-          {MVP_CLIP_COUNT} best moments as captioned vertical clips.
+          {clipCount} best moments as captioned vertical clips.
         </p>
       </div>
 
@@ -125,17 +128,33 @@ export default function NewClipsPage() {
           </p>
         </div>
 
-        {/* Clip count — fixed at 3 for the MVP. */}
-        <div className="mt-6 flex items-center justify-between rounded-lg border border-ink-700 bg-ink-850 px-4 py-3">
-          <div>
-            <p className="text-sm font-medium text-white/80">Number of clips</p>
-            <p className="text-xs text-ink-500">
-              The MVP delivers your top 3 moments.
-            </p>
+        {/* Clip count — user picks how many top moments (3–10). */}
+        <div className="mt-6 rounded-lg border border-ink-700 bg-ink-850 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-white/80">Number of clips</p>
+              <p className="text-xs text-ink-500">
+                We&apos;ll deliver your top {clipCount} ranked moments.
+              </p>
+            </div>
+            <span className="text-lg font-bold text-brand-400">
+              {clipCount} clips
+            </span>
           </div>
-          <span className="text-lg font-bold text-brand-400">
-            {MVP_CLIP_COUNT}
-          </span>
+          <input
+            type="range"
+            min={CLIP_COUNT_MIN}
+            max={CLIP_COUNT_MAX}
+            step={1}
+            value={clipCount}
+            onChange={(e) => setClipCount(Number(e.target.value))}
+            aria-label="Number of clips"
+            className="mt-3 w-full accent-brand"
+          />
+          <div className="mt-1 flex justify-between text-[11px] text-ink-500">
+            <span>{CLIP_COUNT_MIN}</span>
+            <span>{CLIP_COUNT_MAX}</span>
+          </div>
         </div>
 
         {/* Caption style picker */}
@@ -234,7 +253,7 @@ export default function NewClipsPage() {
           onClick={submit}
           className="mt-6 w-full rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white shadow-glow transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {submitting ? "Submitting…" : `Generate ${MVP_CLIP_COUNT} clips`}
+          {submitting ? "Submitting…" : `Generate ${clipCount} clips`}
         </button>
       </div>
     </div>

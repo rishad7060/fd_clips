@@ -66,6 +66,19 @@ interface MockJobRecord {
 
 const records = new Map<string, MockJobRecord>();
 
+/** Monthly grant per paid tier — mirrors PLANS in app/api/src/billing/plans.ts. */
+const MOCK_PLAN_CREDITS: Record<"starter" | "pro", number> = {
+  starter: 150,
+  pro: 300,
+};
+
+/** In-session billing state so a mock PayPal upgrade updates the balance bar. */
+let billingState: { plan: string; credit_balance: number; monthly_credits: number } = {
+  plan: "free",
+  credit_balance: 24,
+  monthly_credits: 30,
+};
+
 /**
  * source_key -> original filename, populated by mockStore.uploadFile so a later
  * createJob({ source_type: "upload", source_key }) can label the job with the
@@ -172,9 +185,43 @@ function clipsReady(rec: MockJobRecord): number {
 export const mockStore = {
   orgId: ORG_ID,
 
-  /** Deterministic free-plan balance for the offline demo (24/30 credits used-ish). */
+  /**
+   * Deterministic balance for the offline demo. Starts as the free plan
+   * (24/30 used-ish); a mock PayPal capture upgrades it in-session so the
+   * billing buttons do something real (grant credits, move the balance bar).
+   */
   getBalance(): { plan: string; credit_balance: number; monthly_credits: number } {
-    return { plan: "free", credit_balance: 24, monthly_credits: 30 };
+    return { ...billingState };
+  },
+
+  /**
+   * Mock PayPal Orders v2 create. Returns a deterministic local approval URL +
+   * an orderId encoding the tier so a follow-up captureOrder can grant offline.
+   */
+  createOrder(tier: "starter" | "pro"): { url: string; orderId: string; mock: boolean; tier: string } {
+    const orderId = `MOCK-${tier}-${Date.now().toString(36)}`;
+    return {
+      url: `https://mock-paypal.local/checkout?order=${orderId}&tier=${tier}`,
+      orderId,
+      mock: true,
+      tier,
+    };
+  },
+
+  /**
+   * Mock PayPal capture. Reads the tier out of the orderId and grants that
+   * plan's monthly credits locally, updating the in-session balance.
+   */
+  captureOrder(orderId: string): { ok: boolean; plan: string; credit_balance: number } {
+    const tier = /(starter|pro)/.exec(orderId)?.[1] as "starter" | "pro" | undefined;
+    if (tier && MOCK_PLAN_CREDITS[tier]) {
+      billingState = {
+        plan: tier,
+        monthly_credits: MOCK_PLAN_CREDITS[tier],
+        credit_balance: MOCK_PLAN_CREDITS[tier],
+      };
+    }
+    return { ok: true, plan: billingState.plan, credit_balance: billingState.credit_balance };
   },
 
   /**

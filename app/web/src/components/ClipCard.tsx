@@ -28,6 +28,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
   const [muted, setMuted] = useState(false);
   const [progress, setProgress] = useState(0); // 0..1 of clip duration
   const [hovering, setHovering] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const hasVideo = Boolean(clip.final_url);
   const hasThumb = Boolean(clip.thumb_url);
@@ -71,6 +72,17 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
   const react = (e: React.MouseEvent, value: "up" | "down") => {
     e.stopPropagation();
     setReaction((prev) => (prev === value ? null : value));
+  };
+  // Copy the clip's shareable URL; show a brief "Copied!" confirmation.
+  const copyLink = () => {
+    if (!hasVideo || !navigator.clipboard?.writeText) return;
+    void navigator.clipboard
+      .writeText(clip.final_url)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => {});
   };
 
   return (
@@ -250,6 +262,28 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
               <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
             </svg>
           </button>
+          {hasVideo && (
+            <button
+              type="button"
+              onClick={copyLink}
+              title={copied ? "Copied!" : "Copy link"}
+              aria-label={copied ? "Link copied" : "Copy clip link"}
+              className={`grid h-8 w-8 place-items-center rounded-md hover:bg-ink-800 hover:text-white ${
+                copied ? "text-brand-400" : ""
+              }`}
+            >
+              {copied ? (
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 13a5 5 0 007.07 0l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 00-7.07 0l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+                </svg>
+              )}
+            </button>
+          )}
           {hasVideo ? (
             <a
               href={clip.final_url}

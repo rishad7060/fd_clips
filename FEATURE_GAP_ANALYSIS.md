@@ -8,6 +8,13 @@ Reference competitors: **Opus.pro** (OpusClip), **Vizard**, **Klap**,
 **Submagic** (captions-first), **Munch**, **2Short**, **Spikes Studio**,
 **Veed / Descript** (editor-first).
 
+**Shipped 2026-06-17:** file upload, multi-platform URLs, # clips slider, gallery
+sort/filter, copy-link + download-all, burned-in auto-hook, Opus-style dashboard,
+PayPal payments (replacing Stripe), half-Opus pricing. See `PRICING.md` and
+`INTEGRATION.md` for go-live. Still genuinely BLOCKED on the free/CPU stack:
+active-speaker tracking (needs LR-ASD/GPU), B-roll, caption translation, social
+publishing.
+
 ---
 
 ## 1. Ingestion & sources
@@ -15,10 +22,10 @@ Reference competitors: **Opus.pro** (OpusClip), **Vizard**, **Klap**,
 | Feature | Opus & others | FocalDive | Notes |
 |---|---|---|---|
 | YouTube URL | ✅ all | ✅ | yt-dlp, hardened |
-| File upload (mp4/mov) | ✅ all | ❌ | DTO/R2 staging stubbed; cut from MVP |
-| Google Drive / Dropbox import | ✅ Opus, Vizard | ❌ | |
+| File upload (mp4/mov) | ✅ all | ✅ | DONE — POST /uploads + api.uploadFile; hero Upload button |
+| Google Drive / Dropbox import | ✅ Opus, Vizard | 🟡 | UI stub ("Soon") on the home hero; not wired |
 | Zoom / Riverside / StreamYard | ✅ Opus, Vizard | ❌ | recording integrations |
-| Twitch / TikTok / Vimeo / Rumble URL | ✅ most | 🟡 | yt-dlp supports many; untested |
+| Twitch / TikTok / Vimeo / Rumble URL | ✅ most | ✅ | DONE — ingest.py platform-agnostic; verified Vimeo + direct mp4 |
 | Podcast RSS / audio-only + auto B-roll | ✅ Vizard, Munch | ❌ | audio→video shorts |
 | Live-stream / long-VOD chunking | ✅ Opus | 🟡 | pipeline chunks transcribe; no UX |
 | Batch / bulk upload | ✅ Opus, Vizard | ❌ | one URL at a time |
@@ -30,7 +37,7 @@ Reference competitors: **Opus.pro** (OpusClip), **Vizard**, **Klap**,
 | AI moment detection | ✅ all | ✅ | Gemini/GPT vs rubric |
 | Virality score per clip | ✅ Opus ("virality score") | ✅ | 0–100 |
 | Hook / title / reason | ✅ Opus | ✅ | |
-| Choose # clips | ✅ all | 🟡 | fixed at 3 (MVP); UI slider stubbed |
+| Choose # clips | ✅ all | ✅ | DONE — 3–10 slider on /new |
 | Choose clip length range | ✅ all (15/30/60/90s) | ❌ | hardcoded 20–60s |
 | Keyword / topic targeting | ✅ Opus, Vizard | ❌ | "find clips about X" |
 | Manual moment selection (pick your own timestamp) | ✅ Opus, Veed | ❌ | |
