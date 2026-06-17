@@ -14,8 +14,8 @@ type Tile = {
 
 function Icon({ path }: { path: string }) {
   return (
-    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor"
-      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d={path} />
     </svg>
   );
@@ -52,22 +52,22 @@ const TILES: Tile[] = [
 
 export function FeatureTiles() {
   return (
-    <div className="mx-auto flex max-w-3xl flex-wrap items-start justify-center gap-x-8 gap-y-5">
+    <div className="mx-auto flex max-w-3xl flex-wrap items-start justify-center gap-x-6 gap-y-6 sm:gap-x-8">
       {TILES.map((t) => (
         <Link
           key={t.label}
           href={t.href}
-          className="group flex w-20 flex-col items-center gap-2 text-center"
+          className="group flex w-24 flex-col items-center gap-2.5 text-center"
         >
-          <span className="relative grid h-12 w-12 place-items-center rounded-2xl bg-ink-850 text-white/80 ring-1 ring-ink-700 transition group-hover:bg-ink-800 group-hover:text-brand-400 group-hover:ring-brand/40">
+          <span className="relative grid h-16 w-16 place-items-center rounded-2xl border border-white/10 bg-ink-850 text-ink-200 shadow-rim transition duration-200 ease-premium group-hover:-translate-y-0.5 group-hover:border-white/15 group-hover:bg-ink-800 group-hover:text-brand-400 group-hover:shadow-lift">
             {t.icon}
             {t.badge && (
-              <span className="absolute -top-2 -right-2 rounded bg-brand px-1.5 py-0.5 text-[9px] font-bold text-ink-950">
+              <span className="absolute -right-2 -top-2 rounded-lg bg-gradient-to-b from-brand-400 to-brand-600 px-1.5 py-0.5 text-[9px] font-bold text-white shadow-glow">
                 New
               </span>
             )}
           </span>
-          <span className="text-xs font-medium leading-tight text-white/70 group-hover:text-white">
+          <span className="text-xs font-medium leading-tight text-ink-300 transition group-hover:text-white">
             {t.label}
           </span>
         </Link>

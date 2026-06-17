@@ -21,7 +21,7 @@ export function LayerTabs({ value, onChange }: LayerTabsProps) {
     <div
       role="tablist"
       aria-label="Caption layer"
-      className="grid grid-cols-2 gap-1 rounded-xl border border-ink-700 bg-ink-950 p-1"
+      className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-ink-950 p-1"
     >
       {TABS.map((t) => {
         const active = value === t.id;
@@ -32,10 +32,10 @@ export function LayerTabs({ value, onChange }: LayerTabsProps) {
             type="button"
             aria-selected={active}
             onClick={() => onChange(t.id)}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+            className={`rounded-lg px-3 py-2 text-sm font-semibold transition duration-150 ease-premium ${
               active
-                ? "bg-brand text-white shadow-glow"
-                : "text-white/60 hover:text-white"
+                ? "border border-brand bg-brand/10 text-white ring-1 ring-brand/40"
+                : "text-ink-300 hover:text-white"
             }`}
           >
             {t.name}

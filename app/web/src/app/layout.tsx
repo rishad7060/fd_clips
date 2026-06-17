@@ -1,15 +1,24 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { CLERK_ENABLED } from "@/lib/auth";
 import type { ReactNode } from "react";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+// Inter (display + body) with tight tracking, plus a mono for scores/durations/
+// timestamps (tabular figures). Geist would be the ideal display face but isn't
+// in next/font on Next 14 — Inter, well-configured, is the premium fallback.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-geist",       // alias so the tailwind `sans` var resolves
+  display: "swap",
+});
+const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
+const interBody = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "FocalDive Clips — AI shorts from any long video",
   description:
-    "Turn any podcast, interview, or long video into 5–10 ranked, captioned, vertical clips. Built like Opus Clip.",
+    "Turn any podcast, interview, or long video into ranked, captioned, vertical clips. Built like Opus Clip.",
 };
 
 /**
@@ -24,7 +33,9 @@ export default async function RootLayout({
   children: ReactNode;
 }) {
   const body = (
-    <body className={`${inter.variable} font-sans antialiased`}>{children}</body>
+    <body className={`${inter.variable} ${mono.variable} ${interBody.variable} font-sans antialiased`}>
+      {children}
+    </body>
   );
 
   if (CLERK_ENABLED) {

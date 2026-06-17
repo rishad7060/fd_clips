@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { VideoPreview } from "@/lib/types";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 /**
  * Opus-style video preview, shown ~instantly after a URL is pasted.
@@ -36,8 +37,11 @@ export function VideoPreviewCard({ url }: { url: string }) {
   // Background enrichment (badge + title); never blocks the thumbnail.
   const [preview, setPreview] = useState<VideoPreview | null>(null);
 
-  // Reset the thumbnail tier whenever the URL changes.
-  useEffect(() => { setThumbTier("maxres"); }, [url]);
+  // Track when the thumbnail image has actually painted so we can shimmer until then.
+  const [imgLoaded, setImgLoaded] = useState(false);
+
+  // Reset the thumbnail tier + loaded flag whenever the URL changes.
+  useEffect(() => { setThumbTier("maxres"); setImgLoaded(false); }, [url]);
 
   // Fetch metadata in the background (debounced) for the quality badge + title.
   useEffect(() => {
@@ -74,22 +78,26 @@ export function VideoPreviewCard({ url }: { url: string }) {
 
   return (
     <div className="flex flex-col items-center text-center">
-      <div className="relative w-56 overflow-hidden rounded-xl border border-ink-700 bg-ink-950">
-        <div className="aspect-video w-full">
+      <div className="relative w-56 overflow-hidden rounded-xl border border-white/10 bg-ink-950 shadow-rim">
+        <div className="relative aspect-video w-full">
+          {/* Shimmer skeleton while the thumbnail paints (zero layout shift). */}
+          {src && !imgLoaded && <Skeleton className="absolute inset-0 rounded-none" />}
           {src ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={src}
               alt=""
               referrerPolicy="no-referrer"
-              className="h-full w-full object-cover"
+              className={`h-full w-full object-cover transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
               onLoad={(e) => {
                 // YouTube serves a 120x90 gray placeholder (HTTP 404) for a
                 // missing maxres — detect by natural width and downgrade.
                 const img = e.currentTarget;
                 if (thumbTier === "maxres" && ytId && img.naturalWidth > 0 && img.naturalWidth <= 121) {
                   setThumbTier("hq");
+                  return;
                 }
+                setImgLoaded(true);
               }}
               onError={() => {
                 if (thumbTier === "maxres") setThumbTier("hq");
@@ -97,7 +105,7 @@ export function VideoPreviewCard({ url }: { url: string }) {
               }}
             />
           ) : (
-            <div className="grid h-full w-full place-items-center bg-ink-900 text-ink-600">
+            <div className="grid h-full w-full place-items-center bg-ink-900 text-ink-500">
               <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 5h16v14H4zM4 9h16M9 5v14" strokeLinecap="round" /></svg>
             </div>
           )}
@@ -109,11 +117,11 @@ export function VideoPreviewCard({ url }: { url: string }) {
         )}
       </div>
       {preview?.title && preview.title !== "Preview" && (
-        <p className="mt-2 line-clamp-1 max-w-56 text-xs font-medium text-white/80" title={preview.title}>
+        <p className="mt-2 line-clamp-1 max-w-56 text-xs font-medium text-ink-200" title={preview.title}>
           {preview.title}
         </p>
       )}
-      <p className="mx-auto mt-2 max-w-sm text-[11px] leading-relaxed text-ink-500">
+      <p className="mx-auto mt-2 max-w-sm text-[11px] leading-relaxed text-ink-400">
         Using video you don&apos;t own may violate copyright laws. By continuing, you confirm this is your own original content.
       </p>
     </div>

@@ -8,37 +8,75 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Dark product surface palette.
+        // Dark product surface palette. Low numbers = LIGHT text, high = dark
+        // surfaces (an inverted ramp, since this is dark-mode-only). The 100–400
+        // tiers were MISSING before — muted text classes (ink-400/300/200)
+        // rendered with no color app-wide. Now complete.
         ink: {
-          950: "#070a12",
-          900: "#0b0f1a",
-          850: "#0f1422",
-          800: "#141a2b",
-          700: "#1c2236",
-          600: "#283049",
-          500: "#3a4561",
+          50: "#f4f6fb",   // near-white (rare)
+          100: "#dfe4f0",  // primary-ish light text
+          200: "#c2c9dc",  // strong secondary text
+          300: "#9aa3bd",  // secondary text / labels
+          400: "#727d9c",  // muted text / placeholders
+          500: "#3a4561",  // faint / disabled text, hairline-ish
+          600: "#283049",  // strong border / divider
+          700: "#1c2236",  // border
+          800: "#141a2b",  // elevated surface (hover)
+          850: "#0f1422",  // card surface
+          900: "#0b0f1a",  // panel surface
+          950: "#070a12",  // app background
         },
         brand: {
           DEFAULT: "#6d5efc",
+          300: "#a99dff",
           400: "#8b7dff",
           500: "#6d5efc",
           600: "#5a4be0",
+          700: "#4a3dc4",
         },
-        accent: "#FFE600",
+        // Semantic state colors (were raw Tailwind defaults before — inconsistent).
+        success: { DEFAULT: "#34d399", 300: "#6ee7b7", 400: "#34d399", 500: "#10b981" },
+        warning: { DEFAULT: "#fbbf24", 300: "#fcd34d", 400: "#fbbf24", 500: "#f59e0b" },
+        danger: { DEFAULT: "#f87171", 300: "#fca5a5", 400: "#f87171", 500: "#ef4444" },
+        accent: "#FFE600", // kept for high-score badges only (with an icon, never color-alone)
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+        // Geist Sans/Mono loaded in layout.tsx as CSS vars; Inter is the fallback.
+        sans: ["var(--font-geist)", "var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["var(--font-geist-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       boxShadow: {
-        glow: "0 0 0 1px rgba(109,94,252,0.25), 0 8px 40px -8px rgba(109,94,252,0.45)",
+        glow: "0 0 0 1px rgba(109,94,252,0.30), 0 8px 40px -8px rgba(109,94,252,0.45)",
+        // Top-edge inner highlight — the glass-rim "lit from above" look on cards.
+        rim: "inset 0 1px 0 0 rgba(255,255,255,0.06)",
+        card: "inset 0 1px 0 0 rgba(255,255,255,0.05), 0 1px 2px 0 rgba(0,0,0,0.3)",
+        lift: "0 12px 32px -12px rgba(0,0,0,0.6)",
+      },
+      transitionTimingFunction: {
+        // Premium ease-out (energetic) + spring overshoot for toggles/checks.
+        premium: "cubic-bezier(0.22, 1, 0.36, 1)",
+        spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
       },
       keyframes: {
-        shimmer: {
-          "100%": { transform: "translateX(100%)" },
+        shimmer: { "100%": { transform: "translateX(100%)" } },
+        fadeIn: {
+          from: { opacity: "0", transform: "translateY(6px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "fade-up": {
+          from: { opacity: "0", transform: "translateY(12px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        pulseDot: {
+          "0%,100%": { opacity: "1", transform: "scale(1)" },
+          "50%": { opacity: "0.4", transform: "scale(0.7)" },
         },
       },
       animation: {
         shimmer: "shimmer 1.6s infinite",
+        fadeIn: "fadeIn .25s cubic-bezier(0.22,1,0.36,1)",
+        "fade-up": "fade-up .4s cubic-bezier(0.22,1,0.36,1) both",
+        pulseDot: "pulseDot 1.4s ease-in-out infinite",
       },
     },
   },

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { AspectRatio, ClipLength, ClipStyle, Genre } from "@/lib/types";
+import { Button } from "@/components/ui/Button";
+import { SectionTitle } from "@/components/ui/Card";
 
 /**
  * A reusable saved clip-generation config ("My templates", Opus-style). MVP:
@@ -70,15 +72,11 @@ export function MyTemplates({ current, onApply }: {
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-bold text-white">My templates</h2>
+        <SectionTitle>My templates</SectionTitle>
         {!naming && (
-          <button
-            type="button"
-            onClick={() => setNaming(true)}
-            className="rounded-md bg-ink-800 px-2.5 py-1 text-xs font-medium text-white/80 hover:bg-ink-700 hover:text-white"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={() => setNaming(true)}>
             + Save current
-          </button>
+          </Button>
         )}
       </div>
 
@@ -90,26 +88,26 @@ export function MyTemplates({ current, onApply }: {
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && save()}
             placeholder="Template name (e.g. Podcast 9:16)"
-            className="flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-white placeholder:text-ink-600 focus:border-brand focus:outline-none"
+            className="flex-1 rounded-xl border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white transition placeholder:text-ink-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand/40"
           />
-          <button type="button" onClick={save} className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-ink-950">Save</button>
-          <button type="button" onClick={() => { setNaming(false); setName(""); }} className="px-2 text-sm text-ink-500 hover:text-white">Cancel</button>
+          <Button type="button" variant="primary" size="sm" onClick={save}>Save</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => { setNaming(false); setName(""); }}>Cancel</Button>
         </div>
       )}
 
       {templates.length === 0 ? (
-        <p className="text-xs text-ink-500">
+        <p className="text-xs text-ink-400">
           No saved templates yet. Tune the config above and “Save current” to reuse it later.
         </p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {templates.map((t) => (
-            <div key={t.id} className="group flex items-center gap-1 rounded-lg border border-ink-700 bg-ink-900/60 py-1 pl-3 pr-1">
+            <div key={t.id} className="group flex items-center gap-1 rounded-lg border border-white/10 bg-ink-850 py-1 pl-3 pr-1 transition hover:border-white/15">
               <button
                 type="button"
                 onClick={() => onApply(t.config)}
                 title={`${t.config.genre} · ${t.config.aspectRatio} · ${t.config.clipLength}`}
-                className="text-sm font-medium text-white/80 hover:text-white"
+                className="text-sm font-medium text-ink-200 hover:text-white"
               >
                 {t.name}
               </button>
@@ -117,7 +115,7 @@ export function MyTemplates({ current, onApply }: {
                 type="button"
                 onClick={() => remove(t.id)}
                 aria-label={`Delete ${t.name}`}
-                className="grid h-5 w-5 place-items-center rounded text-ink-500 hover:bg-ink-700 hover:text-white"
+                className="grid h-5 w-5 place-items-center rounded text-ink-400 hover:bg-ink-700 hover:text-white"
               >
                 <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M6 18L18 6" /></svg>
               </button>

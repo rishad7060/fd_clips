@@ -5,15 +5,19 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { JOB_STAGES, type JobProgressEvent, type JobStage } from "@/lib/types";
 import { StatusPill } from "@/components/StatusPill";
+import { Card, Panel, SectionTitle } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { ClipCardSkeleton } from "@/components/ui/Skeleton";
 
-const STAGE_LABEL: Record<JobStage, string> = {
-  ingest: "Ingest",
-  transcribe: "Transcribe",
-  score: "Score moments",
-  extract: "Extract clips",
-  reframe: "Reframe vertical",
-  captions: "Burn captions",
-  done: "Done",
+/** Narrated, user-facing stage copy mapped to the 6 pipeline stages. */
+const STAGE: Record<JobStage, { label: string; detail: string }> = {
+  ingest: { label: "Download", detail: "Fetching the source video" },
+  transcribe: { label: "Transcribe", detail: "Turning speech into text" },
+  score: { label: "Finding viral moments", detail: "Scoring the best clips" },
+  extract: { label: "Extract", detail: "Cutting the top moments" },
+  reframe: { label: "Reframe", detail: "Cropping to vertical 9:16" },
+  captions: { label: "Caption", detail: "Burning in karaoke captions" },
+  done: { label: "Done", detail: "Wrapping up" },
 };
 
 const VISIBLE_STAGES = JOB_STAGES.filter((s) => s !== "done");
@@ -31,6 +35,13 @@ function stageState(
   return "pending";
 }
 
+function formatElapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return m > 0 ? `${m}m ${String(sec).padStart(2, "0")}s` : `${sec}s`;
+}
+
 export default function JobProgressPage({
   params,
 }: {
@@ -40,7 +51,9 @@ export default function JobProgressPage({
   const router = useRouter();
   const [event, setEvent] = useState<JobProgressEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
   const redirected = useRef(false);
+  const startedAt = useRef<number>(Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -94,112 +107,179 @@ export default function JobProgressPage({
     };
   }, [jobId, router]);
 
-  const progress = event?.progress ?? 0;
+  // Time-elapsed ticker — stops once the job reaches a terminal state.
   const status = event?.status ?? "queued";
+  const terminal = status === "completed" || status === "failed" || status === "canceled";
+  useEffect(() => {
+    if (terminal) return;
+    const id = setInterval(() => setElapsed(Date.now() - startedAt.current), 1000);
+    return () => clearInterval(id);
+  }, [terminal]);
+
+  const progress = event?.progress ?? 0;
   const stage = event?.stage ?? "ingest";
+
+  // Rough ETA from how long we've run vs. percent done (only once we have signal).
+  const eta =
+    !terminal && progress > 4 && progress < 100
+      ? Math.max(0, (elapsed / progress) * (100 - progress))
+      : null;
+
+  const clipsReady = typeof event?.clips_ready === "number" ? event.clips_ready : 0;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Generating clips</h1>
-          <p className="font-mono text-xs text-ink-500">{jobId}</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">
+            Generating clips
+          </h1>
+          <p className="mt-1 font-mono text-xs tabular-nums text-ink-400">{jobId}</p>
         </div>
         <StatusPill status={status} />
       </div>
 
-      {/* Big progress ring + percent */}
-      <div className="rounded-2xl border border-ink-700 bg-ink-900/60 p-8 text-center">
+      {/* Big progress ring + narrated current step */}
+      <Card className="p-8 text-center">
         <ProgressRing value={progress} />
-        <p className="mt-4 text-lg font-semibold text-white">
-          {event?.message ?? "Queued…"}
+        <p className="mt-5 text-lg font-semibold tracking-tight text-white">
+          {event?.message || STAGE[stage]?.detail || "Queued…"}
         </p>
-        {typeof event?.clips_ready === "number" && event.clips_ready > 0 && (
-          <p className="mt-1 text-sm text-emerald-300">
-            {event.clips_ready} clip{event.clips_ready === 1 ? "" : "s"} ready
+        <div className="mt-2 flex items-center justify-center gap-4 text-xs text-ink-400">
+          <span className="font-mono tabular-nums">
+            Elapsed {formatElapsed(elapsed)}
+          </span>
+          {eta != null && (
+            <>
+              <span className="text-ink-600">·</span>
+              <span className="font-mono tabular-nums">~{formatElapsed(eta)} left</span>
+            </>
+          )}
+        </div>
+        {clipsReady > 0 && (
+          <p className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-success-500/15 px-2.5 py-1 text-xs font-medium text-success-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            {clipsReady} clip{clipsReady === 1 ? "" : "s"} ready
           </p>
         )}
-      </div>
+      </Card>
 
-      {/* Stage timeline */}
-      <ol className="space-y-2">
-        {VISIBLE_STAGES.map((s) => {
-          const st = stageState(s, stage, status);
-          return (
-            <li
-              key={s}
-              className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition ${
-                st === "active"
-                  ? "border-brand/50 bg-brand/10"
-                  : st === "done"
-                    ? "border-ink-700 bg-ink-900/40"
-                    : "border-ink-800 bg-ink-950/40"
-              }`}
-            >
-              <span
-                className={`grid h-6 w-6 place-items-center rounded-full text-xs font-bold ${
-                  st === "done"
-                    ? "bg-emerald-500 text-white"
-                    : st === "active"
-                      ? "bg-brand text-white"
-                      : "bg-ink-700 text-ink-500"
+      {/* Narrated stage timeline */}
+      <Panel className="p-2">
+        <ol className="space-y-1">
+          {VISIBLE_STAGES.map((s) => {
+            const st = stageState(s, stage, status);
+            return (
+              <li
+                key={s}
+                className={`flex items-center gap-3 rounded-xl px-4 py-3 transition ${
+                  st === "active" ? "bg-brand/10 ring-1 ring-brand/40" : ""
                 }`}
               >
-                {st === "done" ? "✓" : st === "active" ? "" : ""}
+                <StageBadge state={st} />
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`text-sm font-medium ${
+                      st === "pending" ? "text-ink-400" : "text-white"
+                    }`}
+                  >
+                    {STAGE[s].label}
+                  </p>
+                  {st === "active" && (
+                    <p className="truncate text-xs text-ink-300">{STAGE[s].detail}</p>
+                  )}
+                </div>
                 {st === "active" && (
-                  <span className="h-2 w-2 animate-ping rounded-full bg-white" />
+                  <span className="shrink-0 text-xs font-medium text-brand-300">
+                    In progress
+                  </span>
                 )}
-              </span>
-              <span
-                className={`text-sm font-medium ${
-                  st === "pending" ? "text-ink-500" : "text-white"
-                }`}
-              >
-                {STAGE_LABEL[s]}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+                {st === "done" && (
+                  <span className="shrink-0 text-xs text-ink-400">Done</span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </Panel>
 
+      {/* Skeleton clip previews — "your clips are being prepared" */}
+      {!error && (
+        <section className="space-y-3">
+          <SectionTitle className="text-sm text-ink-300">
+            Your clips are being prepared
+          </SectionTitle>
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <ClipCardSkeleton key={i} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Failure states — upgrade-gate vs generic */}
       {error && (() => {
         const needsUpgrade = /upgrade|plan|too long|longer videos/i.test(error);
         return needsUpgrade ? (
-          <div className="space-y-3 rounded-2xl border border-brand/40 bg-brand/10 p-5 text-sm">
-            <p className="text-base font-semibold text-white">Video too long for the Free plan</p>
-            <p className="break-words text-white/80">{error}</p>
-            <p className="text-xs text-white/50">
+          <Card className="space-y-3 border-brand/40 bg-brand/10 p-5">
+            <p className="text-base font-semibold tracking-tight text-white">
+              Video too long for the Free plan
+            </p>
+            <p className="break-words text-sm text-ink-200">{error}</p>
+            <p className="text-xs text-ink-400">
               Your credit was refunded. Longer videos need a paid plan.
             </p>
             <div className="flex flex-wrap gap-3 pt-1">
-              <a
-                href="/billing"
-                className="inline-block rounded-lg bg-brand px-4 py-2 font-semibold text-white shadow-glow hover:bg-brand-600"
-              >
-                ✦ Upgrade plan
+              <a href="/billing">
+                <Button variant="primary">Upgrade plan</Button>
               </a>
-              <a
-                href="/new"
-                className="inline-block rounded-lg border border-ink-600 px-4 py-2 font-medium text-white/80 hover:border-brand hover:text-white"
-              >
-                Try a shorter video
+              <a href="/new">
+                <Button variant="secondary">Try a shorter video</Button>
               </a>
             </div>
-          </div>
+          </Card>
         ) : (
-          <div className="space-y-3 rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
-            <p className="font-semibold text-red-300">This job couldn&apos;t finish</p>
-            <p className="break-words text-red-200/90">{error}</p>
-            <a
-              href="/new"
-              className="inline-block rounded-lg bg-red-500/20 px-4 py-2 font-medium text-red-100 hover:bg-red-500/30"
-            >
-              ← Try another video
+          <Card className="space-y-3 border-danger-500/40 bg-danger-500/10 p-5">
+            <p className="text-base font-semibold tracking-tight text-danger-300">
+              This job couldn&apos;t finish
+            </p>
+            <p className="break-words text-sm text-ink-200">{error}</p>
+            <a href="/new">
+              <Button variant="secondary">Try another video</Button>
             </a>
-          </div>
+          </Card>
         );
       })()}
     </div>
+  );
+}
+
+/** Stage status badge: check (done), spinning ring (active), dot (pending). */
+function StageBadge({ state }: { state: "done" | "active" | "pending" }) {
+  if (state === "done") {
+    return (
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-success-500 text-white">
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      </span>
+    );
+  }
+  if (state === "active") {
+    return (
+      <span className="relative grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand/15 ring-1 ring-brand/40">
+        <svg className="h-5 w-5 animate-spin text-brand-300" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
+          <path className="opacity-90" fill="currentColor" d="M12 3a9 9 0 0 1 9 9h-3a6 6 0 0 0-6-6V3z" />
+        </svg>
+      </span>
+    );
+  }
+  return (
+    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ink-800 ring-1 ring-white/10">
+      <span className="h-1.5 w-1.5 rounded-full bg-ink-500" />
+    </span>
   );
 }
 
@@ -210,7 +290,7 @@ function ProgressRing({ value }: { value: number }) {
   return (
     <div className="relative mx-auto h-36 w-36">
       <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
-        <circle cx="60" cy="60" r={r} fill="none" stroke="#283049" strokeWidth="10" />
+        <circle cx="60" cy="60" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
         <circle
           cx="60"
           cy="60"
@@ -221,10 +301,10 @@ function ProgressRing({ value }: { value: number }) {
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={offset}
-          className="transition-all duration-500"
+          className="transition-all duration-500 ease-premium"
         />
       </svg>
-      <span className="absolute inset-0 grid place-items-center text-3xl font-extrabold text-white">
+      <span className="absolute inset-0 grid place-items-center font-mono text-3xl font-semibold tabular-nums text-white">
         {value}%
       </span>
     </div>

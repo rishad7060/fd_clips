@@ -5,6 +5,10 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import type { Clip, ClipsResponse } from "@/lib/types";
 import { ClipCard } from "@/components/ClipCard";
+import { Button } from "@/components/ui/Button";
+import { Card, SectionTitle } from "@/components/ui/Card";
+import { Select } from "@/components/ui/Select";
+import { ClipCardSkeleton } from "@/components/ui/Skeleton";
 
 /**
  * Opus-grade results gallery: a DENSE, scannable grid (up to 6 clips per row on
@@ -92,30 +96,36 @@ export default function ClipGalleryPage({ params }: { params: { jobId: string } 
       {/* Results header */}
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <Link href="/dashboard" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-800 hover:text-white" aria-label="Back to projects">
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+          <Link href="/dashboard" aria-label="Back to projects">
+            <Button variant="ghost" size="sm" className="h-8 w-8 px-0">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+            </Button>
           </Link>
           <div>
-            <h1 className="text-base font-bold leading-tight text-white">Your clips</h1>
-            <p className="text-xs text-ink-500">
-              {data ? `${total} clip${total === 1 ? "" : "s"} · ranked by virality` : "Loading…"}
+            <SectionTitle className="leading-tight">Your clips</SectionTitle>
+            <p className="text-xs text-ink-400">
+              {data ? (
+                <>
+                  <span className="font-mono tabular-nums">{total}</span> clip{total === 1 ? "" : "s"} · ranked by virality
+                </>
+              ) : "Loading…"}
             </p>
           </div>
         </div>
 
         {/* Search clips by keyword/moment */}
         <div className="order-last w-full sm:order-none sm:ml-4 sm:max-w-sm sm:flex-1">
-          <div className="flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 focus-within:border-brand">
-            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-ink-500" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" /></svg>
+          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-ink-950 px-3 py-2 transition focus-within:border-brand">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-ink-400" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" /></svg>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Find keywords or moments…"
-              className="w-full bg-transparent text-sm text-white placeholder:text-ink-600 focus:outline-none"
+              className="w-full bg-transparent text-sm text-white placeholder:text-ink-400 focus:outline-none"
             />
             {query && (
-              <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="text-ink-500 hover:text-white">
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M6 18L18 6" /></svg>
+              <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="text-ink-400 hover:text-white">
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 6l12 12M6 18L18 6" /></svg>
               </button>
             )}
           </div>
@@ -123,39 +133,41 @@ export default function ClipGalleryPage({ params }: { params: { jobId: string } 
 
         {/* Sort menu + actions */}
         <div className="ml-auto flex items-center gap-2">
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            aria-label="Sort clips"
-            className="rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-2 text-xs font-medium text-white focus:border-brand focus:outline-none"
-          >
-            {SORT_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
+          <div className="w-36">
+            <Select
+              value={sort}
+              onChange={(v) => setSort(v as SortKey)}
+              aria-label="Sort clips"
+              options={SORT_OPTIONS.map((o) => ({ value: o.id, label: o.label }))}
+              className="py-2"
+            />
+          </div>
           {visibleClips.some((c) => c.final_url) && (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={downloadAll}
+              loading={downloadingAll}
               disabled={downloadingAll}
-              className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-ink-950 transition hover:bg-white/90 disabled:opacity-50"
             >
               {downloadingAll ? "Downloading…" : "Download all"}
-            </button>
+            </Button>
           )}
-          <Link href="/new" className="rounded-lg border border-ink-700 px-3 py-2 text-xs font-medium text-white/80 hover:border-brand hover:text-white">
-            + New
+          <Link href="/new">
+            <Button variant="ghost" size="sm">+ New</Button>
           </Link>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>
+        <Card className="border-danger-500/40 bg-danger-500/10 p-4 text-sm text-danger-300">{error}</Card>
       )}
 
       {/* Loading skeleton — dense grid */}
       {!data && !error && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="aspect-[9/16] animate-pulse rounded-xl border border-ink-800 bg-ink-900/60" />
+            <ClipCardSkeleton key={i} />
           ))}
         </div>
       )}
@@ -186,12 +198,17 @@ export default function ClipGalleryPage({ params }: { params: { jobId: string } 
 
 function EmptyState({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-2xl border border-ink-700 bg-ink-900/60 p-8 text-center">
-      <p className="text-lg font-semibold text-white">{title}</p>
-      <p className="mx-auto mt-2 max-w-md text-sm text-white/60">{body}</p>
-      <Link href="/new" className="mt-4 inline-block rounded-lg border border-ink-600 px-4 py-2 text-sm font-medium text-white/80 hover:border-brand hover:text-white">
-        ← Try another video
+    <Card className="p-10 text-center">
+      <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-ink-800 text-ink-300">
+        <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="14" height="16" rx="2" /><path d="M17 8l4-2v12l-4-2" />
+        </svg>
+      </span>
+      <p className="mt-4 text-lg font-semibold tracking-tight text-white">{title}</p>
+      <p className="mx-auto mt-1.5 max-w-md text-sm text-ink-300">{body}</p>
+      <Link href="/new" className="mt-5 inline-block">
+        <Button variant="secondary">Try another video</Button>
       </Link>
-    </div>
+    </Card>
   );
 }

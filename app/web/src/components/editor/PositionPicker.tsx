@@ -24,10 +24,10 @@ export function PositionPicker({ value, onChange }: PositionPickerProps) {
             aria-pressed={activeOpt}
             aria-label={`Caption position ${o.name}`}
             onClick={() => onChange(o.id)}
-            className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+            className={`rounded-lg border px-3 py-2 text-sm font-medium transition duration-150 ease-premium ${
               activeOpt
                 ? "border-brand bg-brand/10 text-white ring-1 ring-brand/40"
-                : "border-ink-700 bg-ink-850 text-white/70 hover:border-ink-500"
+                : "border-white/10 bg-ink-850 text-ink-300 hover:border-white/15 hover:bg-ink-800 hover:text-white"
             }`}
           >
             {o.name}

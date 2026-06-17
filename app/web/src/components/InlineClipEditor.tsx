@@ -15,6 +15,8 @@ import { LayerTabs, type EditorLayer } from "@/components/editor/LayerTabs";
 import { FontSizePicker } from "@/components/editor/FontSizePicker";
 import { SubtitleTimeline } from "@/components/editor/SubtitleTimeline";
 import { CaptionOverlays } from "@/components/editor/CaptionOverlays";
+import { Button } from "@/components/ui/Button";
+import { Panel, SectionTitle, Label } from "@/components/ui/Card";
 
 /**
  * Two-layer inline clip editor (CapCut / Opus-style). Fully client-side live
@@ -128,20 +130,21 @@ export function InlineClipEditor({ clip }: { clip: Clip }) {
       <div>
         <Link
           href={`/jobs/${clip.job_id}/clips`}
-          className="text-xs text-ink-500 hover:text-white"
+          className="inline-flex items-center gap-1 text-xs text-ink-400 transition hover:text-white"
         >
-          ← Back to clips
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+          Back to clips
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-white">
+        <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-white">
           Edit clip #{clip.rank}
         </h1>
-        <p className="text-sm text-white/60">{clip.suggested_title}</p>
+        <p className="text-sm text-ink-300">{clip.suggested_title}</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr,360px]">
-        {/* LEFT — live preview */}
-        <div className="space-y-4">
-          <div className="relative aspect-[9/16] overflow-hidden rounded-2xl bg-ink-950 ring-1 ring-ink-700">
+        {/* LEFT — live preview (sticky so it doesn't scroll away) */}
+        <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+          <div className="relative aspect-[9/16] overflow-hidden rounded-2xl bg-ink-950 ring-1 ring-white/10 shadow-rim">
             {hasVideo && !videoError ? (
               <video
                 ref={videoRef}
@@ -270,9 +273,9 @@ export function InlineClipEditor({ clip }: { clip: Clip }) {
           )}
 
           {/* Style templates (apply to the subtitle layer) */}
-          <section className="rounded-2xl border border-ink-700 bg-ink-900/60 p-5">
-            <h2 className="mb-3 font-semibold text-white">Style</h2>
-            <p className="mb-3 text-xs text-ink-500">
+          <Panel className="p-5">
+            <SectionTitle>Style</SectionTitle>
+            <p className="mb-3 mt-1 text-xs text-ink-400">
               Templates set the karaoke subtitle highlight + position.
             </p>
             <div className="grid grid-cols-2 gap-3">
@@ -283,14 +286,14 @@ export function InlineClipEditor({ clip }: { clip: Clip }) {
                   aria-pressed={templateId === t.id}
                   aria-label={`Style ${t.name}`}
                   onClick={() => actions.setTemplate(t.id)}
-                  className={`rounded-lg border p-3 text-left transition ${
+                  className={`rounded-xl border p-3 text-left transition duration-150 ease-premium ${
                     templateId === t.id
                       ? "border-brand bg-brand/10 ring-1 ring-brand/40"
-                      : "border-ink-700 bg-ink-850 hover:border-ink-500"
+                      : "border-white/10 bg-ink-850 hover:border-white/15 hover:bg-ink-800"
                   }`}
                 >
                   <span
-                    className="block rounded px-2 py-1.5 text-center text-[11px] font-bold"
+                    className="block rounded-lg px-2 py-1.5 text-center text-[11px] font-bold"
                     style={{ background: "#000", color: t.style.highlight_color }}
                   >
                     ABC
@@ -298,64 +301,50 @@ export function InlineClipEditor({ clip }: { clip: Clip }) {
                   <span className="mt-2 block text-xs font-medium text-white">
                     {t.name}
                   </span>
-                  <span className="mt-0.5 block text-[10px] text-ink-500">
+                  <span className="mt-0.5 block text-[10px] text-ink-400">
                     {t.style.font}
                   </span>
                 </button>
               ))}
             </div>
-          </section>
+          </Panel>
 
           {/* Trim readout */}
-          <section className="rounded-2xl border border-ink-700 bg-ink-900/60 p-5">
-            <h2 className="mb-2 font-semibold text-white">Trim</h2>
-            <p className="font-mono text-xs text-ink-500">
+          <Panel className="p-5">
+            <SectionTitle>Trim</SectionTitle>
+            <p className="mt-2 font-mono text-xs tabular-nums text-ink-300">
               {formatTimecode(derived.absoluteStart)} →{" "}
               {formatTimecode(derived.absoluteEnd)}
             </p>
-            <p className="mt-1 text-sm text-brand-400">{derived.durationLabel}</p>
-          </section>
+            <p className="mt-1 font-mono text-sm tabular-nums text-brand-300">{derived.durationLabel}</p>
+          </Panel>
         </div>
       </div>
 
       {/* FOOTER — optional re-render */}
-      <div className="flex flex-wrap items-center gap-3 border-t border-ink-700 pt-5">
-        <button
-          type="button"
-          onClick={reRender}
-          disabled={rendering}
-          className="rounded-xl bg-brand px-6 py-3 text-sm font-semibold text-white shadow-glow hover:bg-brand-600 disabled:opacity-50"
-        >
-          {rendering ? "Re-rendering…" : "Apply & re-render (optional)"}
-        </button>
+      <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-5">
+        <Button variant="primary" size="lg" onClick={reRender} loading={rendering} disabled={rendering}>
+          {rendering ? "Re-rendering…" : "Apply & re-render"}
+        </Button>
         {saved && (
-          <span className="text-sm text-emerald-300">✓ Re-render requested</span>
+          <span className="inline-flex items-center gap-1.5 text-sm text-success-300">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+            Re-render requested
+          </span>
         )}
-        <button
-          type="button"
-          onClick={actions.reset}
-          className="rounded-lg border border-ink-600 px-4 py-2.5 text-sm font-medium text-white/80 hover:border-brand hover:text-white"
-        >
+        <Button variant="ghost" onClick={actions.reset}>
           Reset edits
-        </button>
+        </Button>
         {hasVideo && (
-          <a
-            href={clip.final_url}
-            download={safeName}
-            className="rounded-lg border border-ink-600 px-4 py-2.5 text-sm font-medium text-white/80 hover:border-brand hover:text-white"
-          >
-            Download current render
+          <a href={clip.final_url} download={safeName}>
+            <Button variant="secondary">Download current render</Button>
           </a>
         )}
-        <button
-          type="button"
-          onClick={() => router.push(`/jobs/${clip.job_id}/clips`)}
-          className="text-sm text-white/60 hover:text-white"
-        >
+        <Button variant="ghost" onClick={() => router.push(`/jobs/${clip.job_id}/clips`)}>
           Done
-        </button>
+        </Button>
         {renderNote && (
-          <p className="w-full text-xs text-amber-300">{renderNote}</p>
+          <p className="w-full text-xs text-warning-300">{renderNote}</p>
         )}
       </div>
     </div>
@@ -374,10 +363,10 @@ function HookControls({
   actions: Actions;
 }) {
   return (
-    <section className="space-y-4 rounded-2xl border border-ink-700 bg-ink-900/60 p-5">
+    <Panel className="space-y-4 p-5">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold text-white">Hook banner</h2>
-        <label className="flex items-center gap-2 text-xs text-white/70">
+        <SectionTitle>Hook banner</SectionTitle>
+        <label className="flex items-center gap-2 text-xs text-ink-300">
           <input
             type="checkbox"
             checked={hook.show}
@@ -389,22 +378,18 @@ function HookControls({
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-white/70">
-          Text
-        </label>
+        <Label className="mb-1 block">Text</Label>
         <textarea
           value={hook.text}
           dir="auto"
           rows={2}
           onChange={(e) => actions.setHookText(e.target.value)}
-          className="min-h-[38px] w-full resize-y rounded-lg border border-ink-600 bg-ink-950 px-3 py-2 text-sm text-white focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+          className="min-h-[38px] w-full resize-y rounded-xl border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white transition focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
         />
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-medium text-white/70">
-          Text color
-        </label>
+        <Label className="mb-2 block">Text color</Label>
         <ColorPicker
           value={hook.color}
           onChange={actions.setHookColor}
@@ -413,9 +398,7 @@ function HookControls({
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-medium text-white/70">
-          Box color
-        </label>
+        <Label className="mb-2 block">Box color</Label>
         <ColorPicker
           value={hook.boxColor}
           onChange={actions.setHookBoxColor}
@@ -424,19 +407,15 @@ function HookControls({
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-medium text-white/70">
-          Position
-        </label>
+        <Label className="mb-2 block">Position</Label>
         <PositionPicker value={hook.position} onChange={actions.setHookPosition} />
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-medium text-white/70">
-          Font size
-        </label>
+        <Label className="mb-2 block">Font size</Label>
         <FontSizePicker value={hook.fontSize} onChange={actions.setHookFontSize} />
       </div>
-    </section>
+    </Panel>
   );
 }
 
@@ -452,10 +431,10 @@ function SubtitleControls({
   transcriptLoaded: boolean;
 }) {
   return (
-    <section className="space-y-4 rounded-2xl border border-ink-700 bg-ink-900/60 p-5">
+    <Panel className="space-y-4 p-5">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold text-white">Subtitles (karaoke)</h2>
-        <label className="flex items-center gap-2 text-xs text-white/70">
+        <SectionTitle>Subtitles (karaoke)</SectionTitle>
+        <label className="flex items-center gap-2 text-xs text-ink-300">
           <input
             type="checkbox"
             checked={subtitle.show}
@@ -467,9 +446,7 @@ function SubtitleControls({
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-medium text-white/70">
-          Highlight color
-        </label>
+        <Label className="mb-2 block">Highlight color</Label>
         <ColorPicker
           value={subtitle.highlightColor}
           onChange={actions.setSubtitleHighlightColor}
@@ -477,9 +454,7 @@ function SubtitleControls({
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-medium text-white/70">
-          Position
-        </label>
+        <Label className="mb-2 block">Position</Label>
         <PositionPicker
           value={subtitle.position}
           onChange={actions.setSubtitlePosition}
@@ -487,9 +462,7 @@ function SubtitleControls({
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-medium text-white/70">
-          Font size
-        </label>
+        <Label className="mb-2 block">Font size</Label>
         <FontSizePicker
           value={subtitle.fontSize}
           onChange={actions.setSubtitleFontSize}
@@ -497,11 +470,9 @@ function SubtitleControls({
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-medium text-white/70">
-          Segments
-        </label>
+        <Label className="mb-2 block">Segments</Label>
         {!transcriptLoaded ? (
-          <p className="text-xs text-ink-500">Loading transcript…</p>
+          <p className="text-xs text-ink-400">Loading transcript…</p>
         ) : (
           <SubtitleTimeline
             segments={subtitle.segments}
@@ -510,6 +481,6 @@ function SubtitleControls({
           />
         )}
       </div>
-    </section>
+    </Panel>
   );
 }

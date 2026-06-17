@@ -10,6 +10,8 @@ import { ConfigPanel } from "@/components/config/ConfigPanel";
 import { CaptionPresets } from "@/components/config/CaptionPresets";
 import { MyTemplates, type SavedConfig } from "@/components/config/MyTemplates";
 import { VideoPreviewCard } from "@/components/config/VideoPreviewCard";
+import { Button } from "@/components/ui/Button";
+import { Panel, SectionTitle } from "@/components/ui/Card";
 
 /**
  * The home clip builder: a URL/upload box that, ONCE a source is added, reveals
@@ -129,20 +131,20 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
         ) : looksLikeUrl ? (
           <SourceChip label={url.trim()} onRemove={() => setUrl("")} />
         ) : (
-          <div className="flex items-center gap-2 rounded-xl border border-ink-700 bg-ink-950 px-3 py-3.5 focus-within:border-brand">
+          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-ink-950 px-3 py-3.5 transition focus-within:border-brand focus-within:ring-1 focus-within:ring-brand/40">
             <LinkIcon />
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="Paste a video link — YouTube, TikTok, Instagram, X…"
-              className="w-full bg-transparent text-sm text-white placeholder:text-ink-500 focus:outline-none"
+              className="w-full bg-transparent text-sm text-white placeholder:text-ink-400 focus:outline-none"
               autoFocus
             />
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-white/70 hover:bg-ink-800 hover:text-white disabled:opacity-50"
+              className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-ink-300 transition hover:bg-ink-800 hover:text-white disabled:opacity-50"
             >
               {uploading ? "Uploading…" : "Upload"}
             </button>
@@ -160,16 +162,19 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
           </div>
         )}
 
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="lg"
+          full
+          loading={submitting}
           onClick={getClips}
           disabled={submitting || !hasSource}
-          className="w-full rounded-xl bg-white py-3.5 text-sm font-bold text-ink-950 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? "Creating clips…" : "Get clips in 1 click"}
-        </button>
+        </Button>
 
-        {error && <p className="text-center text-sm text-red-300">{error}</p>}
+        {error && <p className="text-center text-sm text-danger-400">{error}</p>}
       </div>
 
       {/* Everything below reveals ONLY after a source is added. */}
@@ -181,7 +186,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
             <span className="inline-flex items-center gap-1">
               Credit usage:
               <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-brand-400" fill="currentColor"><path d="M13 2L3 14h7l-1 8 10-12h-7z" /></svg>
-              <span className="font-semibold text-white">{creditEstimate}</span>
+              <span className="font-mono font-semibold tabular-nums text-white">{creditEstimate}</span>
             </span>
           </div>
 
@@ -213,26 +218,28 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
           </div>
 
           {/* Email */}
-          <div className="mt-8 rounded-xl border border-ink-700 bg-ink-900/50 p-4">
-            <label className="mb-1.5 block text-sm font-medium text-white/80">
-              Email <span className="font-normal text-ink-500">(optional)</span>
-            </label>
+          <Panel className="mt-8 p-5">
+            <SectionTitle className="mb-1">
+              Email <span className="text-sm font-normal text-ink-400">(optional)</span>
+            </SectionTitle>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full rounded-lg border border-ink-600 bg-ink-950 px-3 py-2.5 text-sm text-white placeholder:text-ink-500 focus:border-brand focus:outline-none"
+              className="mt-2.5 w-full rounded-xl border border-white/10 bg-ink-950 px-3 py-2.5 text-sm text-white transition placeholder:text-ink-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand/40"
             />
-            <p className="mt-1.5 text-xs text-ink-500">
+            <p className="mt-2 text-xs text-ink-400">
               We&apos;ll open your project right away; add an email to also be notified when clips are ready.
             </p>
-          </div>
+          </Panel>
 
           {/* Save as default */}
           <div className="mt-8 flex justify-center">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 try {
                   localStorage.setItem("fd:lastConfig", JSON.stringify(currentConfig()));
@@ -240,10 +247,9 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
                   setTimeout(() => setSavedDefault(false), 2000);
                 } catch {/* ignore */}
               }}
-              className="rounded-lg border border-ink-700 px-4 py-2 text-xs font-medium text-white/70 transition hover:border-brand hover:text-white"
             >
               {savedDefault ? "Saved as default ✓" : "Save settings above as default"}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -253,9 +259,9 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
 
 function SourceChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-ink-700 bg-ink-950 px-3 py-3.5">
+    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-ink-950 px-3 py-3.5 shadow-rim">
       <LinkIcon />
-      <span className="flex-1 truncate text-sm text-white/90">{label}</span>
+      <span className="flex-1 truncate text-sm text-ink-100">{label}</span>
       <button type="button" onClick={onRemove} className="text-sm font-medium text-brand-400 underline-offset-2 hover:underline">
         Remove
       </button>

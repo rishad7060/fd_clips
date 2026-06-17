@@ -23,10 +23,10 @@ export function FontSizePicker({ value, onChange }: FontSizePickerProps) {
             aria-pressed={active}
             aria-label={`Font size ${o.label}`}
             onClick={() => onChange(o.value)}
-            className={`min-w-[3rem] rounded-lg border px-3 py-2 text-sm font-medium transition ${
+            className={`min-w-[3rem] rounded-lg border px-3 py-2 text-sm font-medium transition duration-150 ease-premium ${
               active
                 ? "border-brand bg-brand/10 text-white ring-1 ring-brand/40"
-                : "border-ink-700 bg-ink-850 text-white/70 hover:border-ink-500"
+                : "border-white/10 bg-ink-850 text-ink-300 hover:border-white/15 hover:bg-ink-800 hover:text-white"
             }`}
           >
             {o.label}
