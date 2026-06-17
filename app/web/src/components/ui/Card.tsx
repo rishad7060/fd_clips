@@ -12,9 +12,19 @@ export function Card({ className = "", interactive = false, ...props }: HTMLAttr
   );
 }
 
-/** A muted panel surface (config sections). */
+/**
+ * Frosted-glass panel surface for config sections (Opus-style): a low-opacity
+ * background with a soft backdrop blur so the page shows through, and a subtle
+ * dim-until-hover — its contents sit slightly muted at rest and brighten when
+ * the cursor is over the section, so the active area "wakes up".
+ */
 export function Panel({ className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={`rounded-2xl border border-white/10 bg-ink-900/60 shadow-rim ${className}`} {...props} />;
+  return (
+    <div
+      className={`group/panel rounded-2xl border border-white/10 bg-ink-900/45 shadow-rim backdrop-blur-md transition-[opacity,background-color] duration-300 ease-premium opacity-[0.92] hover:bg-ink-900/60 hover:opacity-100 ${className}`}
+      {...props}
+    />
+  );
 }
 
 /** Section heading inside a panel/page — proper hierarchy (not body-sized). */
