@@ -19,8 +19,9 @@ const NAV: { href: string; label: string; icon: string; exact?: boolean }[] = [
   { href: "/dashboard#projects", label: "Projects", icon: "M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" },
 ];
 
-// Help points to a real destination (billing/support), not a dead self-link.
-const HELP_HREF = "/billing";
+// The bottom "?" entry opens the help center.
+const HELP_HREF = "/help";
+const HELP_LABEL = "Help";
 const HELP_ICON = "M9.5 9a2.5 2.5 0 113.5 2.3c-.8.4-1 .8-1 1.7M12 17h.01";
 
 function NavIcon({ path, className = "h-5 w-5" }: { path: string; className?: string }) {
@@ -82,12 +83,16 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Help at the bottom — points to a real page. */}
+        {/* Help at the bottom — opens the help center. */}
         <Link
           href={HELP_HREF}
-          title="Help & billing"
-          aria-label="Help & billing"
-          className="group relative grid h-11 w-11 place-items-center rounded-xl text-ink-400 transition hover:bg-ink-800 hover:text-white"
+          title={HELP_LABEL}
+          aria-label={HELP_LABEL}
+          className={`group relative grid h-11 w-11 place-items-center rounded-xl transition ${
+            pathname === HELP_HREF || pathname.startsWith(HELP_HREF + "/")
+              ? "border border-brand bg-brand/10 text-brand-400 ring-1 ring-brand/40"
+              : "text-ink-400 hover:bg-ink-800 hover:text-white"
+          }`}
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor"
             strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -95,7 +100,7 @@ export function Sidebar() {
             <path d={HELP_ICON} />
           </svg>
           <span className="pointer-events-none absolute left-full ml-2 hidden whitespace-nowrap rounded-md bg-ink-800 px-2 py-1 text-xs text-white shadow ring-1 ring-white/10 group-hover:block">
-            Help &amp; billing
+            {HELP_LABEL}
           </span>
         </Link>
       </aside>
@@ -120,15 +125,19 @@ export function Sidebar() {
         })}
         <Link
           href={HELP_HREF}
-          aria-label="Help & billing"
-          className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium text-ink-400 transition hover:text-white"
+          aria-label={HELP_LABEL}
+          className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition ${
+            pathname === HELP_HREF || pathname.startsWith(HELP_HREF + "/")
+              ? "text-brand-400"
+              : "text-ink-400 hover:text-white"
+          }`}
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor"
             strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="9" />
             <path d={HELP_ICON} />
           </svg>
-          Help
+          {HELP_LABEL}
         </Link>
       </nav>
     </>
