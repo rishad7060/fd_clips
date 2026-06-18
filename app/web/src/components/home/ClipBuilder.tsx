@@ -151,8 +151,17 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
         ...(range ? { process_range: range } : {}),
         ...(emailOk ? { email: email.trim() } : {}),
       };
-      const job = await api.createJob(input);
-      router.push(`/jobs/${job.job_id}`);
+      await api.createJob(input);
+      // Don't block on a full-screen progress page — drop the user back on the
+      // dashboard where the new job appears in the projects grid with live
+      // status (the grid polls until terminal). Clear the source so the grid
+      // (hidden while a source is staged) reveals on this same page if the
+      // builder happens to be mounted on /dashboard.
+      setUrl("");
+      setSourceKey(null);
+      setFileName(null);
+      router.push("/dashboard");
+      router.refresh();
     } catch (e) {
       setError(friendly(e));
       setSubmitting(false);

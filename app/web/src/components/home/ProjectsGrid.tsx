@@ -18,14 +18,38 @@ export function ProjectsGrid() {
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Poll while ANY job is still in flight so progress bars/status pills animate
+  // as the background pipeline runs, then stop once every job is terminal so we
+  // don't hammer the API forever. A single interval is (re)created from the
+  // latest fetch result; the cleanup clears it so no timer leaks.
   useEffect(() => {
     let alive = true;
-    api
-      .listJobs()
-      .then((j) => alive && setJobs(j))
-      .catch((e) => alive && setError(String(e)));
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const isTerminal = (s: Job["status"]) =>
+      s === "completed" || s === "failed" || s === "canceled";
+
+    const tick = () => {
+      api
+        .listJobs()
+        .then((j) => {
+          if (!alive) return;
+          setJobs(j);
+          // Stop polling once nothing is left running/queued.
+          if (timer && j.every((job) => isTerminal(job.status))) {
+            clearInterval(timer);
+            timer = null;
+          }
+        })
+        .catch((e) => alive && setError(String(e)));
+    };
+
+    tick();
+    timer = setInterval(tick, 2500);
+
     return () => {
       alive = false;
+      if (timer) clearInterval(timer);
     };
   }, []);
 
