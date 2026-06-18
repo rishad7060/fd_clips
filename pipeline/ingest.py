@@ -257,17 +257,6 @@ def _ingest_real(
             "socket_timeout": 30,
             "retries": 2,
         }
-        # YouTube-only tweak: it gates high-res formats behind a JS runtime
-        # (nsig/n challenge), a GVS PO token, SABR-only experiments, or DRM —
-        # depending on the player client. On a box with no deno/node JS runtime,
-        # most clients fall back to a 360p-max ladder (blurry upscale). The
-        # **android_vr** client is the exception: full 360→1080→4K ladder with
-        # directly-downloadable URLs, NO PO token, NO JS runtime. (Other sites
-        # ignore this key, so it's only applied for YouTube to avoid surprises.)
-        if _is_youtube(source):
-            ydl_opts["extractor_args"] = {
-                "youtube": {"player_client": ["android_vr", "android", "ios", "web"]}
-            }
         if ffmpeg_dir:
             ydl_opts["ffmpeg_location"] = ffmpeg_dir
         # YouTube increasingly requires cookies ("Sign in to confirm you're not a
@@ -296,13 +285,92 @@ def _ingest_real(
             )
             ydl_opts["force_keyframes_at_cuts"] = True
             trimmed_on_download = True
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # extract_info(download=True) both downloads AND returns the
-                # metadata dict — which carries the "most replayed" heatmap and
-                # view_count. (ydl.download() would discard that.)
-                info = ydl.extract_info(source, download=True) or {}
-        except Exception as e:  # noqa: BLE001 — surface a clear, actionable error
+
+        # YouTube gates high-res formats behind a JS runtime (nsig/n challenge), a
+        # GVS PO token, SABR-only experiments, or DRM — depending on the player
+        # CLIENT. Clients also differ in whether their media URLs survive the
+        # actual download: YouTube increasingly returns "HTTP 403 Forbidden" at
+        # DOWNLOAD time (after a clean extraction) for some clients/IPs. No single
+        # client is reliable for long, so we try a LADDER of client combos and
+        # accept the first that downloads. (Other sites ignore this key, so the
+        # ladder is YouTube-only; non-YouTube gets a single default attempt.)
+        if _is_youtube(source):
+            client_attempts: list[list[str]] = [
+                # tv + web_safari are the most 403-resistant at download time
+                # lately; android_vr keeps the full 1080p ladder w/o a PO token.
+                ["tv", "web_safari", "android_vr"],
+                ["android_vr", "ios", "android"],
+                ["mweb", "web"],
+            ]
+        else:
+            client_attempts = [[]]  # single attempt, no client override
+
+        # If browser cookies are available, retrying WITH them is the strongest
+        # 403/bot-check fix — so append a cookie'd pass as the final fallback.
+        cookie_retry = bool(
+            (cookie_file and Path(cookie_file).is_file()) or cookie_browser
+        )
+
+        last_err: Optional[Exception] = None
+        info = {}
+        for attempt_i, clients in enumerate(client_attempts):
+            opts = dict(ydl_opts)
+            if clients:
+                opts["extractor_args"] = {"youtube": {"player_client": clients}}
+            # Clean any partial download from a prior 403 attempt so the next
+            # client starts fresh (avoids "file exists"/resume confusion).
+            for leftover in ws.glob("download.*"):
+                try:
+                    leftover.unlink()
+                except OSError:
+                    pass
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    # extract_info(download=True) both downloads AND returns the
+                    # metadata dict — which carries the "most replayed" heatmap
+                    # and view_count. (ydl.download() would discard that.)
+                    info = ydl.extract_info(source, download=True) or {}
+                last_err = None
+                break
+            except Exception as e:  # noqa: BLE001 — try the next client combo
+                last_err = e
+                el = str(e).lower()
+                # Only worth trying another client for 403/bot/format issues;
+                # an unsupported URL or genuine "not found" won't improve.
+                fatal = (
+                    "unsupported url" in el
+                    or "is not a valid url" in el
+                    or "no video" in el
+                )
+                if fatal:
+                    break
+                print(f"  [ingest] attempt {attempt_i + 1} "
+                      f"({clients or 'default'}) failed: {str(e)[:120]}")
+                continue
+
+        # Final fallback: one more pass WITH browser/file cookies if we have them
+        # and every clientless/client attempt 403'd or bot-checked.
+        if last_err is not None and cookie_retry:
+            el = str(last_err).lower()
+            if "403" in el or "forbidden" in el or "sign in" in el or "bot" in el:
+                opts = dict(ydl_opts)
+                opts["extractor_args"] = {
+                    "youtube": {"player_client": ["tv", "web_safari", "android_vr"]}
+                }
+                for leftover in ws.glob("download.*"):
+                    try:
+                        leftover.unlink()
+                    except OSError:
+                        pass
+                try:
+                    with yt_dlp.YoutubeDL(opts) as ydl:
+                        info = ydl.extract_info(source, download=True) or {}
+                    last_err = None
+                except Exception as e:  # noqa: BLE001
+                    last_err = e
+
+        if last_err is not None:
+            e = last_err
             msg = str(e)
             low = msg.lower()
             if "unsupported url" in low or "no video" in low or "is not a valid url" in low:
@@ -323,6 +391,14 @@ def _ingest_real(
                     "common on Instagram/TikTok/private YouTube). Set "
                     "YTDLP_COOKIES_FROM_BROWSER=chrome (or edge/firefox) in .env to reuse "
                     "your logged-in browser's cookies, or set YTDLP_COOKIES to a cookies.txt."
+                )
+            elif _is_youtube(source) and ("403" in low or "forbidden" in low):
+                hint = (
+                    "YouTube blocked the download (HTTP 403) from this IP across every "
+                    "player client. The most reliable fix is cookies: set "
+                    "YTDLP_COOKIES_FROM_BROWSER=chrome (or edge/firefox) in .env to reuse "
+                    "your logged-in browser's session, then retry. Updating yt-dlp "
+                    "(pip install -U yt-dlp) or trying a different video can also help."
                 )
             else:
                 hint = (
