@@ -32,11 +32,13 @@ from typing import Any, Optional
 
 try:
     from .config import get_settings
+    from ._parallel import map_clips_parallel
 except ImportError:
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from config import get_settings  # type: ignore
+    from _parallel import map_clips_parallel  # type: ignore
 
 # Auto-emoji for configured keywords (subtle: at most one per line, see
 # build_ass). Curated so it punches up without looking cheesy.
@@ -776,8 +778,8 @@ def caption_clips(job_id: str, top_n: Optional[int] = None) -> list[CaptionResul
     clips_dir = ws / "clips"
     clips_dir.mkdir(parents=True, exist_ok=True)
 
-    results: list[CaptionResult] = []
-    for rank, cand in enumerate(candidates, start=1):
+    def _one(rank: int, cand: dict) -> CaptionResult:
+        """Build .ass + burn-in for a single clip (independent per rank)."""
         start, end = float(cand["start"]), float(cand["end"])
         # Prefer the editor's edited words for this rank; else slice the
         # transcript. Override words are clip-relative → shift to absolute so
@@ -821,16 +823,17 @@ def caption_clips(job_id: str, top_n: Optional[int] = None) -> list[CaptionResul
         # Poster frame for the gallery card (CONTRACTS §5 {n}_thumb.jpg).
         _make_thumbnail(final, clips_dir / f"{rank}_thumb.jpg", mock=settings.mock_mode)
 
-        results.append(
-            CaptionResult(
-                rank=rank, ass_path=str(ass_path), final_path=str(final),
-                burned_in=burned, rtl=rtl, line_count=line_count,
-                mock=settings.mock_mode,
-            )
-        )
         print(f"  clip #{rank}: {line_count} caption line(s) "
               f"{'(RTL)' if rtl else ''} burned_in={burned} -> {final.name}")
+        return CaptionResult(
+            rank=rank, ass_path=str(ass_path), final_path=str(final),
+            burned_in=burned, rtl=rtl, line_count=line_count,
+            mock=settings.mock_mode,
+        )
 
+    # SPEED: each clip's burn-in is an independent ffmpeg pass → run concurrently
+    # (subprocess-bound, so threads overlap on CPU). Results stay in rank order.
+    results = map_clips_parallel(_one, list(enumerate(candidates, start=1)))
     return results
 
 
@@ -863,7 +866,7 @@ def _burn_in(vertical: Path, ass_path: Path, final: Path, *, mock: bool) -> bool
     cmd = [
         (ffmpeg or "ffmpeg"), "-y", "-i", str(vertical),
         "-vf", vf,
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
         "-pix_fmt", "yuv420p", "-c:a", "copy", str(final),
     ]
     cmd_str = " ".join(cmd)

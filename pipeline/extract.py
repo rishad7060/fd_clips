@@ -105,7 +105,7 @@ def _cut_command(
     # Frame-accurate: decode + re-encode on CPU with libx264 (NO nvenc/GPU).
     return [
         ffmpeg, "-y", "-ss", f"{start:.3f}", "-i", str(source),
-        "-t", f"{duration:.3f}", "-c:v", "libx264", "-preset", "veryfast",
+        "-t", f"{duration:.3f}", "-c:v", "libx264", "-preset", "ultrafast",
         "-crf", "20", "-c:a", "aac", "-pix_fmt", "yuv420p", str(out),
     ]
 
@@ -237,7 +237,7 @@ def _start_is_keyframe_aligned(source: Path, start: float, tol: float = 0.05) ->
 
 
 def _main() -> None:
-    parser = argparse.ArgumentParser(description="FocalDive clip extraction stage")
+    parser = argparse.ArgumentParser(description="FD clip extraction stage")
     parser.add_argument("--job-id", default="demo-job-0001")
     parser.add_argument("--top", type=int, default=None)
     args = parser.parse_args()

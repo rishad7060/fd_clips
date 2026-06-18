@@ -56,11 +56,13 @@ from typing import Any, Optional
 
 try:
     from .config import get_settings
+    from ._parallel import map_clips_parallel
 except ImportError:
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from config import get_settings  # type: ignore
+    from _parallel import map_clips_parallel  # type: ignore
 
 TARGET_W = 1080
 TARGET_H = 1920
@@ -99,6 +101,13 @@ def set_aspect_ratio(aspect_ratio: Optional[str]) -> tuple[int, int]:
 
 # ── MediaPipe smart-crop tuning (real branch only) ──────────────────────────
 FRAME_SAMPLE_STRIDE = 5     # run face detection on every Nth decoded frame
+# SPEED: BlazeFace/FaceLandmarker work on a 0..1 fraction basis, so detection on a
+# downscaled copy returns the SAME face fractions as on the full-res frame (output
+# geometry is unchanged — the crop still uses the full-res pixels). Detection cost
+# scales with pixel count, so shrinking a 1920px-wide frame to 640px is ~9x fewer
+# pixels per detect. We only downscale the DETECTION input; openness crops and the
+# rendered crop window stay full-res. 0 disables (use the native frame).
+DETECT_MAX_WIDTH = 640      # px: cap the detection-input width (fractions unchanged)
 EMA_ALPHA = 0.25            # crop-center smoothing weight (0.2-0.3 = calm camera)
 # Lower confidence so distant / profile / turned-away faces (the off-camera
 # speaker on a zoomed-out two-shot) still register — they're what we widen for.
@@ -312,8 +321,8 @@ def reframe_clips(
     clips_dir = ws / "clips"
     clips_dir.mkdir(parents=True, exist_ok=True)
 
-    plans: list[CropPlan] = []
-    for rank, cand in enumerate(candidates, start=1):
+    def _one(rank: int, cand: dict) -> CropPlan:
+        """Reframe a single clip (independent per rank → safe to run in parallel)."""
         start, end = float(cand["start"]), float(cand["end"])
         clip_segments = [
             s for s in segments if s["start"] < end and s["end"] > start
@@ -328,13 +337,20 @@ def reframe_clips(
             plan = _reframe_real(
                 rank, start, end, speakers, raw, vertical, clip_segments
             )
-        plans.append(plan)
         (clips_dir / f"{rank}_reframe.json").write_text(
             json.dumps(plan.to_json(), indent=2), encoding="utf-8"
         )
         print(f"  clip #{rank}: mode={plan.mode}  keyframes={len(plan.keyframes)} "
               f"cuts={len(plan.scene_cuts)} -> {vertical.name}")
+        return plan
 
+    # SPEED: each clip is independent (own raw→vertical encode + reframe.json), so
+    # process them concurrently. ffmpeg encodes are subprocess-bound and MediaPipe
+    # releases the GIL during inference, so threads give real wall-clock overlap on
+    # CPU without the pickling/import cost of processes. An error in one clip is
+    # logged and re-raised at gather time so the batch surfaces it (rather than a
+    # silent missing clip), matching the prior fail-loud behavior.
+    plans = map_clips_parallel(_one, list(enumerate(candidates, start=1)))
     return plans
 
 
@@ -731,11 +747,20 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
 
             # MediaPipe expects contiguous RGB.
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # SPEED: detect on a downscaled copy — BlazeFace/FaceLandmarker return
+            # 0..1 fractions, so face geometry is identical, but detection touches
+            # ~9x fewer pixels. The full-res ``rgb`` is kept for openness crops
+            # (which DO need real pixels) and the rendered crop window.
+            det_rgb = _downscale_for_detect(rgb, np, cv2)
+            single_speaker = _is_single_speaker_clip(samples)
             # Tiled detection recovers the 2nd speaker that full-frame BlazeFace
             # misses on a wide two-shot (each half is detected at 2x face res).
+            # SPEED: skip tiling entirely once the clip looks single-speaker — the
+            # 2x/3x extra detect passes only matter for 2-person two-shots.
             faces = (
-                _detect_tiled(rgb, detect_fn, np) if TILED_DETECT
-                else detect_fn(rgb)
+                _detect_tiled(det_rgb, detect_fn, np)
+                if (TILED_DETECT and not single_speaker)
+                else detect_fn(det_rgb)
             )  # [(cx, cy, area, score), ...]
             if not faces:
                 # Still record the cut so a faceless shot boundary isn't lost,
@@ -749,7 +774,12 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
             # Measure mouth openness per face ONLY when ≥2 faces are visible (the
             # only case where we must decide WHO is talking). Crop each face box
             # (padded) and run FaceLandmarker on it — robust on small/360p faces.
-            measure = openness_fn is not None and len(faces) >= 2
+            # SPEED: skip the 478-point ASD mesh once the clip reads single-speaker
+            # (no talker disambiguation needed → pure geometry framing).
+            measure = (
+                openness_fn is not None and len(faces) >= 2
+                and not single_speaker
+            )
             fh, fw = frame.shape[:2]
             all_centers: list[tuple[float, float, float]] = []
             for (fx, fy, area, _s) in faces:
@@ -799,6 +829,55 @@ def _dominant_face_xy(
     """
     cx, cy, _area, _score = max(faces, key=lambda f: (f[2], f[3]))
     return cx, cy
+
+
+def _downscale_for_detect(rgb: Any, np: Any, cv2: Any) -> Any:
+    """Return ``rgb`` shrunk so its width ≤ DETECT_MAX_WIDTH (for face detection).
+
+    BlazeFace/FaceLandmarker report face centers/boxes as fractions of frame size,
+    so detecting on a smaller copy yields the SAME fractions at a fraction of the
+    pixel cost. Returns a contiguous uint8 array. Frames already at/below the cap
+    (or DETECT_MAX_WIDTH ≤ 0) pass through unchanged. Detection-only — callers keep
+    the full-res frame for openness crops and the rendered crop.
+    """
+    if DETECT_MAX_WIDTH <= 0:
+        return rgb
+    h, w = rgb.shape[:2]
+    if w <= DETECT_MAX_WIDTH:
+        return rgb
+    scale = DETECT_MAX_WIDTH / float(w)
+    new_w = DETECT_MAX_WIDTH
+    new_h = max(1, int(round(h * scale)))
+    small = cv2.resize(rgb, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    return np.ascontiguousarray(small, dtype=np.uint8)
+
+
+# ── Single-speaker fast-path pre-check ──────────────────────────────────────
+# How many of the first faced samples to inspect, and how many of them must show
+# exactly ONE face, before we treat the whole clip as single-speaker and skip the
+# (expensive) tiled detect + ASD mesh. Tiling/ASD only matter for 2-person
+# two-shots; a talking-head clip never needs them. Kept conservative so a genuine
+# two-shot (even one that opens on a single face) still trips the multi path early.
+SINGLE_SPEAKER_PROBE_SAMPLES = 6
+SINGLE_SPEAKER_MIN_FRAC = 0.85   # ≥85% of probed faced frames show exactly 1 face
+
+
+def _is_single_speaker_clip(samples: list["FaceSample"]) -> bool:
+    """Cheap pre-check: do the first faced samples consistently show ONE face?
+
+    Looks at the first ``SINGLE_SPEAKER_PROBE_SAMPLES`` samples that contained a
+    face (collected so far this clip) and returns True when ≥SINGLE_SPEAKER_MIN_FRAC
+    of them have exactly one detected face. When True the caller skips tiled
+    detection and the ASD landmarker mesh for the rest of the clip — both only
+    disambiguate 2-person two-shots. Returns False until enough evidence exists
+    (so the multi-speaker path stays the safe default early in the clip).
+    """
+    faced = [s for s in samples if s.cx >= 0.0]
+    if len(faced) < SINGLE_SPEAKER_PROBE_SAMPLES:
+        return False
+    probe = faced[:SINGLE_SPEAKER_PROBE_SAMPLES]
+    one_face = sum(1 for s in probe if len(s.faces) <= 1)
+    return (one_face / len(probe)) >= SINGLE_SPEAKER_MIN_FRAC
 
 
 def _detect_tiled(
@@ -1568,7 +1647,7 @@ def _reframe_real(
             )
         cmd = [
             ffmpeg, "-y", "-i", str(raw), "-filter_complex", vf,
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
             "-pix_fmt", "yuv420p", "-c:a", "aac", str(vertical),
         ]
         subprocess.run(cmd, check=True)
@@ -1658,7 +1737,7 @@ def _reframe_real(
         # Graceful fallback: placeholder + logged intent, mock/CI stays green.
         intended = (
             f"ffmpeg -y -i {raw} -vf \"{vf}\" "
-            f"-c:v libx264 -preset veryfast -crf 20 -c:a aac {vertical}"
+            f"-c:v libx264 -preset ultrafast -crf 20 -c:a aac {vertical}"
         )
         vertical.write_bytes(b"FOCALDIVE_MOCK_VERTICAL\x00")
         print(f"    [no-ffmpeg] reframe skipped; intended: {intended}")
@@ -1671,7 +1750,7 @@ def _reframe_real(
 
     cmd = [
         ffmpeg, "-y", "-i", str(raw), "-vf", vf,
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
         "-pix_fmt", "yuv420p", "-c:a", "aac", str(vertical),
     ]
     subprocess.run(cmd, check=True)
