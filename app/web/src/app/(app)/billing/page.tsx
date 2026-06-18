@@ -15,9 +15,9 @@ import { Button } from "@/components/ui/Button";
  * mock/MVP the capture grants credits locally so the balance bar updates live.
  */
 const PLANS = [
-  { tier: "free", label: "Free", price: 0, credits: 30, features: ["30 source-minutes / mo", "6 clips per video", "Auto captions + hooks"] },
-  { tier: "starter", label: "Starter", price: 7.5, credits: 150, features: ["150 source-minutes / mo", "All Free features", "1080p exports", "Priority queue"] },
-  { tier: "pro", label: "Pro", price: 14.5, credits: 300, features: ["300 source-minutes / mo", "All Starter features", "Active-speaker reframe", "No watermark"] },
+  { tier: "free", label: "Free", price: 0, credits: 60, features: ["60 source-minutes / mo", "Up to 1080p clips", "Auto captions + hooks", "Has watermark · clips expire in 3 days"] },
+  { tier: "starter", label: "Starter", price: 7.5, credits: 150, features: ["150 source-minutes / mo", "All Free features", "No watermark", "Powerful editor"] },
+  { tier: "pro", label: "Pro", price: 14.5, credits: 300, features: ["300 source-minutes / mo", "All Starter features", "Active-speaker reframe", "Priority processing"] },
 ];
 
 export default function BillingPage() {

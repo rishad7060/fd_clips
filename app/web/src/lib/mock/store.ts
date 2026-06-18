@@ -73,11 +73,12 @@ const MOCK_PLAN_CREDITS: Record<"starter" | "pro", number> = {
   pro: 300,
 };
 
-/** In-session billing state so a mock PayPal upgrade updates the balance bar. */
+/** In-session billing state so a mock PayPal upgrade updates the balance bar.
+ *  Free tier = 60 credits/mo (mirrors PLANS.free in app/api/src/billing/plans.ts). */
 let billingState: { plan: string; credit_balance: number; monthly_credits: number } = {
   plan: "free",
-  credit_balance: 24,
-  monthly_credits: 30,
+  credit_balance: 54,
+  monthly_credits: 60,
 };
 
 /**

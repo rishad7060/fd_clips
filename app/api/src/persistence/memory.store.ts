@@ -10,6 +10,7 @@ import {
   JobRecord,
   OrganizationRecord,
   PlanTier,
+  SubscriptionStatus,
 } from './store.types';
 
 const now = (): string => new Date().toISOString();
@@ -54,6 +55,8 @@ export class MemoryStore implements DataStore {
       plan: 'free',
       creditBalance: defaultCredits,
       stripeCustomerId: null,
+      paypalSubscriptionId: null,
+      subscriptionStatus: null,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -80,6 +83,28 @@ export class MemoryStore implements DataStore {
     const org = this.orgs.get(orgId);
     if (!org) throw new Error(`Organization ${orgId} not found`);
     org.plan = plan;
+    org.updatedAt = now();
+    return org;
+  }
+
+  async getOrganizationByPaypalSubscriptionId(
+    subscriptionId: string,
+  ): Promise<OrganizationRecord | null> {
+    for (const org of this.orgs.values()) {
+      if (org.paypalSubscriptionId === subscriptionId) return org;
+    }
+    return null;
+  }
+
+  async setOrganizationSubscription(
+    orgId: string,
+    subscriptionId: string | null,
+    status: SubscriptionStatus | null,
+  ): Promise<OrganizationRecord> {
+    const org = this.orgs.get(orgId);
+    if (!org) throw new Error(`Organization ${orgId} not found`);
+    org.paypalSubscriptionId = subscriptionId;
+    org.subscriptionStatus = status;
     org.updatedAt = now();
     return org;
   }

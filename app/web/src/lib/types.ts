@@ -189,7 +189,7 @@ export interface ClipsResponse {
 
 /**
  * Current org plan + credit balance (GET /billing/balance). `monthly_credits`
- * is the plan's monthly grant (free=30, starter=150, pro=300), used by the UI
+ * is the plan's monthly grant (free=60, starter=150, pro=300), used by the UI
  * to render a balance/quota bar. The API returns only plan + creditBalance; the
  * web client derives monthly_credits from a plan→credits map.
  */

@@ -53,8 +53,16 @@ model Organization {
   name      String
   plan      PlanTier @default(free)
   // Cached running balance in credits (1 credit = 1 source-minute).
-  creditBalance Int   @default(30) @map("credit_balance")
+  // Default raised 30 -> 60 (Opus parity). MIGRATION REQUIRED: the new default
+  // only applies to rows created after `prisma migrate`; existing orgs keep
+  // their balance. See migration note in app/api/.env.example.
+  creditBalance Int   @default(60) @map("credit_balance")
   stripeCustomerId String? @unique @map("stripe_customer_id")
+  // PayPal recurring subscription id (I-XXXXXXXXXXXX) + last-known status from
+  // PayPal webhooks (ACTIVE | SUSPENDED | CANCELLED | EXPIRED). Null on the free
+  // tier / before any subscription. MIGRATION REQUIRED (new columns).
+  paypalSubscriptionId String? @unique @map("paypal_subscription_id")
+  subscriptionStatus   String? @map("subscription_status")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

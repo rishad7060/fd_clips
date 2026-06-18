@@ -9,6 +9,7 @@ import {
   JobRecord,
   OrganizationRecord,
   PlanTier,
+  SubscriptionStatus,
 } from './store.types';
 
 /**
@@ -51,6 +52,8 @@ export class PrismaStore implements DataStore {
       plan: o.plan,
       creditBalance: o.creditBalance,
       stripeCustomerId: o.stripeCustomerId ?? null,
+      paypalSubscriptionId: o.paypalSubscriptionId ?? null,
+      subscriptionStatus: (o.subscriptionStatus as SubscriptionStatus | null) ?? null,
       createdAt: this.toIso(o.createdAt),
       updatedAt: this.toIso(o.updatedAt),
     };
@@ -137,6 +140,27 @@ export class PrismaStore implements DataStore {
 
   async setOrganizationPlan(orgId: string, plan: PlanTier): Promise<OrganizationRecord> {
     const o = await this.prisma.organization.update({ where: { id: orgId }, data: { plan } });
+    return this.mapOrg(o);
+  }
+
+  async getOrganizationByPaypalSubscriptionId(
+    subscriptionId: string,
+  ): Promise<OrganizationRecord | null> {
+    const o = await this.prisma.organization.findUnique({
+      where: { paypalSubscriptionId: subscriptionId },
+    });
+    return o ? this.mapOrg(o) : null;
+  }
+
+  async setOrganizationSubscription(
+    orgId: string,
+    subscriptionId: string | null,
+    status: SubscriptionStatus | null,
+  ): Promise<OrganizationRecord> {
+    const o = await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { paypalSubscriptionId: subscriptionId, subscriptionStatus: status },
+    });
     return this.mapOrg(o);
   }
 

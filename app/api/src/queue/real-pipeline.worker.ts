@@ -62,6 +62,18 @@ export interface RealPipelineWorkerDeps {
   bus: ProgressBus;
   /** Called when a job fails so charged credits can be refunded. */
   onFailure: (organizationId: string, jobId: string, creditsCharged: number) => Promise<void>;
+  /**
+   * Duration true-up: after ingest the REAL source duration is known. Reconcile
+   * the up-front charge against it. Returns whether the org could afford the
+   * full video — false means fail the job (charge was refunded). Optional so the
+   * mock queue can omit it.
+   */
+  onIngestDuration?: (
+    organizationId: string,
+    jobId: string,
+    realDurationSec: number,
+    chargedAtCreate: number,
+  ) => Promise<{ insufficient: boolean }>;
   /** Repo root to spawn python from (defaults to the resolved REPO_ROOT). */
   repoRoot?: string;
   /** Python executable on PATH (defaults to 'python'). */
@@ -124,6 +136,28 @@ export class RealPipelineWorker implements JobWorker {
       }
 
       const result = await this.runPipeline(payload, source);
+
+      // Server-side duration true-up: the pipeline wrote the REAL source
+      // duration to workspace/<jobId>/source.meta.json. Reconcile the up-front
+      // (client-estimated) charge against it. If the org can't afford the full
+      // video the charge is already refunded inside the true-up — fail the job
+      // here (no extra refund) with a clear message instead of silently
+      // under-charging (the create-time revenue leak).
+      const insufficient = await this.reconcileDuration(payload);
+      if (insufficient) {
+        const message =
+          'Not enough credits for the full video. Add credits or upgrade, then retry.';
+        await store.updateJob(orgId, jobId, {
+          status: 'failed',
+          stage: 'ingest',
+          progress: 0,
+          error: message,
+        });
+        this.emit(payload, 'failed', 'ingest', 0, 'Job failed', 0, message);
+        this.logger.warn(`Job ${jobId} failed true-up: insufficient credits for full video.`);
+        return;
+      }
+
       await this.materializeClips(payload, result);
     } catch (err) {
       const message = (err as Error).message;
@@ -269,6 +303,48 @@ export class RealPipelineWorker implements JobWorker {
         }
       });
     });
+  }
+
+  /**
+   * Reconcile the up-front credit charge against the REAL source duration the
+   * pipeline wrote to workspace/<jobId>/source.meta.json. Returns true when the
+   * org couldn't afford the full video (charge already refunded by the true-up),
+   * so the caller should fail the job. No-op (returns false) when the callback
+   * isn't wired, the meta file is missing/unparsable, or duration is unknown.
+   */
+  private async reconcileDuration(payload: JobQueuePayload): Promise<boolean> {
+    if (!this.deps.onIngestDuration) return false;
+    const orgId = payload.organization_id;
+    const jobId = payload.job_id;
+
+    const metaPath = path.join(this.repoRoot, 'workspace', jobId, 'source.meta.json');
+    let realDurationSec = 0;
+    try {
+      const raw = await readFile(metaPath, 'utf-8');
+      const meta = JSON.parse(raw) as { duration?: number };
+      realDurationSec = typeof meta.duration === 'number' ? meta.duration : 0;
+    } catch {
+      // No meta / unreadable → can't true-up; don't block the job.
+      return false;
+    }
+    if (realDurationSec <= 0) return false;
+
+    const job = await this.deps.store.getJob(orgId, jobId);
+    const chargedAtCreate = job?.creditsCharged ?? 0;
+    try {
+      const { insufficient } = await this.deps.onIngestDuration(
+        orgId,
+        jobId,
+        realDurationSec,
+        chargedAtCreate,
+      );
+      return insufficient;
+    } catch (err) {
+      // A reconciliation failure must not crash an otherwise-successful job;
+      // log and continue (we'd rather under-charge than lose the job).
+      this.logger.error(`Duration true-up failed for ${jobId}: ${(err as Error).message}`);
+      return false;
+    }
   }
 
   /**

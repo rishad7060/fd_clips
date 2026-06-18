@@ -3,8 +3,10 @@ import { AppConfigService } from '../config/config.service';
 import { DataStore, DATA_STORE } from '../persistence/store.types';
 import { AuthedRequest } from './auth.types';
 import { ClerkService } from './clerk.service';
-
-const FREE_TIER_CREDITS = 30; // CONTRACTS / roadmap 9d: Free 30 min/mo.
+// Single source of truth for the free-tier grant (Opus parity: 60 min/mo).
+// Defined on the free plan in billing/plans.ts; imported here so the guard and
+// the plan catalog can never drift out of sync.
+import { FREE_TIER_CREDITS } from '../billing/plans';
 
 const MOCK_CLERK_ORG = 'org_mock_local';
 const MOCK_USER = 'user_mock_local';

@@ -10,6 +10,9 @@ export type SourceType = 'url' | 'upload';
 export type PlanTier = 'free' | 'starter' | 'pro';
 export type CreditReason = 'grant' | 'debit' | 'refund';
 
+/** PayPal subscription lifecycle (mirrors PayPal's resource.status values). */
+export type SubscriptionStatus = 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED';
+
 export interface OrganizationRecord {
   id: string;
   clerkOrgId: string;
@@ -17,6 +20,10 @@ export interface OrganizationRecord {
   plan: PlanTier;
   creditBalance: number;
   stripeCustomerId: string | null;
+  /** PayPal recurring subscription id (I-XXXX); null = no active subscription. */
+  paypalSubscriptionId: string | null;
+  /** Last-known PayPal subscription status; null before any subscription. */
+  subscriptionStatus: SubscriptionStatus | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -114,6 +121,14 @@ export interface DataStore {
   upsertOrganizationByClerkId(clerkOrgId: string, name: string, defaultCredits: number): Promise<OrganizationRecord>;
   getOrganization(id: string): Promise<OrganizationRecord | null>;
   setOrganizationPlan(id: string, plan: PlanTier): Promise<OrganizationRecord>;
+  /** Look up an org by its PayPal subscription id (webhook handling). */
+  getOrganizationByPaypalSubscriptionId(subscriptionId: string): Promise<OrganizationRecord | null>;
+  /** Persist the PayPal subscription id + status on an org. */
+  setOrganizationSubscription(
+    id: string,
+    subscriptionId: string | null,
+    status: SubscriptionStatus | null,
+  ): Promise<OrganizationRecord>;
 
   // Credits (atomic balance + ledger entry)
   addCredits(

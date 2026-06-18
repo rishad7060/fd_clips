@@ -1,6 +1,7 @@
 import { Global, Inject, Logger, Module, OnApplicationShutdown } from '@nestjs/common';
 import { AppConfigService } from '../config/config.service';
 import { ConfigModule } from '../config/config.module';
+import { BillingService } from '../billing/billing.service';
 import { PersistenceModule } from '../persistence/persistence.module';
 import { ProgressModule } from '../progress/progress.module';
 import { DataStore, DATA_STORE } from '../persistence/store.types';
@@ -22,11 +23,12 @@ import { JobQueue, JobWorker, JOB_QUEUE } from './queue.types';
   providers: [
     {
       provide: JOB_QUEUE,
-      inject: [AppConfigService, DATA_STORE, PROGRESS_BUS],
+      inject: [AppConfigService, DATA_STORE, PROGRESS_BUS, BillingService],
       useFactory: async (
         config: AppConfigService,
         store: DataStore,
         bus: ProgressBus,
+        billing: BillingService,
       ): Promise<JobQueue> => {
         const logger = new Logger('QueueModule');
         if (!config.flags.mockQueue && config.redisUrl) {
@@ -49,8 +51,25 @@ import { JobQueue, JobWorker, JOB_QUEUE } from './queue.types';
         // Opt-in real pipeline (USE_REAL_PIPELINE=true) spawns pipeline/run.py;
         // otherwise the default MockWorker simulates the pipeline. Both satisfy
         // the JobWorker contract the MemoryQueue drives.
+        // Duration true-up: after ingest the real source duration reconciles
+        // the up-front (client-estimated) charge. Returns whether the org could
+        // afford the full video (false → fail the job; charge already refunded).
+        const onIngestDuration = async (
+          orgId: string,
+          jobId: string,
+          realDurationSec: number,
+          chargedAtCreate: number,
+        ): Promise<{ insufficient: boolean }> => {
+          const r = await billing.reconcileJobDuration(
+            orgId,
+            jobId,
+            realDurationSec,
+            chargedAtCreate,
+          );
+          return { insufficient: r.insufficient };
+        };
         const worker: JobWorker = config.flags.useRealPipeline
-          ? new RealPipelineWorker({ store, bus, onFailure })
+          ? new RealPipelineWorker({ store, bus, onFailure, onIngestDuration })
           : new MockWorker({ store, bus, onFailure });
         logger.log(
           `In-memory queue using ${config.flags.useRealPipeline ? 'RealPipelineWorker' : 'MockWorker'}.`,

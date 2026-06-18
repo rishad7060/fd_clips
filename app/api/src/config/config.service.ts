@@ -86,6 +86,24 @@ export class AppConfigService {
     return this.get<string>('PAYPAL_MODE', 'sandbox');
   }
 
+  /** Pre-created PayPal Billing Plan id for the Starter monthly subscription. */
+  get paypalPlanStarter(): string | undefined {
+    return this.get<string>('PAYPAL_PLAN_STARTER', undefined);
+  }
+
+  /** Pre-created PayPal Billing Plan id for the Pro monthly subscription. */
+  get paypalPlanPro(): string | undefined {
+    return this.get<string>('PAYPAL_PLAN_PRO', undefined);
+  }
+
+  /**
+   * PayPal webhook id (from the PayPal Dashboard). Required in real mode to
+   * verify webhook signatures via /v1/notifications/verify-webhook-signature.
+   */
+  get paypalWebhookId(): string | undefined {
+    return this.get<string>('PAYPAL_WEBHOOK_ID', undefined);
+  }
+
   /** Where PayPal returns the buyer after approve/cancel. */
   get billingReturnUrl(): string {
     return this.get<string>('PAYPAL_RETURN_URL', 'http://localhost:3000/billing?ok=1');

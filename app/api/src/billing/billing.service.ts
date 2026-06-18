@@ -1,7 +1,13 @@
 import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { AppConfigService } from '../config/config.service';
-import { DataStore, DATA_STORE, OrganizationRecord, PlanTier } from '../persistence/store.types';
-import { PLANS } from './plans';
+import {
+  DataStore,
+  DATA_STORE,
+  OrganizationRecord,
+  PlanTier,
+  SubscriptionStatus,
+} from '../persistence/store.types';
+import { capabilitiesFor, PlanCapabilities, PLANS } from './plans';
 
 export interface CheckoutOrder {
   /** PayPal approval URL (mock: a deterministic local URL). */
@@ -16,6 +22,38 @@ export interface CheckoutOrder {
 export interface CaptureResult {
   ok: boolean;
   plan: PlanTier;
+  creditBalance: number;
+}
+
+/** Ledger notes used as idempotency markers for the duration true-up. */
+const TRUEUP_NOTE = 'Duration true-up (full video)';
+const TRUEUP_REFUND_NOTE = 'Refund — insufficient credits for full video';
+
+/** Approval handoff for a PayPal recurring subscription. */
+export interface SubscriptionStart {
+  /** PayPal approval URL the buyer is redirected to (mock: a local stub). */
+  url: string;
+  /** PayPal subscription id (I-XXXX); mock encodes `${orgId}:${tier}`. */
+  subscriptionId: string;
+  mock: boolean;
+  tier: Exclude<PlanTier, 'free'>;
+}
+
+/** Org plan + balance + capability flags (for the web to gate features). */
+export interface PlanStatus {
+  plan: PlanTier;
+  creditBalance: number;
+  capabilities: PlanCapabilities;
+  subscriptionStatus: SubscriptionStatus | null;
+}
+
+/** Result of reconciling a job's charge against its real source duration. */
+export interface TrueUpResult {
+  /** Extra credits debited (0 when the up-front charge already covered it). */
+  extraCharged: number;
+  /** True when the org couldn't afford the full video and the job was refunded. */
+  insufficient: boolean;
+  /** New balance after reconciliation. */
   creditBalance: number;
 }
 
@@ -50,6 +88,80 @@ export class BillingService {
   async getBalance(organizationId: string): Promise<{ plan: PlanTier; creditBalance: number }> {
     const org = await this.requireOrg(organizationId);
     return { plan: org.plan, creditBalance: org.creditBalance };
+  }
+
+  /**
+   * Plan + balance + capability flags (watermark/editing/retention/resolution).
+   * The web reads this to gate the editor and show "remove watermark" upsells.
+   */
+  async getPlanStatus(organizationId: string): Promise<PlanStatus> {
+    const org = await this.requireOrg(organizationId);
+    return {
+      plan: org.plan,
+      creditBalance: org.creditBalance,
+      capabilities: capabilitiesFor(org.plan),
+      subscriptionStatus: org.subscriptionStatus,
+    };
+  }
+
+  /**
+   * Server-side duration true-up (closes the create-time revenue leak). The
+   * up-front charge uses a CLIENT-supplied durationSec; after ingest the worker
+   * knows the REAL source duration. Reconcile:
+   *  - real cost <= already charged -> no-op.
+   *  - real cost  > already charged and balance covers the delta -> debit delta.
+   *  - real cost  > already charged but balance can't cover it -> refund the
+   *    whole up-front charge and signal insufficient so the worker fails the
+   *    job with a clear "not enough credits for the full video" message.
+   * Idempotent: keyed on a `trueup:${jobId}` ledger entry so a retried callback
+   * can't double-charge.
+   */
+  async reconcileJobDuration(
+    organizationId: string,
+    jobId: string,
+    realDurationSec: number,
+    chargedAtCreate: number,
+  ): Promise<TrueUpResult> {
+    const org = await this.requireOrg(organizationId);
+
+    // Idempotency: if we've already trued-up (or refunded) this job, no-op.
+    const ledger = await this.store.listLedger(organizationId);
+    const already = ledger.some(
+      (l) => l.jobId === jobId && (l.note === TRUEUP_NOTE || l.note === TRUEUP_REFUND_NOTE),
+    );
+    if (already) {
+      return { extraCharged: 0, insufficient: false, creditBalance: org.creditBalance };
+    }
+
+    const realCost = this.creditsForDuration(realDurationSec);
+    const delta = realCost - chargedAtCreate;
+    if (delta <= 0) {
+      return { extraCharged: 0, insufficient: false, creditBalance: org.creditBalance };
+    }
+
+    if (org.creditBalance < delta) {
+      // Can't afford the full video: refund the up-front charge so the user
+      // isn't billed for a job that won't complete, and signal failure.
+      const refunded = await this.store.addCredits(organizationId, chargedAtCreate, 'refund', {
+        jobId,
+        note: TRUEUP_REFUND_NOTE,
+      });
+      this.logger.warn(
+        `True-up: org=${organizationId} job=${jobId} needs ${realCost} credits ` +
+          `(real ${realDurationSec}s) but only had ${org.creditBalance + chargedAtCreate}; refunded ${chargedAtCreate}.`,
+      );
+      return { extraCharged: 0, insufficient: true, creditBalance: refunded.creditBalance };
+    }
+
+    const debited = await this.store.addCredits(organizationId, -delta, 'debit', {
+      jobId,
+      note: TRUEUP_NOTE,
+    });
+    this.logger.log(
+      `True-up: org=${organizationId} job=${jobId} charged +${delta} credit(s) ` +
+        `(real ${realDurationSec}s = ${realCost}, was ${chargedAtCreate}).`,
+    );
+    return { extraCharged: delta, insufficient: false, creditBalance: debited.creditBalance };
   }
 
   /** Throws 402-style error if insufficient; otherwise debits and returns the new balance. */
@@ -194,7 +306,7 @@ export class BillingService {
    * the signature is not verified and the raw JSON is trusted. Returns a short
    * description of the action taken (for logging/response).
    */
-  async handlePaypalWebhook(rawBody: Buffer): Promise<string> {
+  async handlePaypalWebhook(rawBody: Buffer, headers: Record<string, string> = {}): Promise<string> {
     let event: { id?: string; event_type?: string; resource?: any };
     try {
       event = JSON.parse(rawBody.toString('utf8'));
@@ -202,51 +314,296 @@ export class BillingService {
       throw new BadRequestException('Invalid PayPal webhook JSON.');
     }
 
+    // SECURITY (money-critical): this endpoint is public and unauthenticated. In
+    // REAL mode we VERIFY the PayPal signature before trusting the body —
+    // otherwise anyone could POST a fake event with a custom_id and mint free
+    // credits. Verified via /v1/notifications/verify-webhook-signature using
+    // PAYPAL_WEBHOOK_ID. Mock mode (no keys, no real money) skips verification.
+    if (!this.config.flags.mockBilling) {
+      const verified = await this.verifyWebhookSignature(headers, rawBody);
+      if (!verified) {
+        throw new BadRequestException('PayPal webhook signature verification failed.');
+      }
+    }
+
+    return this.dispatchPaypalEvent(event);
+  }
+
+  /**
+   * Route a (verified, or mock-trusted) PayPal event to a grant/plan change.
+   * Handles both one-time orders and recurring subscriptions, idempotently.
+   */
+  private async dispatchPaypalEvent(event: {
+    id?: string;
+    event_type?: string;
+    resource?: any;
+  }): Promise<string> {
     const type = event.event_type ?? '';
     const resource = event.resource ?? {};
 
-    // SECURITY (money-critical): this endpoint is public and unauthenticated. In
-    // REAL mode we do NOT trust a webhook body to grant credits until its PayPal
-    // signature is verified — otherwise anyone could POST a fake
-    // PAYMENT.CAPTURE.COMPLETED with a custom_id and mint free credits. Until
-    // signature verification (PayPal /v1/notifications/verify-webhook-signature)
-    // is wired, the AUTHENTICATED capture endpoint is the sole grant path in real
-    // mode; the webhook only triggers a capture (which re-confirms with PayPal).
-    // Mock mode (no keys, no real money) still grants so the demo works.
+    switch (type) {
+      // ---- Recurring subscriptions ----------------------------------------
+      case 'BILLING.SUBSCRIPTION.ACTIVATED': {
+        const parsed = resource.custom_id ? this.parseCustomId(resource.custom_id) : null;
+        const subId: string | undefined = resource.id;
+        if (parsed && subId) {
+          await this.activateSubscription(parsed.orgId, parsed.tier, subId, `sub:${subId}:activate`);
+          return `Activated ${parsed.tier} subscription for org ${parsed.orgId}`;
+        }
+        return 'BILLING.SUBSCRIPTION.ACTIVATED: missing custom_id/id; ignored';
+      }
+      case 'PAYMENT.SALE.COMPLETED': {
+        // Recurring renewal payment. resource.billing_agreement_id = subscription id.
+        const subId: string | undefined = resource.billing_agreement_id;
+        const saleId: string | undefined = resource.id;
+        if (!subId) return 'PAYMENT.SALE.COMPLETED: no billing_agreement_id; ignored';
+        const org = await this.store.getOrganizationByPaypalSubscriptionId(subId);
+        if (!org) return `PAYMENT.SALE.COMPLETED: unknown subscription ${subId}; ignored`;
+        if (org.plan === 'free') return `PAYMENT.SALE.COMPLETED: org ${org.id} is free; ignored`;
+        // Idempotent on the unique sale id so a replay can't double-grant.
+        await this.grantMonthly(org.id, org.plan, `sale:${saleId ?? subId}`);
+        return `Renewed ${org.plan} credits for org ${org.id}`;
+      }
+      case 'BILLING.SUBSCRIPTION.CANCELLED':
+      case 'BILLING.SUBSCRIPTION.SUSPENDED':
+      case 'BILLING.SUBSCRIPTION.EXPIRED': {
+        const subId: string | undefined = resource.id;
+        const status: SubscriptionStatus =
+          type === 'BILLING.SUBSCRIPTION.SUSPENDED'
+            ? 'SUSPENDED'
+            : type === 'BILLING.SUBSCRIPTION.EXPIRED'
+              ? 'EXPIRED'
+              : 'CANCELLED';
+        if (!subId) return `${type}: no subscription id; ignored`;
+        const org = await this.store.getOrganizationByPaypalSubscriptionId(subId);
+        if (!org) return `${type}: unknown subscription ${subId}; ignored`;
+        await this.downgradeToFree(org.id, status);
+        return `Downgraded org ${org.id} to free (${status})`;
+      }
+
+      // ---- One-time orders (credit packs) ---------------------------------
+      case 'PAYMENT.CAPTURE.COMPLETED': {
+        const customId: string | undefined =
+          resource.custom_id ?? resource.supplementary_data?.related_ids?.order_id;
+        const parsed = customId ? this.parseCustomId(customId) : null;
+        if (parsed) {
+          const orderId = resource.supplementary_data?.related_ids?.order_id ?? resource.id;
+          await this.grantMonthly(parsed.orgId, parsed.tier, `order:${orderId}`);
+          return `Granted ${parsed.tier} credits to org ${parsed.orgId}`;
+        }
+        return 'PAYMENT.CAPTURE.COMPLETED: no org/tier custom_id; ignored';
+      }
+      case 'CHECKOUT.ORDER.APPROVED': {
+        // In real mode, re-capture via PayPal (authoritative). In mock mode,
+        // grant from the trusted custom_id directly.
+        if (!this.config.flags.mockBilling && resource.id) {
+          const capture = await this.captureOrder(resource.id);
+          return `Captured approved order ${resource.id} -> ${capture.plan}`;
+        }
+        const customId: string | undefined = resource.purchase_units?.[0]?.custom_id;
+        const parsed = customId ? this.parseCustomId(customId) : null;
+        if (parsed) {
+          await this.grantMonthly(parsed.orgId, parsed.tier, `order:${resource.id}`);
+          return `Granted ${parsed.tier} credits to org ${parsed.orgId}`;
+        }
+        return 'CHECKOUT.ORDER.APPROVED: no org/tier custom_id; ignored';
+      }
+
+      default:
+        return `Unhandled event type: ${type || '(none)'}`;
+    }
+  }
+
+  /**
+   * Verify a PayPal webhook signature via
+   * POST /v1/notifications/verify-webhook-signature using PAYPAL_WEBHOOK_ID.
+   * Returns true only when PayPal responds verification_status === 'SUCCESS'.
+   * Returns false (rejecting the webhook) if the webhook id is unset or any
+   * required header is missing — fail closed, never grant on an unverifiable event.
+   */
+  private async verifyWebhookSignature(
+    headers: Record<string, string>,
+    rawBody: Buffer,
+  ): Promise<boolean> {
+    const webhookId = this.config.paypalWebhookId;
+    if (!webhookId) {
+      this.logger.error('PAYPAL_WEBHOOK_ID is not set — refusing to trust webhook (fail closed).');
+      return false;
+    }
+    const h = (name: string): string => headers[name] ?? headers[name.toLowerCase()] ?? '';
+    const transmissionId = h('paypal-transmission-id');
+    const transmissionTime = h('paypal-transmission-time');
+    const transmissionSig = h('paypal-transmission-sig');
+    const certUrl = h('paypal-cert-url');
+    const authAlgo = h('paypal-auth-algo');
+    if (!transmissionId || !transmissionTime || !transmissionSig || !certUrl || !authAlgo) {
+      this.logger.warn('PayPal webhook missing one or more signature headers; rejecting.');
+      return false;
+    }
+    let webhookEvent: unknown;
+    try {
+      webhookEvent = JSON.parse(rawBody.toString('utf8'));
+    } catch {
+      return false;
+    }
+    try {
+      const accessToken = await this.paypalAccessToken();
+      const res = await this.paypalFetch('/v1/notifications/verify-webhook-signature', accessToken, {
+        method: 'POST',
+        body: JSON.stringify({
+          transmission_id: transmissionId,
+          transmission_time: transmissionTime,
+          transmission_sig: transmissionSig,
+          cert_url: certUrl,
+          auth_algo: authAlgo,
+          webhook_id: webhookId,
+          webhook_event: webhookEvent,
+        }),
+      });
+      const json = (await res.json()) as { verification_status?: string };
+      return json.verification_status === 'SUCCESS';
+    } catch (err) {
+      this.logger.error(`PayPal signature verification call failed: ${(err as Error).message}`);
+      return false;
+    }
+  }
+
+  // ---- PayPal recurring SUBSCRIPTIONS ---------------------------------------
+
+  /**
+   * Starts a PayPal recurring subscription for the given tier. Returns the
+   * approval URL the buyer is redirected to (+ the subscription id). custom_id =
+   * `${orgId}:${tier}` so the activation webhook can grant credits.
+   *
+   * In mock mode (no PayPal keys) this immediately mock-activates: it sets the
+   * org's plan, grants the first month's credits, and stores a fake
+   * subscription id — so local dev exercises the full flow without PayPal.
+   */
+  async createSubscription(
+    organizationId: string,
+    tier: Exclude<PlanTier, 'free'>,
+  ): Promise<SubscriptionStart> {
+    const plan = PLANS[tier];
+    await this.requireOrg(organizationId);
+
+    if (this.config.flags.mockBilling) {
+      const subscriptionId = this.mockSubscriptionId(organizationId, tier);
+      this.logger.warn(
+        `MOCK PayPal subscription for org=${organizationId} tier=${tier} → auto-activating.`,
+      );
+      // Mock-activate immediately (no real redirect/webhook in offline dev).
+      await this.activateSubscription(organizationId, tier, subscriptionId, `sub:${subscriptionId}`);
+      return {
+        url: `https://mock-paypal.local/subscribe?sub=${subscriptionId}&tier=${tier}`,
+        subscriptionId,
+        mock: true,
+        tier,
+      };
+    }
+
+    const planId = this.subscriptionPlanId(tier);
+    const accessToken = await this.paypalAccessToken();
+    const res = await this.paypalFetch('/v1/billing/subscriptions', accessToken, {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_id: planId,
+        custom_id: `${organizationId}:${tier}`,
+        application_context: {
+          brand_name: 'FocalDive Clips',
+          user_action: 'SUBSCRIBE_NOW',
+          shipping_preference: 'NO_SHIPPING',
+          return_url: this.config.billingReturnUrl,
+          cancel_url: this.config.billingCancelUrl,
+        },
+      }),
+    });
+    const sub = (await res.json()) as {
+      id: string;
+      status?: string;
+      links?: Array<{ rel: string; href: string }>;
+    };
+    const approve = sub.links?.find((l) => l.rel === 'approve' || l.rel === 'payer-action');
+    if (!sub.id || !approve) {
+      throw new BadRequestException('PayPal did not return a subscription approval link.');
+    }
+    // Record the pending subscription id now (status comes from the webhook).
+    await this.store.setOrganizationSubscription(organizationId, sub.id, null);
+    return { url: approve.href, subscriptionId: sub.id, mock: false, tier };
+  }
+
+  /**
+   * Activates a subscription: set the org's plan, store the subscription id +
+   * ACTIVE status, and grant the first month's credits (idempotent on
+   * externalEventId). Called on BILLING.SUBSCRIPTION.ACTIVATED and on mock start.
+   */
+  async activateSubscription(
+    organizationId: string,
+    tier: Exclude<PlanTier, 'free'>,
+    subscriptionId: string,
+    externalEventId: string,
+  ): Promise<OrganizationRecord> {
+    await this.store.setOrganizationSubscription(organizationId, subscriptionId, 'ACTIVE');
+    return this.grantMonthly(organizationId, tier, externalEventId);
+  }
+
+  /**
+   * Cancels the org's active PayPal subscription. Calls PayPal to cancel (real
+   * mode), marks the subscription CANCELLED, and downgrades to free. PayPal
+   * keeps access until period end; we flip the plan on the CANCELLED/EXPIRED
+   * webhook in real mode, but downgrade immediately in mock mode.
+   */
+  async cancelSubscription(organizationId: string): Promise<{ ok: boolean; plan: PlanTier }> {
+    const org = await this.requireOrg(organizationId);
+    if (!org.paypalSubscriptionId) {
+      throw new BadRequestException('No active subscription to cancel.');
+    }
+
     if (!this.config.flags.mockBilling) {
-      if (type === 'CHECKOUT.ORDER.APPROVED' && resource.id) {
-        // Re-capture via PayPal (authoritative) — capture confirms COMPLETED and
-        // grants idempotently by order id.
-        const capture = await this.captureOrder(resource.id);
-        return `Captured approved order ${resource.id} -> ${capture.plan}`;
-      }
-      return `Webhook ${type || '(none)'}: real-mode grant requires verified signature; ignored (capture is the grant path).`;
+      const accessToken = await this.paypalAccessToken();
+      await this.paypalFetch(
+        `/v1/billing/subscriptions/${encodeURIComponent(org.paypalSubscriptionId)}/cancel`,
+        accessToken,
+        { method: 'POST', body: JSON.stringify({ reason: 'User requested cancellation.' }) },
+      );
+      // Real mode: mark cancelled; PayPal's CANCELLED/EXPIRED webhook performs
+      // the actual downgrade at period end (keeps paid access until then).
+      const updated = await this.store.setOrganizationSubscription(
+        organizationId,
+        org.paypalSubscriptionId,
+        'CANCELLED',
+      );
+      return { ok: true, plan: updated.plan };
     }
 
-    // ---- Mock mode only below (offline demo; no real money) ----
-    if (type === 'PAYMENT.CAPTURE.COMPLETED') {
-      const customId: string | undefined =
-        resource.custom_id ?? resource.supplementary_data?.related_ids?.order_id;
-      const parsed = customId ? this.parseCustomId(customId) : null;
-      if (parsed) {
-        const orderId = resource.supplementary_data?.related_ids?.order_id ?? resource.id;
-        await this.grantMonthly(parsed.orgId, parsed.tier, `order:${orderId}`);
-        return `Granted ${parsed.tier} credits to org ${parsed.orgId}`;
-      }
-      return 'PAYMENT.CAPTURE.COMPLETED: no org/tier custom_id; ignored';
-    }
+    // Mock mode: downgrade immediately (no period to wait out).
+    await this.store.setOrganizationSubscription(organizationId, null, 'CANCELLED');
+    const downgraded = await this.store.setOrganizationPlan(organizationId, 'free');
+    return { ok: true, plan: downgraded.plan };
+  }
 
-    if (type === 'CHECKOUT.ORDER.APPROVED') {
-      const customId: string | undefined = resource.purchase_units?.[0]?.custom_id;
-      const parsed = customId ? this.parseCustomId(customId) : null;
-      if (parsed) {
-        await this.grantMonthly(parsed.orgId, parsed.tier, `order:${resource.id}`);
-        return `Granted ${parsed.tier} credits to org ${parsed.orgId}`;
-      }
-      return 'CHECKOUT.ORDER.APPROVED: no org/tier custom_id; ignored';
+  /** Downgrade an org to free at period end (CANCELLED/SUSPENDED/EXPIRED). */
+  private async downgradeToFree(
+    organizationId: string,
+    status: SubscriptionStatus,
+  ): Promise<void> {
+    const org = await this.store.getOrganization(organizationId);
+    if (!org) return;
+    await this.store.setOrganizationSubscription(organizationId, org.paypalSubscriptionId, status);
+    if (org.plan !== 'free') {
+      await this.store.setOrganizationPlan(organizationId, 'free');
+      this.logger.log(`Downgraded org=${organizationId} to free (subscription ${status}).`);
     }
+  }
 
-    return `Unhandled event type: ${type || '(none)'}`;
+  /** Resolve the configured PayPal Billing Plan id for a paid tier. */
+  private subscriptionPlanId(tier: Exclude<PlanTier, 'free'>): string {
+    const id = tier === 'starter' ? this.config.paypalPlanStarter : this.config.paypalPlanPro;
+    if (!id) {
+      throw new BadRequestException(
+        `Missing PayPal plan id for ${tier} (set PAYPAL_PLAN_${tier.toUpperCase()}).`,
+      );
+    }
+    return id;
   }
 
   // ---- PayPal REST helpers (Orders v2, plain fetch — no SDK) ----------------
@@ -292,7 +649,9 @@ export class BillingService {
 
   // ---- custom_id / mock orderId encoding ------------------------------------
 
-  private parseCustomId(customId: string): { orgId: string; tier: PlanTier } | null {
+  private parseCustomId(
+    customId: string,
+  ): { orgId: string; tier: Exclude<PlanTier, 'free'> } | null {
     const idx = customId.indexOf(':');
     if (idx <= 0) return null;
     const orgId = customId.slice(0, idx);
@@ -305,6 +664,12 @@ export class BillingService {
   private mockOrderId(orgId: string, tier: PlanTier): string {
     const token = Buffer.from(`${orgId}:${tier}`, 'utf8').toString('base64url');
     return `MOCK-${token}`;
+  }
+
+  /** Mock subscription id encodes org:tier (base64url) for offline activation. */
+  private mockSubscriptionId(orgId: string, tier: PlanTier): string {
+    const token = Buffer.from(`${orgId}:${tier}`, 'utf8').toString('base64url');
+    return `I-MOCK${token}`;
   }
 
   private decodeMockOrderId(orderId: string): { orgId: string; tier: PlanTier } {
