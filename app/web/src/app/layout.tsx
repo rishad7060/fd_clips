@@ -40,9 +40,15 @@ export default async function RootLayout({
 
   if (CLERK_ENABLED) {
     const { ClerkProvider } = await import("@clerk/nextjs");
+    const { AuthTokenBridge } = await import("@/components/AuthTokenBridge");
     return (
       <ClerkProvider>
-        <html lang="en">{body}</html>
+        <html lang="en">
+          <body className={`${inter.variable} ${mono.variable} ${interBody.variable} font-sans antialiased`}>
+            <AuthTokenBridge />
+            {children}
+          </body>
+        </html>
       </ClerkProvider>
     );
   }

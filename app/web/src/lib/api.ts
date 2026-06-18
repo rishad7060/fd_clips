@@ -37,14 +37,14 @@ export const USING_MOCK_API = !API_URL;
  * Monthly credit grant per plan tier — mirrors PLANS in app/api/src/billing/
  * plans.ts. The /billing/balance endpoint returns only { plan, creditBalance },
  * so the client derives monthly_credits here to render a quota/balance bar.
- * Falls back to the free grant (30) for any unknown plan id.
+ * Falls back to the free grant (60) for any unknown plan id.
  */
 const MONTHLY_CREDITS: Record<string, number> = {
-  free: 30,
+  free: 60,
   starter: 150,
   pro: 300,
 };
-const DEFAULT_MONTHLY_CREDITS = 30;
+const DEFAULT_MONTHLY_CREDITS = 60;
 
 // ---- Real-API DTO shapes (camelCase boundary) -----------------------------
 
@@ -192,10 +192,40 @@ function toClip(v: ApiClipView): Clip {
   };
 }
 
+/**
+ * Clerk session-token getter, installed at runtime by <AuthTokenBridge/> (only
+ * mounted when Clerk is enabled). In mock/dev mode it stays null, so http()
+ * sends no Authorization header and nothing changes. We keep it as a
+ * module-level seam so the api object — imported by client components — can
+ * attach the Bearer token without each caller knowing about Clerk.
+ */
+let getToken: (() => Promise<string | null>) | null = null;
+
+/** Register the Clerk token getter (called from the AuthTokenBridge). */
+export function setTokenGetter(fn: (() => Promise<string | null>) | null): void {
+  getToken = fn;
+}
+
+/** Best-effort Bearer header; never throws, returns {} when no token. */
+async function authHeader(): Promise<Record<string, string>> {
+  if (!getToken) return {};
+  try {
+    const token = await getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
+  const auth = await authHeader();
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...auth,
+      ...(init?.headers ?? {}),
+    },
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -421,6 +451,7 @@ export const api = {
     const res = await fetch(`${API_URL}/uploads`, {
       method: "POST",
       body: form,
+      headers: await authHeader(),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
