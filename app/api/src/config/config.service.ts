@@ -104,13 +104,55 @@ export class AppConfigService {
     return this.get<string>('PAYPAL_WEBHOOK_ID', undefined);
   }
 
-  /** Where PayPal returns the buyer after approve/cancel. */
+  // ── Polar.sh (active payment provider) ───────────────────────────────────
+  // Organization Access Token (polar_oat_...). When absent, billing runs in
+  // MOCK mode (local grant, no real checkout). This is the single switch that
+  // flips real vs mock billing now that Polar replaces PayPal.
+  get polarAccessToken(): string | undefined {
+    return this.get<string>('POLAR_ACCESS_TOKEN', undefined);
+  }
+
+  /** Polar REST API base. Defaults to the sandbox host. */
+  get polarBaseUrl(): string {
+    return this.get<string>('POLAR_BASE_URL', 'https://sandbox-api.polar.sh');
+  }
+
+  /** 'sandbox' | 'production' — informational; the base URL drives the host. */
+  get polarMode(): string {
+    return this.get<string>('POLAR_MODE', 'sandbox');
+  }
+
+  /** Pre-created Polar product id (UUID) for the Starter monthly subscription. */
+  get polarProductStarter(): string | undefined {
+    return this.get<string>('POLAR_PRODUCT_STARTER', undefined);
+  }
+
+  /** Pre-created Polar product id (UUID) for the Pro monthly subscription. */
+  get polarProductPro(): string | undefined {
+    return this.get<string>('POLAR_PRODUCT_PRO', undefined);
+  }
+
+  /**
+   * Polar webhook secret (whsec_... or base64). Polar follows the Standard
+   * Webhooks spec; required in real mode to verify webhook signatures.
+   */
+  get polarWebhookSecret(): string | undefined {
+    return this.get<string>('POLAR_WEBHOOK_SECRET', undefined);
+  }
+
+  /** Where the provider returns the buyer after a successful checkout. */
   get billingReturnUrl(): string {
-    return this.get<string>('PAYPAL_RETURN_URL', 'http://localhost:3000/billing?ok=1');
+    return this.get<string>(
+      'BILLING_SUCCESS_URL',
+      this.get<string>('PAYPAL_RETURN_URL', 'http://localhost:3000/billing?ok=1'),
+    );
   }
 
   get billingCancelUrl(): string {
-    return this.get<string>('PAYPAL_CANCEL_URL', 'http://localhost:3000/billing?canceled=1');
+    return this.get<string>(
+      'BILLING_CANCEL_URL',
+      this.get<string>('PAYPAL_CANCEL_URL', 'http://localhost:3000/billing?canceled=1'),
+    );
   }
 
   get r2Bucket(): string {
@@ -149,11 +191,13 @@ export class AppConfigService {
     const hasDb = this.hasValue('DATABASE_URL');
     const hasRedis = this.hasValue('REDIS_URL');
     const hasClerk = this.hasValue('CLERK_SECRET_KEY');
-    const hasPaypal = this.hasValue('PAYPAL_CLIENT_ID') && this.hasValue('PAYPAL_SECRET');
+    // Polar.sh is the active payment provider (replaces PayPal). Real billing is
+    // enabled when a Polar Organization Access Token is present.
+    const hasPolar = this.hasValue('POLAR_ACCESS_TOKEN');
     const hasR2 = this.hasValue('R2_ACCESS_KEY_ID') && this.hasValue('R2_ENDPOINT');
 
     // auto => mock when the relevant cred is missing. Forced overrides everything.
-    const mockMode = forced ?? !(hasDb && hasRedis && hasClerk && hasPaypal);
+    const mockMode = forced ?? !(hasDb && hasRedis && hasClerk && hasPolar);
 
     // MOCK_AUTH explicit flag wins; otherwise mock when Clerk key absent.
     const mockAuthRaw = (this.config.get<string>('MOCK_AUTH') ?? '').toLowerCase();
@@ -172,10 +216,10 @@ export class AppConfigService {
       mockQueue: forced === true ? true : !hasRedis,
       mockDb: forced === true ? true : !hasDb,
       mockStorage: forced === true ? true : !hasR2,
-      // Billing is money — never force MOCK when real PayPal keys are present
+      // Billing is money — never force MOCK when a real Polar token is present
       // (a stray MOCK_MODE=true in prod must NOT enable the forgeable mock-grant
-      // path). Mock only when keys are genuinely absent.
-      mockBilling: hasPaypal ? false : true,
+      // path). Mock only when the token is genuinely absent.
+      mockBilling: hasPolar ? false : true,
       localFiles,
       useRealPipeline,
     };
@@ -190,7 +234,7 @@ export class AppConfigService {
     this.logger.log(`  queue       = ${f.mockQueue ? 'IN-MEMORY (no Redis)' : 'BullMQ/Redis'}`);
     this.logger.log(`  storage     = ${f.mockStorage ? 'MOCK signed URLs' : 'Cloudflare R2'}`);
     this.logger.log(`  localFiles  = ${f.localFiles ? `LOCAL disk via ${this.apiPublicUrl}/files` : 'off'}`);
-    this.logger.log(`  billing     = ${f.mockBilling ? 'STUBBED (no PayPal)' : `PayPal (${this.paypalMode})`}`);
+    this.logger.log(`  billing     = ${f.mockBilling ? 'STUBBED (no Polar token)' : `Polar.sh (${this.polarMode})`}`);
     this.logger.log(`  pipeline    = ${f.useRealPipeline ? 'REAL (spawns pipeline/run.py)' : 'MOCK worker'}`);
     if (f.mockMode) {
       this.logger.warn('Running in MOCK MODE — no external services required.');

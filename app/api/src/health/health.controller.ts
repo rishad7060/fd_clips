@@ -26,7 +26,7 @@ export class HealthController {
         database: f.mockDb ? 'in-memory' : 'postgres',
         queue: this.queue.backend,
         storage: f.mockStorage ? 'mock' : 'r2',
-        billing: f.mockBilling ? 'mock' : 'paypal',
+        billing: f.mockBilling ? 'mock' : 'polar',
       },
     };
   }

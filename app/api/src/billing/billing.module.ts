@@ -4,12 +4,15 @@ import { ConfigModule } from '../config/config.module';
 import { PersistenceModule } from '../persistence/persistence.module';
 import { BillingController } from './billing.controller';
 import { BillingService } from './billing.service';
+import { PolarService } from './polar.service';
 
 @Global()
 @Module({
   imports: [ConfigModule, PersistenceModule, AuthModule],
   controllers: [BillingController],
-  providers: [BillingService],
-  exports: [BillingService],
+  // BillingService stays (credits/debits/true-up + the now-dormant PayPal code);
+  // PolarService is the active payment provider for checkout/cancel/webhook.
+  providers: [BillingService, PolarService],
+  exports: [BillingService, PolarService],
 })
 export class BillingModule {}

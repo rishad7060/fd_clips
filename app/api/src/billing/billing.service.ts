@@ -512,6 +512,14 @@ export class BillingService {
           brand_name: 'FocalDive Clips',
           user_action: 'SUBSCRIBE_NOW',
           shipping_preference: 'NO_SHIPPING',
+          // UNRESTRICTED lets PayPal surface the guest "Pay with Debit/Credit
+          // Card" option (no PayPal account) where the merchant account allows
+          // it — instead of forcing a PayPal login. Still subject to the
+          // business account's "PayPal Account Optional" setting.
+          payment_method: {
+            payer_selected: 'PAYPAL',
+            payee_preferred: 'UNRESTRICTED',
+          },
           return_url: this.config.billingReturnUrl,
           cancel_url: this.config.billingCancelUrl,
         },

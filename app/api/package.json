@@ -1,7 +1,7 @@
 {
   "name": "@focaldive/api",
   "version": "0.1.0",
-  "description": "FocalDive Clips — NestJS API (jobs, billing, progress)",
+  "description": "YT Shorts Clips — NestJS API (jobs, billing, progress)",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {

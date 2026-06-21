@@ -240,6 +240,44 @@ export const mockStore = {
   },
 
   /**
+   * Mock PayPal recurring subscription. There is no real redirect offline, so
+   * we immediately "activate": set the plan + grant the first month's credits,
+   * and return a fake subscription id (mock=true tells the caller not to
+   * redirect). Mirrors BillingService.createSubscription's mock branch.
+   */
+  createSubscription(tier: "starter" | "pro"): {
+    url: string;
+    subscriptionId: string;
+    mock: boolean;
+    tier: string;
+  } {
+    const subscriptionId = `I-MOCK-${tier}-${Date.now().toString(36)}`;
+    if (MOCK_PLAN_CREDITS[tier]) {
+      billingState = {
+        plan: tier,
+        monthly_credits: MOCK_PLAN_CREDITS[tier],
+        credit_balance: MOCK_PLAN_CREDITS[tier],
+      };
+    }
+    return {
+      url: `https://mock-paypal.local/subscribe?sub=${subscriptionId}&tier=${tier}`,
+      subscriptionId,
+      mock: true,
+      tier,
+    };
+  },
+
+  /** Mock cancel: downgrade to the free plan in-session. */
+  cancelSubscription(): { ok: boolean; plan: string } {
+    billingState = {
+      plan: "free",
+      monthly_credits: 60,
+      credit_balance: billingState.credit_balance,
+    };
+    return { ok: true, plan: "free" };
+  },
+
+  /**
    * Mock file upload: returns a deterministic source_key derived from the file
    * name + size so a subsequent createJob({ source_type: "upload", source_key })
    * makes a demo job. No real bytes are stored — the offline demo just needs a

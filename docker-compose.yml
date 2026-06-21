@@ -1,0 +1,151 @@
+# ============================================================
+# FocalDive Clips — full production stack
+# ============================================================
+#   web   (Next.js)  :3000  ─▶ api
+#   api   (NestJS + bundled Python pipeline) :4000 ─▶ postgres, redis
+#   postgres (data)  :5432
+#   redis    (queue) :6379
+#
+# The API spawns the Python pipeline (run.py) as a child process and writes
+# clips into the shared `workspace` volume, which it also serves over /files.
+#
+# Quick start:
+#   1. cp .env.docker.example .env.docker  &&  fill in real values
+#   2. docker compose --env-file .env.docker up --build -d
+#   3. open http://localhost:3000
+#
+# The standalone `pipeline` image (profile: tools) is for manual one-off runs;
+# it is NOT needed for the normal flow since the api image bundles the pipeline.
+# ============================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-focaldive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-focaldive}
+      POSTGRES_DB: ${POSTGRES_DB:-focaldive}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-focaldive} -d ${POSTGRES_DB:-focaldive}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      # Host 5433 → container 5432 (a local Postgres already owns host 5432).
+      # Container-to-container traffic uses the service name + 5432, unaffected.
+      - "5433:5432"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: app/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # ── Core ──
+      API_PORT: 4000
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:4000}
+      NODE_ENV: production
+      # ── Real pipeline + local file serving ──
+      USE_REAL_PIPELINE: "true"
+      LOCAL_FILES: "true"
+      PIPELINE_REPO_ROOT: /app
+      PYTHON_BIN: python3
+      # ── Data / queue ──
+      DATABASE_URL: postgresql://${POSTGRES_USER:-focaldive}:${POSTGRES_PASSWORD:-focaldive}@postgres:5432/${POSTGRES_DB:-focaldive}?schema=public
+      REDIS_URL: redis://redis:6379
+      # ── Mock toggles: keep auth mock until account creation is wired ──
+      MOCK_MODE: ${MOCK_MODE:-auto}
+      MOCK_AUTH: ${MOCK_AUTH:-true}
+      # ── Pipeline AI keys (free CPU path) ──
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-whisper-large-v3}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      SCORING_PROVIDER: ${SCORING_PROVIDER:-gemini}
+      TRANSCRIBE_BACKEND: ${TRANSCRIBE_BACKEND:-groq}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # ── Billing (Polar.sh) ──
+      POLAR_ACCESS_TOKEN: ${POLAR_ACCESS_TOKEN:-}
+      POLAR_BASE_URL: ${POLAR_BASE_URL:-https://sandbox-api.polar.sh}
+      POLAR_MODE: ${POLAR_MODE:-sandbox}
+      POLAR_PRODUCT_STARTER: ${POLAR_PRODUCT_STARTER:-}
+      POLAR_PRODUCT_PRO: ${POLAR_PRODUCT_PRO:-}
+      POLAR_WEBHOOK_SECRET: ${POLAR_WEBHOOK_SECRET:-}
+      BILLING_SUCCESS_URL: ${BILLING_SUCCESS_URL:-http://localhost:3000/billing?ok=1}
+      BILLING_CANCEL_URL: ${BILLING_CANCEL_URL:-http://localhost:3000/billing?canceled=1}
+      # ── Email (optional) ──
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-FocalDive Clips <clips@focaldive.com>}
+      # ── Auth (Clerk) — set when account creation is enabled ──
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
+      CLERK_JWKS_URL: ${CLERK_JWKS_URL:-}
+    volumes:
+      - workspace:/app/workspace
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:4000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    ports:
+      - "4000:4000"
+
+  web:
+    build:
+      context: ./app/web
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* is inlined at BUILD time — must be a build arg, not just
+        # runtime env. Browsers hit the API at this public URL.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Runtime fallback (the build arg already inlined the public value).
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    ports:
+      - "3000:3000"
+
+  # One-off pipeline runner (manual use only). Not part of the normal flow.
+  #   docker compose --profile tools run --rm pipeline \
+  #     python run.py "<url>" --clips 3 --job-id demo --json-progress
+  pipeline:
+    build:
+      context: .
+      dockerfile: pipeline/Dockerfile
+    profiles: ["tools"]
+    env_file:
+      - .env.docker
+    volumes:
+      - workspace:/app/workspace
+
+volumes:
+  pgdata:
+  redisdata:
+  workspace:

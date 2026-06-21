@@ -7,29 +7,14 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { IsIn, IsString } from 'class-validator';
+import { IsIn } from 'class-validator';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { CurrentOrg } from '../auth/current-org.decorator';
 import { AuthContext, AuthedRequest } from '../auth/auth.types';
 import { PlanTier } from '../persistence/store.types';
-import {
-  BillingService,
-  CaptureResult,
-  CheckoutOrder,
-  PlanStatus,
-  SubscriptionStart,
-} from './billing.service';
+import { BillingService, PlanStatus } from './billing.service';
+import { PolarService } from './polar.service';
 import { PLANS } from './plans';
-
-class CheckoutDto {
-  @IsIn(['starter', 'pro'])
-  tier!: Exclude<PlanTier, 'free'>;
-}
-
-class CaptureDto {
-  @IsString()
-  orderId!: string;
-}
 
 class SubscribeDto {
   @IsIn(['starter', 'pro'])
@@ -38,7 +23,10 @@ class SubscribeDto {
 
 @Controller()
 export class BillingController {
-  constructor(private readonly billing: BillingService) {}
+  constructor(
+    private readonly billing: BillingService,
+    private readonly polar: PolarService,
+  ) {}
 
   /** Public: list available plans/tiers. */
   @Get('plans')
@@ -65,53 +53,32 @@ export class BillingController {
   }
 
   /**
-   * Start a PayPal recurring subscription for a paid tier. Returns the approval
-   * URL + subscription id. In mock mode it auto-activates and grants credits.
+   * Start a Polar.sh checkout for a paid tier. Returns the hosted checkout URL
+   * + id. In mock mode it auto-activates and grants credits.
    */
   @UseGuards(ClerkAuthGuard)
   @Post('billing/subscribe')
   async subscribe(
     @CurrentOrg() auth: AuthContext,
     @Body() dto: SubscribeDto,
-  ): Promise<SubscriptionStart> {
-    return this.billing.createSubscription(auth.organizationId, dto.tier);
+  ): Promise<{ url: string; subscriptionId: string; mock: boolean; tier: string }> {
+    return this.polar.createSubscription(auth.organizationId, dto.tier);
   }
 
-  /** Cancel the org's PayPal subscription (downgrades to free at period end). */
+  /** Cancel the org's Polar subscription (downgrades to free at period end). */
   @UseGuards(ClerkAuthGuard)
   @Post('billing/subscription/cancel')
   async cancelSubscription(
     @CurrentOrg() auth: AuthContext,
   ): Promise<{ ok: boolean; plan: PlanTier }> {
-    return this.billing.cancelSubscription(auth.organizationId);
+    return this.polar.cancelSubscription(auth.organizationId);
   }
 
   /**
-   * Start a PayPal Orders v2 checkout. Returns the approval URL + orderId.
-   * In mock mode the URL is a local stub and orderId encodes org:tier.
-   */
-  @UseGuards(ClerkAuthGuard)
-  @Post('billing/checkout')
-  async checkout(@CurrentOrg() auth: AuthContext, @Body() dto: CheckoutDto): Promise<CheckoutOrder> {
-    return this.billing.createOrder(auth.organizationId, dto.tier);
-  }
-
-  /**
-   * Capture an approved PayPal order and grant the plan's monthly credits.
-   * Returns { ok, plan, creditBalance }.
-   */
-  @UseGuards(ClerkAuthGuard)
-  @Post('billing/capture')
-  async capture(@CurrentOrg() auth: AuthContext, @Body() dto: CaptureDto): Promise<CaptureResult> {
-    // Scope the capture to the caller's org: the grant target comes from the
-    // order's custom_id, so assert it matches the authenticated org.
-    return this.billing.captureOrder(dto.orderId, auth.organizationId);
-  }
-
-  /**
-   * PayPal webhook. Public (no Clerk guard). In real mode the PayPal signature
-   * is verified (PAYPAL_WEBHOOK_ID) before any grant; in mock mode the unsigned
-   * JSON is trusted. Requires the raw body — main.ts captures it as req.rawBody.
+   * Polar.sh webhook. Public (no Clerk guard). In real mode the Standard
+   * Webhooks signature is verified (POLAR_WEBHOOK_SECRET) before any grant; in
+   * mock mode the unsigned JSON is trusted. Requires the raw body — main.ts
+   * captures it as req.rawBody.
    */
   @Post('billing/webhook')
   @HttpCode(200)
@@ -119,8 +86,13 @@ export class BillingController {
     @Req() req: AuthedRequest & { rawBody?: Buffer; headers: Record<string, string> },
   ): Promise<{ received: boolean; result: string }> {
     const raw = req.rawBody ?? Buffer.from(JSON.stringify((req as any).body ?? {}));
-    // PayPal signature headers (lower-cased by Node) are forwarded for verification.
-    const result = await this.billing.handlePaypalWebhook(raw, req.headers as Record<string, string>);
+    const result = await this.polar.handleWebhook(raw, req.headers as Record<string, string>);
     return { received: true, result };
   }
+
+  // ── PayPal (DORMANT — replaced by Polar.sh). Kept for reference/rollback. ──
+  // The PayPal one-time Orders + recurring Subscriptions code still lives in
+  // billing.service.ts (createOrder/captureOrder/createSubscription/
+  // handlePaypalWebhook). To revert: restore the /billing/checkout, /capture,
+  // and the PayPal subscribe/cancel/webhook routes pointing at `this.billing`.
 }

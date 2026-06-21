@@ -130,6 +130,24 @@ export interface CaptureResult {
   credit_balance: number;
 }
 
+/** Mirrors billing.controller.ts subscribe(): SubscriptionStart. */
+interface ApiSubscriptionStartView {
+  url: string;
+  subscriptionId: string;
+  mock: boolean;
+  tier: string;
+}
+
+/** Result of starting a PayPal recurring subscription (snake_case wire shape). */
+export interface SubscriptionStart {
+  /** PayPal approval URL to redirect to (mock: a local stub — don't redirect). */
+  url: string;
+  subscription_id: string;
+  /** True when no real PayPal redirect happened (offline/keyless: already granted). */
+  mock: boolean;
+  tier: string;
+}
+
 type PlanTier = "free" | "starter" | "pro";
 
 /** Mirrors clips.controller.ts WordView (clip-relative seconds). */
@@ -434,6 +452,40 @@ export const api = {
       body: JSON.stringify({ orderId }),
     });
     return { ok: v.ok, plan: v.plan, credit_balance: v.creditBalance };
+  },
+
+  /**
+   * Start a PayPal recurring SUBSCRIPTION for a paid tier (POST /billing/subscribe).
+   * Returns the approval URL the buyer is redirected to (+ subscription id). In
+   * mock mode the URL is a local stub, mock=true, and the plan is already granted
+   * locally — the caller refreshes the balance instead of redirecting.
+   */
+  async createSubscription(tier: "starter" | "pro"): Promise<SubscriptionStart> {
+    if (USING_MOCK_API) {
+      const r = mockStore.createSubscription(tier);
+      return delay({
+        url: r.url,
+        subscription_id: r.subscriptionId,
+        mock: r.mock,
+        tier: r.tier,
+      });
+    }
+    const v = await http<ApiSubscriptionStartView>("/billing/subscribe", {
+      method: "POST",
+      body: JSON.stringify({ tier }),
+    });
+    return { url: v.url, subscription_id: v.subscriptionId, mock: v.mock, tier: v.tier };
+  },
+
+  /**
+   * Cancel the org's PayPal subscription (POST /billing/subscription/cancel).
+   * Downgrades to free (at period end in real mode, immediately in mock).
+   */
+  async cancelSubscription(): Promise<{ ok: boolean; plan: string }> {
+    if (USING_MOCK_API) return delay(mockStore.cancelSubscription());
+    return http<{ ok: boolean; plan: string }>("/billing/subscription/cancel", {
+      method: "POST",
+    });
   },
 
   /**

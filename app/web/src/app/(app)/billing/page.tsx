@@ -38,19 +38,36 @@ export default function BillingPage() {
     setError(null);
     setPending(tier);
     try {
-      const order = await api.createOrder(tier);
-      if (order.mock) {
-        // Mock/MVP: no real PayPal redirect — capture immediately to simulate a
-        // completed purchase, which grants credits and moves the balance bar.
-        await api.captureOrder(order.order_id);
+      // Recurring subscription flow: start the subscription, then hand off to
+      // PayPal's approval page. In mock mode there's no real redirect (the plan
+      // is granted locally), so we just refresh the balance.
+      const sub = await api.createSubscription(tier);
+      if (sub.mock) {
         const fresh = await api.getBalance();
         setBal(fresh);
       } else {
-        // Real PayPal: hand off to the approval URL; capture happens on return.
-        window.location.href = order.url;
+        // Real PayPal: redirect to the sandbox/live approval page immediately.
+        // On approval PayPal returns to PAYPAL_RETURN_URL and the
+        // BILLING.SUBSCRIPTION.ACTIVATED webhook grants the first month's credits.
+        window.location.href = sub.url;
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Checkout failed. Please try again.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function cancel() {
+    if (pending) return;
+    setError(null);
+    setPending("cancel");
+    try {
+      await api.cancelSubscription();
+      const fresh = await api.getBalance();
+      setBal(fresh);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not cancel. Please try again.");
     } finally {
       setPending(null);
     }
@@ -114,7 +131,19 @@ export default function BillingPage() {
                   </li>
                 ))}
               </ul>
-              {isCurrent || p.tier === "free" ? (
+              {isCurrent && p.tier !== "free" ? (
+                <Button
+                  variant="secondary"
+                  full
+                  loading={pending === "cancel"}
+                  disabled={pending !== null}
+                  className="mt-5"
+                  onClick={cancel}
+                  title="Cancel subscription (downgrades to Free)"
+                >
+                  {pending === "cancel" ? "Canceling…" : "Cancel plan"}
+                </Button>
+              ) : isCurrent || p.tier === "free" ? (
                 <Button
                   variant="secondary"
                   full
@@ -148,8 +177,10 @@ export default function BillingPage() {
         <p className="mt-6 text-xs text-danger-300">{error}</p>
       )}
       <p className="mt-6 text-xs text-ink-400">
-        Checkout is processed by PayPal. Pricing is half of Opus Clip&apos;s for the same minutes.
-        In this demo build (no PayPal keys), upgrades grant credits locally so you can try the flow.
+        Subscriptions are billed monthly through Polar (card &amp; more, no account required).
+        Pricing is half of Opus Clip&apos;s for the same minutes. Cancel anytime — you keep access
+        until the period ends. In this demo build (no Polar token), upgrades activate locally so you
+        can try the flow.
       </p>
     </div>
   );

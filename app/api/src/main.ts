@@ -35,7 +35,7 @@ async function bootstrap(): Promise<void> {
   const config = app.get(AppConfigService);
   const port = config.apiPort;
   await app.listen(port);
-  logger.log(`FocalDive Clips API listening on http://localhost:${port}`);
+  logger.log(`YT Shorts Clips API listening on http://localhost:${port}`);
   logger.log(`Health:  GET  http://localhost:${port}/health`);
   logger.log(`Jobs:    POST http://localhost:${port}/jobs`);
   logger.log(`WS:      ws://localhost:${port}/ws  (emit "subscribe" { job_id })`);
