@@ -43,7 +43,17 @@ RUN apt-get update && \
         python3-pip \
         python3-venv \
         ffmpeg \
-        ca-certificates && \
+        ca-certificates \
+        # MediaPipe (reframe.py face detector) dlopens OpenGL/GLES + GLib at
+        # runtime; the slim base lacks them → "libGLESv2.so.2: cannot open
+        # shared object file". These provide libGL/libGLESv2/libEGL + libglib.
+        libgl1 \
+        libglib2.0-0 \
+        libegl1 \
+        libgles2 \
+        libsm6 \
+        libxext6 \
+        libxrender1 && \
     # Symlink python → python3 so existing code that calls 'python' (e.g.
     # real-pipeline.worker.ts const PYTHON_BIN = 'python') works unchanged.
     ln -s /usr/bin/python3 /usr/bin/python && \

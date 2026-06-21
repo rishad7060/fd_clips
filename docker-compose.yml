@@ -74,7 +74,13 @@ services:
       PYTHON_BIN: python3
       # ── Data / queue ──
       DATABASE_URL: postgresql://${POSTGRES_USER:-focaldive}:${POSTGRES_PASSWORD:-focaldive}@postgres:5432/${POSTGRES_DB:-focaldive}?schema=public
-      REDIS_URL: redis://redis:6379
+      # NOTE: REDIS_URL is intentionally NOT set on the API. With it set, the API
+      # becomes a BullMQ *producer only* and jobs need the separate Python BullMQ
+      # consumer (worker.py Phase 2), which isn't built yet — jobs would sit
+      # queued forever. Unset, the API uses its in-process MemoryQueue +
+      # RealPipelineWorker, which spawns pipeline/run.py and processes jobs (the
+      # verified working path). Redis still runs below for future use / caching.
+      # REDIS_URL: redis://redis:6379
       # ── Mock toggles: keep auth mock until account creation is wired ──
       MOCK_MODE: ${MOCK_MODE:-auto}
       MOCK_AUTH: ${MOCK_AUTH:-true}
