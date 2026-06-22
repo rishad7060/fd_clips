@@ -15,7 +15,8 @@ export type SubscriptionStatus = 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED
 
 export interface OrganizationRecord {
   id: string;
-  clerkOrgId: string;
+  /** Legacy Clerk/mock org id; null for self-hosted (Google) personal orgs. */
+  clerkOrgId: string | null;
   name: string;
   plan: PlanTier;
   creditBalance: number;
@@ -26,6 +27,25 @@ export interface OrganizationRecord {
   subscriptionStatus: SubscriptionStatus | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UserRecord {
+  id: string;
+  googleId: string | null;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+  organizationId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Google OAuth profile handed to the store when provisioning a user. */
+export interface GoogleProfile {
+  googleId: string;
+  email: string;
+  name?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface JobRecord {
@@ -120,6 +140,15 @@ export interface DataStore {
   // Organizations
   upsertOrganizationByClerkId(clerkOrgId: string, name: string, defaultCredits: number): Promise<OrganizationRecord>;
   getOrganization(id: string): Promise<OrganizationRecord | null>;
+
+  // Users (self-hosted Auth.js + Google). Upserts the user by googleId/email;
+  // on first login creates a personal Organization (+ free-tier grant ledger
+  // entry) and links the user to it. Idempotent across repeat logins.
+  provisionUserByGoogleId(
+    profile: GoogleProfile,
+    defaultCredits: number,
+  ): Promise<{ user: UserRecord; organization: OrganizationRecord }>;
+  getUser(id: string): Promise<UserRecord | null>;
   setOrganizationPlan(id: string, plan: PlanTier): Promise<OrganizationRecord>;
   /** Look up an org by its subscription id (webhook handling). */
   getOrganizationBySubscriptionId(subscriptionId: string): Promise<OrganizationRecord | null>;

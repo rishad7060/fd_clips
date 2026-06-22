@@ -1,43 +1,48 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
-import { CLERK_ENABLED } from "@/lib/auth";
+import { AUTH_ENABLED } from "@/lib/auth";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 /**
- * Hosted Clerk sign-in surface (catch-all route so Clerk can own its sub-paths,
- * e.g. SSO callbacks / factor steps). This is what makes Google OAuth work: the
- * <SignIn/> widget renders whatever social connections are enabled in the Clerk
- * Dashboard. In mock/dev mode (no Clerk keys) we never import @clerk/nextjs and
- * instead show a friendly note so the route still resolves with no credentials.
+ * Self-hosted sign-in surface (Auth.js + Google OAuth). The catch-all segment is
+ * kept so old /sign-in/* links still resolve. In mock/dev mode (auth disabled)
+ * we show a friendly note so the route still resolves with no credentials.
  */
-export default async function SignInPage() {
+export default function SignInPage() {
   return (
     <main className="grid min-h-screen place-items-center px-6 py-12">
-      <div className="flex flex-col items-center gap-8">
+      <div className="flex w-full max-w-sm flex-col items-center gap-8">
         <Logo />
-        {CLERK_ENABLED ? await renderClerk() : <DevNote />}
+        {AUTH_ENABLED ? <SignInCard /> : <DevNote />}
       </div>
     </main>
   );
 }
 
-async function renderClerk() {
-  const { SignIn } = await import("@clerk/nextjs");
+function SignInCard() {
   return (
-    <SignIn
-      appearance={{ baseTheme: undefined, variables: { colorPrimary: "#6366f1" } }}
-      signUpUrl="/sign-up"
-      afterSignInUrl="/dashboard"
-    />
+    <div className="w-full rounded-2xl border border-ink-700 bg-ink-900/70 p-8 text-center shadow-rim">
+      <h1 className="text-lg font-semibold text-white">Welcome back</h1>
+      <p className="mt-2 text-sm text-ink-300">
+        Sign in to turn long videos into ranked, captioned shorts.
+      </p>
+      <div className="mt-6">
+        <GoogleSignInButton callbackUrl="/dashboard" />
+      </div>
+      <p className="mt-6 text-xs text-ink-400">
+        New here? Continuing with Google creates your account automatically.
+      </p>
+    </div>
   );
 }
 
 function DevNote() {
   return (
-    <div className="max-w-sm rounded-2xl border border-ink-700 bg-ink-900/70 p-8 text-center shadow-rim">
-      <h1 className="text-lg font-semibold text-white">Dev mode — no Clerk</h1>
+    <div className="w-full rounded-2xl border border-ink-700 bg-ink-900/70 p-8 text-center shadow-rim">
+      <h1 className="text-lg font-semibold text-white">Dev mode — no auth</h1>
       <p className="mt-2 text-sm text-ink-300">
-        Authentication is mocked locally. Add a Clerk publishable key to enable
-        real sign-in (and Google OAuth).
+        Authentication is mocked locally. Set NEXT_PUBLIC_AUTH_ENABLED=true (and
+        the Google OAuth keys) to enable real sign-in.
       </p>
       <Link
         href="/dashboard"

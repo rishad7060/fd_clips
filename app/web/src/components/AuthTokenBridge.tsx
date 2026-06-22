@@ -1,25 +1,27 @@
 "use client";
 
 import { useEffect } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useSession } from "next-auth/react";
 import { setTokenGetter } from "@/lib/api";
 
 /**
- * Bridges Clerk's client-side session token into the module-level api client.
+ * Bridges the Auth.js session's API token into the module-level api client.
  *
- * The api object is a plain module (no React context), so it can't call
- * useAuth() itself. This tiny client component — mounted ONLY inside the
- * Clerk-enabled branch of the root layout — registers a token getter while
- * mounted and clears it on unmount. In mock/dev mode this component is never
- * rendered, so http() keeps sending no Authorization header.
+ * The api object is a plain module (no React context), so it can't read the
+ * session itself. This tiny client component — mounted ONLY inside the
+ * auth-enabled branch of the root layout — registers a getter that returns the
+ * current session's `apiToken` (minted server-side in the session callback). In
+ * mock/dev mode this component is never rendered, so http() keeps sending no
+ * Authorization header.
  */
 export function AuthTokenBridge() {
-  const { getToken } = useAuth();
+  const { data: session } = useSession();
+  const apiToken = session?.apiToken ?? null;
 
   useEffect(() => {
-    setTokenGetter(() => getToken());
+    setTokenGetter(async () => apiToken);
     return () => setTokenGetter(null);
-  }, [getToken]);
+  }, [apiToken]);
 
   return null;
 }

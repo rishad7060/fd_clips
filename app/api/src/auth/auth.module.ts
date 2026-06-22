@@ -1,17 +1,20 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '../config/config.module';
 import { PersistenceModule } from '../persistence/persistence.module';
-import { ClerkAuthGuard } from './clerk-auth.guard';
-import { ClerkService } from './clerk.service';
+import { AppAuthGuard } from './auth.guard';
+import { AppAuthService } from './app-auth.service';
+import { AuthController } from './auth.controller';
 
 /**
- * Auth wiring. Exports the guard + Clerk verifier. The guard is applied
- * per-controller (not globally) so the health endpoint stays public.
+ * Auth wiring. Exports the guard + app-token verifier. The guard is applied
+ * per-controller (not globally) so the health and /auth/sync endpoints stay
+ * outside the user-JWT requirement.
  */
 @Global()
 @Module({
   imports: [ConfigModule, PersistenceModule],
-  providers: [ClerkService, ClerkAuthGuard],
-  exports: [ClerkService, ClerkAuthGuard],
+  controllers: [AuthController],
+  providers: [AppAuthService, AppAuthGuard],
+  exports: [AppAuthService, AppAuthGuard],
 })
 export class AuthModule {}

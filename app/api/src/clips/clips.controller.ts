@@ -13,7 +13,7 @@ import {
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
+import { AppAuthGuard } from '../auth/auth.guard';
 import { CurrentOrg } from '../auth/current-org.decorator';
 import { AuthContext } from '../auth/auth.types';
 import { DataStore, DATA_STORE } from '../persistence/store.types';
@@ -60,7 +60,7 @@ interface ClipTranscriptView {
   words: WordView[];
 }
 
-@UseGuards(ClerkAuthGuard)
+@UseGuards(AppAuthGuard)
 @Controller('clips')
 export class ClipsController {
   private readonly logger = new Logger(ClipsController.name);

@@ -22,7 +22,7 @@ export class HealthController {
       ts: new Date().toISOString(),
       mockMode: f.mockMode,
       subsystems: {
-        auth: f.mockAuth ? 'mock' : 'clerk',
+        auth: f.mockAuth ? 'mock' : 'google',
         database: f.mockDb ? 'in-memory' : 'postgres',
         queue: this.queue.backend,
         storage: f.mockStorage ? 'mock' : 'r2',

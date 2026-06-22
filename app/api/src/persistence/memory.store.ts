@@ -7,10 +7,12 @@ import {
   CreditLedgerRecord,
   CreditReason,
   DataStore,
+  GoogleProfile,
   JobRecord,
   OrganizationRecord,
   PlanTier,
   SubscriptionStatus,
+  UserRecord,
 } from './store.types';
 
 const now = (): string => new Date().toISOString();
@@ -24,6 +26,9 @@ export class MemoryStore implements DataStore {
   private readonly logger = new Logger(MemoryStore.name);
   private readonly orgs = new Map<string, OrganizationRecord>();
   private readonly orgsByClerk = new Map<string, string>();
+  private readonly users = new Map<string, UserRecord>();
+  private readonly usersByGoogle = new Map<string, string>();
+  private readonly usersByEmail = new Map<string, string>();
   private readonly jobs = new Map<string, JobRecord>();
   private readonly clips = new Map<string, ClipRecord>();
   private readonly ledger: CreditLedgerRecord[] = [];
@@ -34,6 +39,9 @@ export class MemoryStore implements DataStore {
 
   async shutdown(): Promise<void> {
     this.orgs.clear();
+    this.users.clear();
+    this.usersByGoogle.clear();
+    this.usersByEmail.clear();
     this.jobs.clear();
     this.clips.clear();
     this.ledger.length = 0;
@@ -77,6 +85,71 @@ export class MemoryStore implements DataStore {
 
   async getOrganization(orgId: string): Promise<OrganizationRecord | null> {
     return this.orgs.get(orgId) ?? null;
+  }
+
+  async provisionUserByGoogleId(
+    profile: GoogleProfile,
+    defaultCredits: number,
+  ): Promise<{ user: UserRecord; organization: OrganizationRecord }> {
+    // Find an existing user by googleId, falling back to email (so a user who
+    // signed up once is reused even if the lookup key shifts).
+    const existingId =
+      this.usersByGoogle.get(profile.googleId) ?? this.usersByEmail.get(profile.email);
+    if (existingId) {
+      const user = this.users.get(existingId)!;
+      // Keep the profile fresh on repeat logins.
+      user.name = profile.name ?? user.name;
+      user.avatarUrl = profile.avatarUrl ?? user.avatarUrl;
+      user.googleId = profile.googleId ?? user.googleId;
+      user.updatedAt = now();
+      this.usersByGoogle.set(profile.googleId, user.id);
+      return { user, organization: this.orgs.get(user.organizationId)! };
+    }
+
+    // First login: create a personal org (+ free-tier grant) and the user.
+    const orgName = profile.name ? `${profile.name}'s workspace` : profile.email;
+    const org: OrganizationRecord = {
+      id: id(),
+      clerkOrgId: null,
+      name: orgName,
+      plan: 'free',
+      creditBalance: defaultCredits,
+      stripeCustomerId: null,
+      subscriptionId: null,
+      subscriptionStatus: null,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    this.orgs.set(org.id, org);
+    this.ledger.push({
+      id: id(),
+      organizationId: org.id,
+      amount: defaultCredits,
+      reason: 'grant',
+      jobId: null,
+      stripeEventId: null,
+      note: 'Free tier signup grant',
+      createdAt: now(),
+    });
+
+    const user: UserRecord = {
+      id: id(),
+      googleId: profile.googleId,
+      email: profile.email,
+      name: profile.name ?? null,
+      avatarUrl: profile.avatarUrl ?? null,
+      organizationId: org.id,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    this.users.set(user.id, user);
+    this.usersByGoogle.set(profile.googleId, user.id);
+    this.usersByEmail.set(profile.email, user.id);
+    return { user, organization: org };
+  }
+
+  async getUser(userId: string): Promise<UserRecord | null> {
+    return this.users.get(userId) ?? null;
   }
 
   async setOrganizationPlan(orgId: string, plan: PlanTier): Promise<OrganizationRecord> {

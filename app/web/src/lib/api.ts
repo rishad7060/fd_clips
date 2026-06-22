@@ -179,15 +179,15 @@ function toClip(v: ApiClipView): Clip {
 }
 
 /**
- * Clerk session-token getter, installed at runtime by <AuthTokenBridge/> (only
- * mounted when Clerk is enabled). In mock/dev mode it stays null, so http()
+ * API access-token getter, installed at runtime by <AuthTokenBridge/> (only
+ * mounted when Auth.js is enabled). In mock/dev mode it stays null, so http()
  * sends no Authorization header and nothing changes. We keep it as a
  * module-level seam so the api object — imported by client components — can
- * attach the Bearer token without each caller knowing about Clerk.
+ * attach the Bearer token without each caller knowing about the auth provider.
  */
 let getToken: (() => Promise<string | null>) | null = null;
 
-/** Register the Clerk token getter (called from the AuthTokenBridge). */
+/** Register the session token getter (called from the AuthTokenBridge). */
 export function setTokenGetter(fn: (() => Promise<string | null>) | null): void {
   getToken = fn;
 }

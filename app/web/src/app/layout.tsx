@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { CLERK_ENABLED } from "@/lib/auth";
+import { AUTH_ENABLED } from "@/lib/auth";
 import type { ReactNode } from "react";
 
 // Inter (display + body) with tight tracking, plus a mono for scores/durations/
@@ -26,36 +26,36 @@ export const viewport: Viewport = {
 };
 
 /**
- * Root layout. Wraps the tree in ClerkProvider only when real Clerk keys are
- * configured; otherwise renders the app directly in dev/mock auth mode so it
- * works with no credentials. The dynamic import keeps @clerk/nextjs out of the
- * render path entirely when disabled.
+ * Root layout. Wraps the tree in the Auth.js SessionProvider only when real auth
+ * is configured (NEXT_PUBLIC_AUTH_ENABLED); otherwise renders the app directly
+ * in dev/mock auth mode so it works with no credentials. The dynamic imports
+ * keep next-auth out of the render path entirely when disabled.
  */
 export default async function RootLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  const body = (
-    <body className={`${inter.variable} ${mono.variable} ${interBody.variable} font-sans antialiased`}>
-      {children}
-    </body>
-  );
+  const bodyClass = `${inter.variable} ${mono.variable} ${interBody.variable} font-sans antialiased`;
 
-  if (CLERK_ENABLED) {
-    const { ClerkProvider } = await import("@clerk/nextjs");
+  if (AUTH_ENABLED) {
+    const { SessionProvider } = await import("next-auth/react");
     const { AuthTokenBridge } = await import("@/components/AuthTokenBridge");
     return (
-      <ClerkProvider>
-        <html lang="en">
-          <body className={`${inter.variable} ${mono.variable} ${interBody.variable} font-sans antialiased`}>
+      <html lang="en">
+        <body className={bodyClass}>
+          <SessionProvider>
             <AuthTokenBridge />
             {children}
-          </body>
-        </html>
-      </ClerkProvider>
+          </SessionProvider>
+        </body>
+      </html>
     );
   }
 
-  return <html lang="en">{body}</html>;
+  return (
+    <html lang="en">
+      <body className={bodyClass}>{children}</body>
+    </html>
+  );
 }

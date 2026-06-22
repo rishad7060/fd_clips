@@ -1,7 +1,7 @@
 import { Body, Controller, HttpCode, Logger, Post, UseGuards } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
-import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
+import { AppAuthGuard } from '../auth/auth.guard';
 import { AppConfigService } from '../config/config.service';
 import { PreviewDto } from './dto/preview.dto';
 
@@ -61,7 +61,7 @@ function qualityLabel(height: number): string {
   return '—';
 }
 
-@UseGuards(ClerkAuthGuard)
+@UseGuards(AppAuthGuard)
 @Controller('preview')
 export class PreviewController {
   private readonly logger = new Logger(PreviewController.name);

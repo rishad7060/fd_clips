@@ -37,7 +37,7 @@ export const PLANS: Record<PlanTier, PlanDefinition> = {
     label: 'Free',
     priceUsd: 0,
     // Opus parity: free tier = 60 source-minutes/mo. SINGLE SOURCE OF TRUTH —
-    // clerk-auth.guard.ts imports FREE_TIER_CREDITS from here.
+    // auth.guard.ts / auth.controller.ts import FREE_TIER_CREDITS from here.
     monthlyCredits: 60,
     watermark: true,
     editingEnabled: false,
@@ -69,7 +69,7 @@ export const PLANS: Record<PlanTier, PlanDefinition> = {
 /**
  * The free-tier monthly credit grant. The auth guard seeds new orgs with this,
  * so it lives here (next to the plan) to stay the single source of truth — no
- * duplicate literal in clerk-auth.guard.ts.
+ * duplicate literal in auth.guard.ts.
  */
 export const FREE_TIER_CREDITS = PLANS.free.monthlyCredits;
 

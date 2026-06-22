@@ -11,7 +11,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { mkdir, writeFile } from 'fs/promises';
 import { extname, resolve } from 'path';
 import { randomUUID } from 'crypto';
-import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
+import { AppAuthGuard } from '../auth/auth.guard';
 
 /**
  * Minimal shape of a multer-parsed upload. We declare it locally instead of
@@ -40,7 +40,7 @@ const MAX_UPLOAD_BYTES = 1024 * 1024 * 1024; // 1 GiB
  * non-URL path as a local file (workspace-relative resolves against the repo
  * root, the worker's spawn cwd).
  */
-@UseGuards(ClerkAuthGuard)
+@UseGuards(AppAuthGuard)
 @Controller('uploads')
 export class UploadsController {
   private readonly logger = new Logger(UploadsController.name);

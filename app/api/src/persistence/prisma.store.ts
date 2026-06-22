@@ -6,10 +6,12 @@ import {
   CreditLedgerRecord,
   CreditReason,
   DataStore,
+  GoogleProfile,
   JobRecord,
   OrganizationRecord,
   PlanTier,
   SubscriptionStatus,
+  UserRecord,
 } from './store.types';
 
 /**
@@ -56,6 +58,19 @@ export class PrismaStore implements DataStore {
       subscriptionStatus: (o.subscriptionStatus as SubscriptionStatus | null) ?? null,
       createdAt: this.toIso(o.createdAt),
       updatedAt: this.toIso(o.updatedAt),
+    };
+  }
+
+  private mapUser(u: any): UserRecord {
+    return {
+      id: u.id,
+      googleId: u.googleId ?? null,
+      email: u.email,
+      name: u.name ?? null,
+      avatarUrl: u.avatarUrl ?? null,
+      organizationId: u.organizationId,
+      createdAt: this.toIso(u.createdAt),
+      updatedAt: this.toIso(u.updatedAt),
     };
   }
 
@@ -136,6 +151,64 @@ export class PrismaStore implements DataStore {
   async getOrganization(orgId: string): Promise<OrganizationRecord | null> {
     const o = await this.prisma.organization.findUnique({ where: { id: orgId } });
     return o ? this.mapOrg(o) : null;
+  }
+
+  async provisionUserByGoogleId(
+    profile: GoogleProfile,
+    defaultCredits: number,
+  ): Promise<{ user: UserRecord; organization: OrganizationRecord }> {
+    // Reuse an existing user (by googleId, falling back to email), refreshing
+    // the cached profile fields on repeat logins.
+    const existing =
+      (await this.prisma.user.findUnique({ where: { googleId: profile.googleId } })) ??
+      (await this.prisma.user.findUnique({ where: { email: profile.email } }));
+    if (existing) {
+      const user = await this.prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          googleId: profile.googleId,
+          name: profile.name ?? existing.name,
+          avatarUrl: profile.avatarUrl ?? existing.avatarUrl,
+        },
+      });
+      const org = await this.prisma.organization.findUnique({
+        where: { id: user.organizationId },
+      });
+      return { user: this.mapUser(user), organization: this.mapOrg(org) };
+    }
+
+    // First login: create a personal org (+ free-tier grant) and the user in
+    // one transaction so a user is never left without an organization.
+    const orgName = profile.name ? `${profile.name}'s workspace` : profile.email;
+    const { user, org } = await this.prisma.$transaction(async (tx: any) => {
+      const org = await tx.organization.create({
+        data: { name: orgName, creditBalance: defaultCredits, plan: 'free' },
+      });
+      await tx.creditLedger.create({
+        data: {
+          organizationId: org.id,
+          amount: defaultCredits,
+          reason: 'grant',
+          note: 'Free tier signup grant',
+        },
+      });
+      const user = await tx.user.create({
+        data: {
+          googleId: profile.googleId,
+          email: profile.email,
+          name: profile.name ?? null,
+          avatarUrl: profile.avatarUrl ?? null,
+          organizationId: org.id,
+        },
+      });
+      return { user, org };
+    });
+    return { user: this.mapUser(user), organization: this.mapOrg(org) };
+  }
+
+  async getUser(userId: string): Promise<UserRecord | null> {
+    const u = await this.prisma.user.findUnique({ where: { id: userId } });
+    return u ? this.mapUser(u) : null;
   }
 
   async setOrganizationPlan(orgId: string, plan: PlanTier): Promise<OrganizationRecord> {

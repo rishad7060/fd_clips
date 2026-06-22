@@ -74,7 +74,12 @@ All variables are documented in [`.env.docker.example`](.env.docker.example). Ke
 | `POLAR_WEBHOOK_SECRET` | Standard Webhooks secret so credits only grant on genuine Polar events |
 | `DATABASE_URL` | Postgres connection string for the api/Prisma |
 | `USE_REAL_PIPELINE` | `true` runs the real Python pipeline (vs. mock) |
-| `MOCK_AUTH` | `true` injects a dev org so the app works without Clerk |
+| `NEXT_PUBLIC_AUTH_ENABLED` | `true` turns on the real Google login UI + route protection (web) |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth 2.0 client credentials |
+| `AUTH_SECRET` | NextAuth session/cookie secret (web) |
+| `AUTH_JWT_SECRET` | Shared HS256 secret signing the app API token (web **and** api, must match) |
+| `AUTH_INTERNAL_SECRET` | Shared secret guarding the API's internal `/auth/sync` (web **and** api) |
+| `MOCK_AUTH` | `true` injects a dev org so the app works without real auth |
 
 Secrets are gitignored (`.env`, `.env.local`, `.env.docker`). Never commit real secrets — copy `.env.docker.example` to `.env.docker` and fill it in.
 
@@ -93,6 +98,6 @@ Secrets are gitignored (`.env`, `.env.local`, `.env.docker`). Never commit real 
 
 ## Status / notes
 
-- **Account creation (Clerk auth) is currently disabled.** `MOCK_AUTH=true` injects a dev org so every other feature works. Enable Clerk (`CLERK_SECRET_KEY` + `CLERK_JWKS_URL`) and flip `MOCK_AUTH=false` to turn it on.
+- **Authentication is self-hosted (Auth.js v5 + Google OAuth).** It is off by default so the app runs keyless (`MOCK_AUTH` injects a dev org; the web shows a dev user). To enable real Google login/registration: create a Google OAuth 2.0 client (redirect URI `http://localhost:3000/api/auth/callback/google`), set the web vars (`NEXT_PUBLIC_AUTH_ENABLED=true`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`) in `app/web/.env.local`, and set the shared `AUTH_JWT_SECRET` + `AUTH_INTERNAL_SECRET` in **both** `app/web/.env.local` and the repo-root `.env`. First Google login auto-provisions a `User` + a personal `Organization` (60 free credits).
 - **Billing runs on the Polar.sh sandbox** by default. Switch to live with a production `POLAR_BASE_URL`, `POLAR_MODE=production`, and production token + product ids.
 - **Transcription is CPU-based via Groq** — no GPU is required to run the stack.

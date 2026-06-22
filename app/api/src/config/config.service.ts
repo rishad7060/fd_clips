@@ -60,12 +60,22 @@ export class AppConfigService {
     return this.get<string>('REDIS_URL', undefined);
   }
 
-  get clerkSecretKey(): string | undefined {
-    return this.get<string>('CLERK_SECRET_KEY', undefined);
+  /**
+   * Shared HMAC secret used to verify the app's own (HS256) API access tokens,
+   * minted by the web app's Auth.js session callback. Its presence is what flips
+   * auth from MOCK to real.
+   */
+  get authJwtSecret(): string | undefined {
+    return this.get<string>('AUTH_JWT_SECRET', undefined);
   }
 
-  get clerkJwksUrl(): string | undefined {
-    return this.get<string>('CLERK_JWKS_URL', undefined);
+  /**
+   * Shared secret the web server presents on the internal `POST /auth/sync`
+   * call (header `x-internal-secret`) to provision a user/org. Never exposed to
+   * the browser.
+   */
+  get authInternalSecret(): string | undefined {
+    return this.get<string>('AUTH_INTERNAL_SECRET', undefined);
   }
 
   // ── Polar.sh (payment provider) ──────────────────────────────────────────
@@ -148,18 +158,20 @@ export class AppConfigService {
 
     const hasDb = this.hasValue('DATABASE_URL');
     const hasRedis = this.hasValue('REDIS_URL');
-    const hasClerk = this.hasValue('CLERK_SECRET_KEY');
+    // Self-hosted auth (Auth.js + Google). Real auth is enabled when the shared
+    // HS256 secret used to verify the app's API tokens is present.
+    const hasAuth = this.hasValue('AUTH_JWT_SECRET');
     // Polar.sh is the payment provider. Real billing is enabled when a Polar
     // Organization Access Token is present.
     const hasPolar = this.hasValue('POLAR_ACCESS_TOKEN');
     const hasR2 = this.hasValue('R2_ACCESS_KEY_ID') && this.hasValue('R2_ENDPOINT');
 
     // auto => mock when the relevant cred is missing. Forced overrides everything.
-    const mockMode = forced ?? !(hasDb && hasRedis && hasClerk && hasPolar);
+    const mockMode = forced ?? !(hasDb && hasRedis && hasAuth && hasPolar);
 
-    // MOCK_AUTH explicit flag wins; otherwise mock when Clerk key absent.
+    // MOCK_AUTH explicit flag wins; otherwise mock when the auth secret is absent.
     const mockAuthRaw = (this.config.get<string>('MOCK_AUTH') ?? '').toLowerCase();
-    const mockAuth = mockAuthRaw === 'true' ? true : mockAuthRaw === 'false' ? false : !hasClerk;
+    const mockAuth = mockAuthRaw === 'true' ? true : mockAuthRaw === 'false' ? false : !hasAuth;
 
     // LOCAL_FILES explicit flag wins; otherwise default true when the real
     // pipeline is enabled (its clips live on local disk, not R2).
@@ -187,7 +199,7 @@ export class AppConfigService {
     const f = this.flags;
     this.logger.log('YT Shorts Clips API — feature flags resolved:');
     this.logger.log(`  MOCK_MODE   = ${f.mockMode}`);
-    this.logger.log(`  auth        = ${f.mockAuth ? 'MOCK (fake org injected)' : 'Clerk JWT'}`);
+    this.logger.log(`  auth        = ${f.mockAuth ? 'MOCK (fake org injected)' : 'Google OAuth (app JWT)'}`);
     this.logger.log(`  database    = ${f.mockDb ? 'IN-MEMORY (no Postgres)' : 'Postgres via Prisma'}`);
     this.logger.log(`  queue       = ${f.mockQueue ? 'IN-MEMORY (no Redis)' : 'BullMQ/Redis'}`);
     this.logger.log(`  storage     = ${f.mockStorage ? 'MOCK signed URLs' : 'Cloudflare R2'}`);

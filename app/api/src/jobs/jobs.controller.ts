@@ -1,12 +1,12 @@
 import { Body, Controller, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
-import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
+import { AppAuthGuard } from '../auth/auth.guard';
 import { CurrentOrg } from '../auth/current-org.decorator';
 import { AuthContext } from '../auth/auth.types';
 import { CreateJobDto } from './dto/create-job.dto';
 import { JobsService } from './jobs.service';
 import { JobView, toJobView } from './jobs.mapper';
 
-@UseGuards(ClerkAuthGuard)
+@UseGuards(AppAuthGuard)
 @Controller('jobs')
 export class JobsController {
   constructor(private readonly jobs: JobsService) {}

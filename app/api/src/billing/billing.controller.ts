@@ -8,7 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { IsIn } from 'class-validator';
-import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
+import { AppAuthGuard } from '../auth/auth.guard';
 import { CurrentOrg } from '../auth/current-org.decorator';
 import { AuthContext, AuthedRequest } from '../auth/auth.types';
 import { PlanTier } from '../persistence/store.types';
@@ -35,7 +35,7 @@ export class BillingController {
   }
 
   /** Current org credit balance + plan. */
-  @UseGuards(ClerkAuthGuard)
+  @UseGuards(AppAuthGuard)
   @Get('billing/balance')
   async balance(@CurrentOrg() auth: AuthContext): Promise<{ plan: PlanTier; creditBalance: number }> {
     return this.billing.getBalance(auth.organizationId);
@@ -46,7 +46,7 @@ export class BillingController {
    * resolution + subscription status). The web reads this to gate the editor
    * and surface "remove watermark" upsells.
    */
-  @UseGuards(ClerkAuthGuard)
+  @UseGuards(AppAuthGuard)
   @Get('billing/plan')
   async planStatus(@CurrentOrg() auth: AuthContext): Promise<PlanStatus> {
     return this.billing.getPlanStatus(auth.organizationId);
@@ -56,7 +56,7 @@ export class BillingController {
    * Start a Polar.sh checkout for a paid tier. Returns the hosted checkout URL
    * + id. In mock mode it auto-activates and grants credits.
    */
-  @UseGuards(ClerkAuthGuard)
+  @UseGuards(AppAuthGuard)
   @Post('billing/subscribe')
   async subscribe(
     @CurrentOrg() auth: AuthContext,
@@ -66,7 +66,7 @@ export class BillingController {
   }
 
   /** Cancel the org's Polar subscription (downgrades to free at period end). */
-  @UseGuards(ClerkAuthGuard)
+  @UseGuards(AppAuthGuard)
   @Post('billing/subscription/cancel')
   async cancelSubscription(
     @CurrentOrg() auth: AuthContext,

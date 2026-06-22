@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, Inject, Injectable, Logger, Unauthorized
 import { AppConfigService } from '../config/config.service';
 import { DataStore, DATA_STORE } from '../persistence/store.types';
 import { AuthedRequest } from './auth.types';
-import { ClerkService } from './clerk.service';
+import { AppAuthService } from './app-auth.service';
 // Single source of truth for the free-tier grant (Opus parity: 60 min/mo).
 // Defined on the free plan in billing/plans.ts; imported here so the guard and
 // the plan catalog can never drift out of sync.
@@ -16,19 +16,20 @@ const MOCK_ORG_NAME = 'Local Dev Org';
  * Guard that resolves the request's organization.
  *
  * - MOCK_AUTH on: no Authorization header required; a stable fake org is
- *   upserted and injected so every endpoint runs without Clerk keys.
- * - MOCK_AUTH off: requires `Authorization: Bearer <clerk_jwt>`, verifies it,
- *   and maps the Clerk org id to an internal Organization.
+ *   upserted and injected so every endpoint runs without auth credentials.
+ * - MOCK_AUTH off: requires `Authorization: Bearer <app_jwt>` (an HS256 token
+ *   minted by the web app's Auth.js layer), verifies it, and loads the internal
+ *   Organization referenced by the token's `org_id` claim.
  *
  * Either way, req.auth.organizationId is the internal id used to scope data.
  */
 @Injectable()
-export class ClerkAuthGuard implements CanActivate {
-  private readonly logger = new Logger(ClerkAuthGuard.name);
+export class AppAuthGuard implements CanActivate {
+  private readonly logger = new Logger(AppAuthGuard.name);
 
   constructor(
     private readonly config: AppConfigService,
-    private readonly clerk: ClerkService,
+    private readonly auth: AppAuthService,
     @Inject(DATA_STORE) private readonly store: DataStore,
   ) {}
 
@@ -55,20 +56,21 @@ export class ClerkAuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing Bearer token');
     }
     const token = header.slice('Bearer '.length).trim();
-    const claims = await this.clerk.verify(token);
+    const claims = await this.auth.verify(token);
     if (!claims.org_id) {
-      throw new UnauthorizedException('Token has no active organization (org_id)');
+      throw new UnauthorizedException('Token has no organization (org_id)');
     }
-    const org = await this.store.upsertOrganizationByClerkId(
-      claims.org_id,
-      claims.org_name ?? claims.org_slug ?? claims.org_id,
-      FREE_TIER_CREDITS,
-    );
+    const org = await this.store.getOrganization(claims.org_id);
+    if (!org) {
+      throw new UnauthorizedException('Unknown organization');
+    }
     req.auth = {
       userId: claims.sub,
-      clerkOrgId: claims.org_id,
       organizationId: org.id,
       orgName: org.name,
+      email: claims.email,
+      name: claims.name,
+      clerkOrgId: org.clerkOrgId,
     };
     return true;
   }
