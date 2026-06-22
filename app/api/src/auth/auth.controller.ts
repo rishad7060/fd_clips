@@ -6,10 +6,12 @@ import {
   HttpCode,
   Post,
   Inject,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { IsEmail, IsOptional, IsString } from 'class-validator';
+import * as bcrypt from 'bcryptjs';
 import { AppConfigService } from '../config/config.service';
-import { DataStore, DATA_STORE } from '../persistence/store.types';
+import { DataStore, DATA_STORE, UserRole } from '../persistence/store.types';
 import { FREE_TIER_CREDITS } from '../billing/plans';
 
 /**
@@ -38,6 +40,26 @@ interface SyncUserResult {
   organizationId: string;
   orgName: string;
   plan: string;
+}
+
+/** Body of the internal credentials-login call (admin sign-in). */
+class LoginDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  password!: string;
+}
+
+/** Result of a successful credentials login (mirrors the Auth.js token shape). */
+interface LoginResult {
+  userId: string;
+  organizationId: string;
+  orgName: string;
+  plan: string;
+  role: UserRole;
+  email: string;
+  name: string | null;
 }
 
 /**
@@ -79,6 +101,44 @@ export class AuthController {
       organizationId: organization.id,
       orgName: organization.name,
       plan: organization.plan,
+    };
+  }
+
+  /**
+   * Credentials login for admins. Called server-to-server by the web app's
+   * Auth.js `authorize` callback (Credentials provider), gated by the same
+   * `x-internal-secret` as /auth/sync. In MOCK mode (no internal secret set) the
+   * header check is skipped — the bcrypt password check is still the real gate,
+   * and the API is local-only. Never reachable from the browser.
+   */
+  @Post('login')
+  @HttpCode(200)
+  async login(
+    @Headers('x-internal-secret') secret: string | undefined,
+    @Body() dto: LoginDto,
+  ): Promise<LoginResult> {
+    const expected = this.config.authInternalSecret;
+    if (expected && secret !== expected) {
+      throw new ForbiddenException('Invalid internal secret');
+    }
+    const user = await this.store.adminGetUserByEmail(dto.email);
+    if (!user || !user.passwordHash) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    const ok = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    await this.store.adminTouchLogin(user.id);
+    const org = await this.store.getOrganization(user.organizationId);
+    return {
+      userId: user.id,
+      organizationId: user.organizationId,
+      orgName: org?.name ?? 'Admin',
+      plan: org?.plan ?? 'pro',
+      role: user.role,
+      email: user.email,
+      name: user.name,
     };
   }
 }

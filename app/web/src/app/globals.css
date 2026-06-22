@@ -4,6 +4,37 @@
 
 :root {
   color-scheme: dark;
+
+  /* ── Shadcn design tokens (used by the admin dashboard) ──────────────────
+     HSL channels mapped to the ink/brand palette in tailwind.config.ts. Defined
+     globally (not scoped) so portaled primitives — dialogs, dropdowns — inherit
+     them. The creator UI never references these semantic classes, so it is
+     unaffected. App is dark-only, so there is no separate light block. */
+  --background: 224 44% 5%;       /* ink-950 */
+  --foreground: 225 33% 93%;      /* body text */
+  --card: 224 39% 10%;            /* ink-850 */
+  --card-foreground: 225 33% 93%;
+  --popover: 224 40% 7%;          /* ink-900 */
+  --popover-foreground: 225 33% 93%;
+  --primary: 261 87% 66%;         /* brand-500 #905BF4 */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 225 37% 12%;       /* ink-800 */
+  --secondary-foreground: 225 30% 91%;
+  --muted: 225 37% 12%;           /* ink-800 */
+  --muted-foreground: 225 18% 53%;/* ink-400 */
+  --accent: 225 37% 14%;          /* subtle hover surface */
+  --accent-foreground: 225 30% 91%;
+  --destructive: 0 84% 60%;       /* danger-500 */
+  --destructive-foreground: 0 0% 100%;
+  --border: 225 32% 16%;          /* ink-700 */
+  --input: 225 32% 16%;
+  --ring: 260 89% 82%;            /* brand-300 */
+  --chart-1: 261 87% 66%;
+  --chart-2: 190 90% 50%;
+  --chart-3: 160 84% 39%;
+  --chart-4: 38 92% 50%;
+  --chart-5: 0 84% 60%;
+  --radius: 0.6rem;
 }
 
 html,

@@ -9,6 +9,7 @@ export type JobStage = 'ingest' | 'transcribe' | 'score' | 'extract' | 'reframe'
 export type SourceType = 'url' | 'upload';
 export type PlanTier = 'free' | 'starter' | 'pro';
 export type CreditReason = 'grant' | 'debit' | 'refund';
+export type UserRole = 'user' | 'admin';
 
 /** Subscription lifecycle (mirrors the payment provider's status values). */
 export type SubscriptionStatus = 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED';
@@ -35,6 +36,11 @@ export interface UserRecord {
   email: string;
   name: string | null;
   avatarUrl: string | null;
+  /** Access level. `admin` unlocks the cross-tenant admin dashboard. */
+  role: UserRole;
+  /** bcrypt hash for Credentials (admin) login; null for Google-only users. */
+  passwordHash: string | null;
+  lastLoginAt: string | null;
   organizationId: string;
   createdAt: string;
   updatedAt: string;
@@ -128,10 +134,61 @@ export interface CreateClipInput {
   thumbKey?: string | null;
 }
 
+// ── Admin (cross-tenant) ────────────────────────────────────────────────────
+// The admin dashboard reads/writes ACROSS organizations. These shapes and the
+// admin* methods below are the ONLY place org-scoping is intentionally bypassed;
+// they are reachable solely through AdminModule behind AdminGuard.
+
+export interface AdminListParams {
+  search?: string;
+  /** 1-based page number. */
+  page?: number;
+  /** Capped (<=100) by the controller DTO. */
+  pageSize?: number;
+}
+
+export interface Paged<T> {
+  rows: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface OrganizationWithCounts extends OrganizationRecord {
+  userCount: number;
+  jobCount: number;
+}
+
+export interface TimePoint {
+  /** ISO date (YYYY-MM-DD). */
+  date: string;
+  [series: string]: number | string;
+}
+
+export interface AdminOverviewStats {
+  totals: {
+    organizations: number;
+    users: number;
+    jobs: number;
+    clips: number;
+    /** Sum of all orgs' current credit balances. */
+    creditsOutstanding: number;
+  };
+  jobsByStatus: Record<JobStatus, number>;
+  plansByTier: Record<PlanTier, number>;
+  /** Estimated monthly recurring revenue (active subscriptions × plan price). */
+  revenueMrrUsd: number;
+  jobsTimeseries: { date: string; created: number; completed: number; failed: number }[];
+  creditsTimeseries: { date: string; granted: number; debited: number; refunded: number }[];
+  recentJobs: JobRecord[];
+  topOrgsByUsage: { organization: OrganizationRecord; jobCount: number; creditsUsed: number }[];
+}
+
 /**
  * The single persistence contract. Both the in-memory store (local dev) and
  * the Prisma/Postgres store implement this so callers never branch on mode.
- * All reads/writes are tenant-scoped by organizationId.
+ * All reads/writes are tenant-scoped by organizationId — EXCEPT the admin*
+ * methods at the end, which are intentionally cross-tenant.
  */
 export interface DataStore {
   init(): Promise<void>;
@@ -186,6 +243,30 @@ export interface DataStore {
     clipId: string,
     patch: Partial<Pick<ClipRecord, 'start' | 'end'>>,
   ): Promise<ClipRecord | null>;
+
+  // ── Admin (cross-tenant) ──────────────────────────────────────────────────
+  adminGetOverview(rangeDays: number): Promise<AdminOverviewStats>;
+  adminListOrganizations(p: AdminListParams): Promise<Paged<OrganizationWithCounts>>;
+  adminGetOrganization(orgId: string): Promise<OrganizationWithCounts | null>;
+  adminListUsers(p: AdminListParams): Promise<Paged<UserRecord>>;
+  adminListJobs(
+    p: AdminListParams & { status?: JobStatus; organizationId?: string },
+  ): Promise<Paged<JobRecord>>;
+  adminListClips(
+    p: AdminListParams & { organizationId?: string; jobId?: string },
+  ): Promise<Paged<ClipRecord>>;
+  adminListLedgerAll(
+    p: AdminListParams & { organizationId?: string },
+  ): Promise<Paged<CreditLedgerRecord>>;
+  /** Credentials login lookup — returns the full record incl. passwordHash. */
+  adminGetUserByEmail(email: string): Promise<UserRecord | null>;
+  adminSetUserRole(userId: string, role: UserRole): Promise<UserRecord | null>;
+  adminTouchLogin(userId: string): Promise<void>;
+  adminCancelJob(jobId: string): Promise<JobRecord | null>;
+  adminDeleteUser(userId: string): Promise<boolean>;
+  adminDeleteOrganization(orgId: string): Promise<boolean>;
+  adminDeleteJob(jobId: string): Promise<boolean>;
+  adminDeleteClip(clipId: string): Promise<boolean>;
 }
 
 export const DATA_STORE = Symbol('DATA_STORE');

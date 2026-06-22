@@ -14,10 +14,21 @@ import { AUTH_ENABLED } from "@/lib/auth";
 // Route prefixes that require a signed-in user (the (app) route group; the
 // route-group parens don't appear in the URL).
 const PROTECTED_PREFIXES = ["/dashboard", "/new", "/jobs", "/billing", "/help"];
+// Admin routes require a signed-in user whose role is "admin".
+const ADMIN_PREFIX = "/admin";
+// The admin login page itself must stay open.
+const ADMIN_SIGN_IN = "/admin/sign-in";
 
 function isProtected(pathname: string): boolean {
   return PROTECTED_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
+function isAdminRoute(pathname: string): boolean {
+  return (
+    (pathname === ADMIN_PREFIX || pathname.startsWith(`${ADMIN_PREFIX}/`)) &&
+    pathname !== ADMIN_SIGN_IN
   );
 }
 
@@ -29,9 +40,19 @@ export async function middleware(req: NextRequest, event: unknown) {
   // env vars when auth is disabled (mirrors the original optional-auth pattern).
   const { auth } = await import("@/auth");
   const handler = auth((r) => {
-    if (!r.auth && isProtected(r.nextUrl.pathname)) {
+    const path = r.nextUrl.pathname;
+    // Admin routes: require an authenticated admin; otherwise to /admin/sign-in.
+    if (isAdminRoute(path)) {
+      if (!r.auth || r.auth.role !== "admin") {
+        const signIn = new URL(ADMIN_SIGN_IN, r.nextUrl.origin);
+        signIn.searchParams.set("callbackUrl", path);
+        return NextResponse.redirect(signIn);
+      }
+      return NextResponse.next();
+    }
+    if (!r.auth && isProtected(path)) {
       const signIn = new URL("/sign-in", r.nextUrl.origin);
-      signIn.searchParams.set("callbackUrl", r.nextUrl.pathname);
+      signIn.searchParams.set("callbackUrl", path);
       return NextResponse.redirect(signIn);
     }
     return NextResponse.next();

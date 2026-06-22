@@ -46,6 +46,14 @@ enum CreditReason {
   refund // returned on job failure
 }
 
+// Access level for a User. `user` (default) is a normal creator scoped to their
+// own organization; `admin` is a system operator with cross-tenant access to the
+// admin dashboard (see app/api/src/admin and app/web/src/app/(admin)).
+enum UserRole {
+  user
+  admin
+}
+
 model Organization {
   id        String   @id @default(cuid())
   // Legacy Clerk organization id (or a synthetic id in MOCK_AUTH mode). Optional
@@ -86,6 +94,13 @@ model User {
   email          String   @unique
   name           String?
   avatarUrl      String?  @map("avatar_url")
+  // Access level. Regular Google signups are `user`; admins are provisioned via
+  // the seed script (real) or the in-memory seed (mock) and log in with a
+  // password (Credentials provider), never Google.
+  role           UserRole @default(user)
+  // bcrypt hash for Credentials (admin) login. Null for Google-only users.
+  passwordHash   String?  @map("password_hash")
+  lastLoginAt    DateTime? @map("last_login_at")
   // The user's personal organization (the tenant boundary for their data).
   organizationId String   @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -93,6 +108,7 @@ model User {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId])
+  @@index([role])
   @@map("users")
 }
 

@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '../config/config.module';
 import { PersistenceModule } from '../persistence/persistence.module';
 import { AppAuthGuard } from './auth.guard';
+import { AdminGuard } from './admin.guard';
 import { AppAuthService } from './app-auth.service';
 import { AuthController } from './auth.controller';
 
@@ -14,7 +15,7 @@ import { AuthController } from './auth.controller';
 @Module({
   imports: [ConfigModule, PersistenceModule],
   controllers: [AuthController],
-  providers: [AppAuthService, AppAuthGuard],
-  exports: [AppAuthService, AppAuthGuard],
+  providers: [AppAuthService, AppAuthGuard, AdminGuard],
+  exports: [AppAuthService, AppAuthGuard, AdminGuard],
 })
 export class AuthModule {}

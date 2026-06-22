@@ -1,5 +1,6 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { AppConfigService } from '../config/config.service';
+import { UserRole } from '../persistence/store.types';
 
 /** Claims carried by the app's own API access token (HS256). */
 export interface AppClaims {
@@ -9,6 +10,8 @@ export interface AppClaims {
   org_id: string;
   email?: string;
   name?: string;
+  /** Access level minted into the token by the web session callback. */
+  role?: UserRole;
 }
 
 /**

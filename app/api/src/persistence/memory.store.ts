@@ -1,6 +1,9 @@
 import { Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import * as bcrypt from 'bcryptjs';
 import {
+  AdminListParams,
+  AdminOverviewStats,
   ClipRecord,
   CreateClipInput,
   CreateJobInput,
@@ -9,11 +12,16 @@ import {
   DataStore,
   GoogleProfile,
   JobRecord,
+  JobStatus,
   OrganizationRecord,
+  OrganizationWithCounts,
+  Paged,
   PlanTier,
   SubscriptionStatus,
   UserRecord,
+  UserRole,
 } from './store.types';
+import { PLANS } from '../billing/plans';
 
 const now = (): string => new Date().toISOString();
 const id = (): string => randomUUID();
@@ -35,6 +43,168 @@ export class MemoryStore implements DataStore {
 
   async init(): Promise<void> {
     this.logger.log('In-memory data store ready (data is ephemeral).');
+    if ((process.env.MOCK_ADMIN ?? '').toLowerCase() !== 'false') {
+      this.seedAdmin();
+    }
+  }
+
+  /**
+   * Seed a system admin + a handful of demo orgs/users/jobs/clips/ledger so the
+   * admin dashboard renders against real (in-memory) data in local dev. The
+   * admin logs in via the Credentials provider → POST /auth/login, which checks
+   * the bcrypt hash below. Disable with MOCK_ADMIN=false.
+   */
+  private seedAdmin(): void {
+    const adminEmail = (process.env.ADMIN_EMAIL ?? 'admin@focaldive.local').trim();
+    const adminPassword = (
+      process.env.MOCK_ADMIN_PASSWORD ??
+      process.env.ADMIN_PASSWORD ??
+      'changeme-admin'
+    ).trim();
+
+    const adminOrg: OrganizationRecord = {
+      id: id(),
+      clerkOrgId: null,
+      name: 'FocalDive Admin',
+      plan: 'pro',
+      creditBalance: 0,
+      stripeCustomerId: null,
+      subscriptionId: null,
+      subscriptionStatus: null,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    this.orgs.set(adminOrg.id, adminOrg);
+    const admin: UserRecord = {
+      id: id(),
+      googleId: null,
+      email: adminEmail,
+      name: 'System Admin',
+      avatarUrl: null,
+      role: 'admin',
+      passwordHash: bcrypt.hashSync(adminPassword, 10),
+      lastLoginAt: null,
+      organizationId: adminOrg.id,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    this.users.set(admin.id, admin);
+    this.usersByEmail.set(admin.email, admin.id);
+    this.logger.log(`Seeded admin user: ${adminEmail} (MOCK_ADMIN_PASSWORD)`);
+
+    // Demo tenants so the dashboard isn't empty. Deterministic, spread over the
+    // last ~21 days for the overview timeseries.
+    const demos: { name: string; plan: PlanTier; email: string }[] = [
+      { name: "Ava's workspace", plan: 'pro', email: 'ava@example.com' },
+      { name: "Liam's workspace", plan: 'starter', email: 'liam@example.com' },
+      { name: "Noah's workspace", plan: 'free', email: 'noah@example.com' },
+      { name: "Mia's workspace", plan: 'free', email: 'mia@example.com' },
+      { name: "Zoe's workspace", plan: 'starter', email: 'zoe@example.com' },
+    ];
+    const statuses: JobStatus[] = ['completed', 'completed', 'running', 'failed', 'queued'];
+    demos.forEach((d, oi) => {
+      const created = this.daysAgo(20 - oi * 3);
+      const org: OrganizationRecord = {
+        id: id(),
+        clerkOrgId: null,
+        name: d.name,
+        plan: d.plan,
+        creditBalance: PLANS[d.plan].monthlyCredits - oi * 7,
+        stripeCustomerId: null,
+        subscriptionId: d.plan === 'free' ? null : `sub_demo_${oi}`,
+        subscriptionStatus: d.plan === 'free' ? null : 'ACTIVE',
+        createdAt: created,
+        updatedAt: created,
+      };
+      this.orgs.set(org.id, org);
+      this.ledger.push({
+        id: id(),
+        organizationId: org.id,
+        amount: PLANS[d.plan].monthlyCredits,
+        reason: 'grant',
+        jobId: null,
+        stripeEventId: null,
+        note: `${PLANS[d.plan].label} grant`,
+        createdAt: created,
+      });
+      const user: UserRecord = {
+        id: id(),
+        googleId: `google_demo_${oi}`,
+        email: d.email,
+        name: d.name.replace("'s workspace", ''),
+        avatarUrl: null,
+        role: 'user',
+        passwordHash: null,
+        lastLoginAt: this.daysAgo(oi),
+        organizationId: org.id,
+        createdAt: created,
+        updatedAt: created,
+      };
+      this.users.set(user.id, user);
+      this.usersByGoogle.set(user.googleId!, user.id);
+      this.usersByEmail.set(user.email, user.id);
+
+      // A couple of jobs per org, with clips for completed ones.
+      const jobCount = 2 + (oi % 2);
+      for (let ji = 0; ji < jobCount; ji++) {
+        const jCreated = this.daysAgo(18 - oi * 3 - ji);
+        const status = statuses[(oi + ji) % statuses.length];
+        const job: JobRecord = {
+          id: id(),
+          organizationId: org.id,
+          sourceType: 'url',
+          sourceUrl: `https://youtu.be/demo${oi}${ji}`,
+          sourceKey: null,
+          clipCount: 6,
+          style: null,
+          config: null,
+          status,
+          progress: status === 'completed' ? 100 : status === 'running' ? 45 : 0,
+          stage: status === 'completed' ? 'done' : 'transcribe',
+          creditsCharged: 12,
+          error: status === 'failed' ? 'Mock failure (demo)' : null,
+          createdAt: jCreated,
+          updatedAt: jCreated,
+        };
+        this.jobs.set(job.id, job);
+        this.ledger.push({
+          id: id(),
+          organizationId: org.id,
+          amount: -12,
+          reason: 'debit',
+          jobId: job.id,
+          stripeEventId: null,
+          note: 'Job submit',
+          createdAt: jCreated,
+        });
+        if (status === 'completed') {
+          for (let r = 1; r <= 4; r++) {
+            const clip: ClipRecord = {
+              id: id(),
+              organizationId: org.id,
+              jobId: job.id,
+              rank: r,
+              start: r * 30,
+              end: r * 30 + 28,
+              hookLine: `Demo hook ${r} for ${user.name}`,
+              hookTitle: `Hook ${r}`,
+              viralityScore: 95 - r * 7 - oi,
+              reason: 'High retention + strong hook (demo).',
+              suggestedTitle: `Demo clip ${r}`,
+              finalKey: null,
+              thumbKey: null,
+              createdAt: jCreated,
+              updatedAt: jCreated,
+            };
+            this.clips.set(clip.id, clip);
+          }
+        }
+      }
+    });
+  }
+
+  private daysAgo(n: number): string {
+    return new Date(Date.now() - n * 86_400_000).toISOString();
   }
 
   async shutdown(): Promise<void> {
@@ -138,6 +308,9 @@ export class MemoryStore implements DataStore {
       email: profile.email,
       name: profile.name ?? null,
       avatarUrl: profile.avatarUrl ?? null,
+      role: 'user',
+      passwordHash: null,
+      lastLoginAt: null,
       organizationId: org.id,
       createdAt: now(),
       updatedAt: now(),
@@ -294,5 +467,233 @@ export class MemoryStore implements DataStore {
     const updated = { ...clip, ...patch, updatedAt: now() };
     this.clips.set(clipId, updated);
     return updated;
+  }
+
+  // ── Admin (cross-tenant) ──────────────────────────────────────────────────
+
+  private paginate<T>(rows: T[], p: AdminListParams): Paged<T> {
+    const page = Math.max(1, p.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, p.pageSize ?? 20));
+    const start = (page - 1) * pageSize;
+    return { rows: rows.slice(start, start + pageSize), total: rows.length, page, pageSize };
+  }
+
+  private matches(haystack: (string | null | undefined)[], search?: string): boolean {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return haystack.some((h) => (h ?? '').toLowerCase().includes(q));
+  }
+
+  async adminGetOverview(rangeDays: number): Promise<AdminOverviewStats> {
+    const orgs = [...this.orgs.values()];
+    const users = [...this.users.values()];
+    const jobs = [...this.jobs.values()];
+    const clips = [...this.clips.values()];
+
+    const jobsByStatus: Record<JobStatus, number> = {
+      queued: 0,
+      running: 0,
+      completed: 0,
+      failed: 0,
+      canceled: 0,
+    };
+    for (const j of jobs) jobsByStatus[j.status]++;
+
+    const plansByTier: Record<PlanTier, number> = { free: 0, starter: 0, pro: 0 };
+    for (const o of orgs) plansByTier[o.plan]++;
+
+    const revenueMrrUsd = orgs.reduce(
+      (sum, o) =>
+        o.subscriptionStatus === 'ACTIVE' ? sum + PLANS[o.plan].priceUsd : sum,
+      0,
+    );
+
+    // Build per-day buckets over the range.
+    const days = this.dateBuckets(rangeDays);
+    const jobsTimeseries = days.map((date) => ({ date, created: 0, completed: 0, failed: 0 }));
+    const jIndex = new Map(jobsTimeseries.map((d) => [d.date, d]));
+    for (const j of jobs) {
+      const key = j.createdAt.slice(0, 10);
+      const bucket = jIndex.get(key);
+      if (bucket) {
+        bucket.created++;
+        if (j.status === 'completed') bucket.completed++;
+        if (j.status === 'failed') bucket.failed++;
+      }
+    }
+    const creditsTimeseries = days.map((date) => ({ date, granted: 0, debited: 0, refunded: 0 }));
+    const cIndex = new Map(creditsTimeseries.map((d) => [d.date, d]));
+    for (const l of this.ledger) {
+      const bucket = cIndex.get(l.createdAt.slice(0, 10));
+      if (!bucket) continue;
+      if (l.reason === 'grant') bucket.granted += l.amount;
+      else if (l.reason === 'debit') bucket.debited += Math.abs(l.amount);
+      else if (l.reason === 'refund') bucket.refunded += l.amount;
+    }
+
+    const recentJobs = [...jobs]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 10);
+
+    const usageByOrg = new Map<string, { jobCount: number; creditsUsed: number }>();
+    for (const j of jobs) {
+      const u = usageByOrg.get(j.organizationId) ?? { jobCount: 0, creditsUsed: 0 };
+      u.jobCount++;
+      u.creditsUsed += j.creditsCharged;
+      usageByOrg.set(j.organizationId, u);
+    }
+    const topOrgsByUsage = [...usageByOrg.entries()]
+      .map(([orgId, u]) => ({ organization: this.orgs.get(orgId)!, ...u }))
+      .filter((x) => x.organization)
+      .sort((a, b) => b.creditsUsed - a.creditsUsed)
+      .slice(0, 5);
+
+    return {
+      totals: {
+        organizations: orgs.length,
+        users: users.length,
+        jobs: jobs.length,
+        clips: clips.length,
+        creditsOutstanding: orgs.reduce((s, o) => s + o.creditBalance, 0),
+      },
+      jobsByStatus,
+      plansByTier,
+      revenueMrrUsd,
+      jobsTimeseries,
+      creditsTimeseries,
+      recentJobs,
+      topOrgsByUsage,
+    };
+  }
+
+  private dateBuckets(rangeDays: number): string[] {
+    const out: string[] = [];
+    for (let i = rangeDays - 1; i >= 0; i--) {
+      out.push(new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10));
+    }
+    return out;
+  }
+
+  private withCounts(org: OrganizationRecord): OrganizationWithCounts {
+    let userCount = 0;
+    for (const u of this.users.values()) if (u.organizationId === org.id) userCount++;
+    let jobCount = 0;
+    for (const j of this.jobs.values()) if (j.organizationId === org.id) jobCount++;
+    return { ...org, userCount, jobCount };
+  }
+
+  async adminListOrganizations(p: AdminListParams): Promise<Paged<OrganizationWithCounts>> {
+    const rows = [...this.orgs.values()]
+      .filter((o) => this.matches([o.name, o.id, o.plan], p.search))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((o) => this.withCounts(o));
+    return this.paginate(rows, p);
+  }
+
+  async adminGetOrganization(orgId: string): Promise<OrganizationWithCounts | null> {
+    const org = this.orgs.get(orgId);
+    return org ? this.withCounts(org) : null;
+  }
+
+  async adminListUsers(p: AdminListParams): Promise<Paged<UserRecord>> {
+    const rows = [...this.users.values()]
+      .filter((u) => this.matches([u.email, u.name, u.id, u.role], p.search))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.paginate(rows, p);
+  }
+
+  async adminListJobs(
+    p: AdminListParams & { status?: JobStatus; organizationId?: string },
+  ): Promise<Paged<JobRecord>> {
+    const rows = [...this.jobs.values()]
+      .filter((j) => (p.status ? j.status === p.status : true))
+      .filter((j) => (p.organizationId ? j.organizationId === p.organizationId : true))
+      .filter((j) => this.matches([j.id, j.sourceUrl, j.organizationId], p.search))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.paginate(rows, p);
+  }
+
+  async adminListClips(
+    p: AdminListParams & { organizationId?: string; jobId?: string },
+  ): Promise<Paged<ClipRecord>> {
+    const rows = [...this.clips.values()]
+      .filter((c) => (p.organizationId ? c.organizationId === p.organizationId : true))
+      .filter((c) => (p.jobId ? c.jobId === p.jobId : true))
+      .filter((c) => this.matches([c.hookLine, c.suggestedTitle, c.id], p.search))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.paginate(rows, p);
+  }
+
+  async adminListLedgerAll(
+    p: AdminListParams & { organizationId?: string },
+  ): Promise<Paged<CreditLedgerRecord>> {
+    const rows = this.ledger
+      .filter((l) => (p.organizationId ? l.organizationId === p.organizationId : true))
+      .filter((l) => this.matches([l.note, l.organizationId, l.reason], p.search))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.paginate(rows, p);
+  }
+
+  async adminGetUserByEmail(email: string): Promise<UserRecord | null> {
+    const userId = this.usersByEmail.get(email);
+    return userId ? this.users.get(userId) ?? null : null;
+  }
+
+  async adminSetUserRole(userId: string, role: UserRole): Promise<UserRecord | null> {
+    const user = this.users.get(userId);
+    if (!user) return null;
+    user.role = role;
+    user.updatedAt = now();
+    return user;
+  }
+
+  async adminTouchLogin(userId: string): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      user.lastLoginAt = now();
+      user.updatedAt = now();
+    }
+  }
+
+  async adminCancelJob(jobId: string): Promise<JobRecord | null> {
+    const job = this.jobs.get(jobId);
+    if (!job) return null;
+    job.status = 'canceled';
+    job.updatedAt = now();
+    return job;
+  }
+
+  async adminDeleteUser(userId: string): Promise<boolean> {
+    const user = this.users.get(userId);
+    if (!user) return false;
+    this.users.delete(userId);
+    this.usersByEmail.delete(user.email);
+    if (user.googleId) this.usersByGoogle.delete(user.googleId);
+    return true;
+  }
+
+  async adminDeleteOrganization(orgId: string): Promise<boolean> {
+    const org = this.orgs.get(orgId);
+    if (!org) return false;
+    this.orgs.delete(orgId);
+    if (org.clerkOrgId) this.orgsByClerk.delete(org.clerkOrgId);
+    for (const [uid, u] of this.users) if (u.organizationId === orgId) await this.adminDeleteUser(uid);
+    for (const [jid, j] of this.jobs) if (j.organizationId === orgId) this.jobs.delete(jid);
+    for (const [cid, c] of this.clips) if (c.organizationId === orgId) this.clips.delete(cid);
+    for (let i = this.ledger.length - 1; i >= 0; i--) {
+      if (this.ledger[i].organizationId === orgId) this.ledger.splice(i, 1);
+    }
+    return true;
+  }
+
+  async adminDeleteJob(jobId: string): Promise<boolean> {
+    if (!this.jobs.has(jobId)) return false;
+    this.jobs.delete(jobId);
+    for (const [cid, c] of this.clips) if (c.jobId === jobId) this.clips.delete(cid);
+    return true;
+  }
+
+  async adminDeleteClip(clipId: string): Promise<boolean> {
+    return this.clips.delete(clipId);
   }
 }

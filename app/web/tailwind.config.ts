@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: ["class"],
   content: [
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -8,6 +9,50 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // ── Shadcn semantic tokens (admin dashboard) ───────────────────────
+        // Driven by CSS variables defined under `.admin-theme` in globals.css,
+        // mapped to the ink/brand palette below. Additive — none of these names
+        // are used by the existing creator UI, so it is unaffected.
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
+        chart: {
+          1: "hsl(var(--chart-1))",
+          2: "hsl(var(--chart-2))",
+          3: "hsl(var(--chart-3))",
+          4: "hsl(var(--chart-4))",
+          5: "hsl(var(--chart-5))",
+        },
         // Dark product surface palette. Low numbers = LIGHT text, high = dark
         // surfaces (an inverted ramp, since this is dark-mode-only). The 100–400
         // tiers were MISSING before — muted text classes (ink-400/300/200)
@@ -38,7 +83,14 @@ const config: Config = {
         success: { DEFAULT: "#34d399", 300: "#6ee7b7", 400: "#34d399", 500: "#10b981" },
         warning: { DEFAULT: "#fbbf24", 300: "#fcd34d", 400: "#fbbf24", 500: "#f59e0b" },
         danger: { DEFAULT: "#f87171", 300: "#fca5a5", 400: "#f87171", 500: "#ef4444" },
-        accent: "#FFE600", // kept for high-score badges only (with an icon, never color-alone)
+        // High-score badge yellow (kept; was `accent` before shadcn took that
+        // name). Use with an icon, never color-alone.
+        highscore: "#FFE600",
+      },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
         // Geist Sans/Mono loaded in layout.tsx as CSS vars; Inter is the fallback.
@@ -80,7 +132,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [require("tailwindcss-animate")],
 };
 
 export default config;

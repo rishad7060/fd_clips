@@ -192,7 +192,14 @@ export function setTokenGetter(fn: (() => Promise<string | null>) | null): void 
   getToken = fn;
 }
 
-/** Best-effort Bearer header; never throws, returns {} when no token. */
+/**
+ * Best-effort Bearer header; never throws, returns {} when no token. Exported
+ * (as getAuthHeader) so the separate admin client reuses the same registered
+ * session token without re-wiring the AuthTokenBridge.
+ */
+export async function getAuthHeader(): Promise<Record<string, string>> {
+  return authHeader();
+}
 async function authHeader(): Promise<Record<string, string>> {
   if (!getToken) return {};
   try {
