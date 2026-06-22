@@ -89,10 +89,4 @@ export class BillingController {
     const result = await this.polar.handleWebhook(raw, req.headers as Record<string, string>);
     return { received: true, result };
   }
-
-  // ── PayPal (DORMANT — replaced by Polar.sh). Kept for reference/rollback. ──
-  // The PayPal one-time Orders + recurring Subscriptions code still lives in
-  // billing.service.ts (createOrder/captureOrder/createSubscription/
-  // handlePaypalWebhook). To revert: restore the /billing/checkout, /capture,
-  // and the PayPal subscribe/cancel/webhook routes pointing at `this.billing`.
 }

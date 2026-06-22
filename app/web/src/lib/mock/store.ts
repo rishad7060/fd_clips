@@ -73,7 +73,7 @@ const MOCK_PLAN_CREDITS: Record<"starter" | "pro", number> = {
   pro: 300,
 };
 
-/** In-session billing state so a mock PayPal upgrade updates the balance bar.
+/** In-session billing state so a mock upgrade updates the balance bar.
  *  Free tier = 60 credits/mo (mirrors PLANS.free in app/api/src/billing/plans.ts). */
 let billingState: { plan: string; credit_balance: number; monthly_credits: number } = {
   plan: "free",
@@ -202,7 +202,7 @@ export const mockStore = {
 
   /**
    * Deterministic balance for the offline demo. Starts as the free plan
-   * (24/30 used-ish); a mock PayPal capture upgrades it in-session so the
+   * (24/30 used-ish); a mock subscription upgrades it in-session so the
    * billing buttons do something real (grant credits, move the balance bar).
    */
   getBalance(): { plan: string; credit_balance: number; monthly_credits: number } {
@@ -210,40 +210,10 @@ export const mockStore = {
   },
 
   /**
-   * Mock PayPal Orders v2 create. Returns a deterministic local approval URL +
-   * an orderId encoding the tier so a follow-up captureOrder can grant offline.
-   */
-  createOrder(tier: "starter" | "pro"): { url: string; orderId: string; mock: boolean; tier: string } {
-    const orderId = `MOCK-${tier}-${Date.now().toString(36)}`;
-    return {
-      url: `https://mock-paypal.local/checkout?order=${orderId}&tier=${tier}`,
-      orderId,
-      mock: true,
-      tier,
-    };
-  },
-
-  /**
-   * Mock PayPal capture. Reads the tier out of the orderId and grants that
-   * plan's monthly credits locally, updating the in-session balance.
-   */
-  captureOrder(orderId: string): { ok: boolean; plan: string; credit_balance: number } {
-    const tier = /(starter|pro)/.exec(orderId)?.[1] as "starter" | "pro" | undefined;
-    if (tier && MOCK_PLAN_CREDITS[tier]) {
-      billingState = {
-        plan: tier,
-        monthly_credits: MOCK_PLAN_CREDITS[tier],
-        credit_balance: MOCK_PLAN_CREDITS[tier],
-      };
-    }
-    return { ok: true, plan: billingState.plan, credit_balance: billingState.credit_balance };
-  },
-
-  /**
-   * Mock PayPal recurring subscription. There is no real redirect offline, so
+   * Mock Polar recurring subscription. There is no real redirect offline, so
    * we immediately "activate": set the plan + grant the first month's credits,
    * and return a fake subscription id (mock=true tells the caller not to
-   * redirect). Mirrors BillingService.createSubscription's mock branch.
+   * redirect). Mirrors PolarService.createSubscription's mock branch.
    */
   createSubscription(tier: "starter" | "pro"): {
     url: string;
@@ -251,7 +221,7 @@ export const mockStore = {
     mock: boolean;
     tier: string;
   } {
-    const subscriptionId = `I-MOCK-${tier}-${Date.now().toString(36)}`;
+    const subscriptionId = `polar_mock_${tier}_${Date.now().toString(36)}`;
     if (MOCK_PLAN_CREDITS[tier]) {
       billingState = {
         plan: tier,
@@ -260,7 +230,7 @@ export const mockStore = {
       };
     }
     return {
-      url: `https://mock-paypal.local/subscribe?sub=${subscriptionId}&tier=${tier}`,
+      url: `https://mock-polar.local/checkout?product=${tier}`,
       subscriptionId,
       mock: true,
       tier,

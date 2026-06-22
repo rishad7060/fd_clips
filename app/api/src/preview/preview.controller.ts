@@ -72,7 +72,7 @@ export class PreviewController {
    * POST /preview — fetch title/thumbnail/resolution for a URL WITHOUT
    * downloading. yt-dlp metadata extraction needs NO API keys, so this runs
    * REGARDLESS of mockMode — gating it on mockMode (which is true whenever any
-   * unrelated cred like PayPal is missing) was leaving the preview permanently
+   * unrelated cred like the Polar token is missing) was leaving the preview permanently
    * empty. When python/yt-dlp is genuinely unavailable or the extract fails, we
    * fall back to a deterministic stub with a `note` so the UI never breaks.
    * Never 500s.

@@ -55,7 +55,7 @@ See [DOCKER.md](DOCKER.md) for follow/stop commands, the optional manual pipelin
 On Windows, start the real stack (API + web against the real Python pipeline) with:
 
 ```powershell
-pwsh ./start-real.ps1
+powershell -ExecutionPolicy Bypass -File .\start-real.ps1
 ```
 
 This builds and launches the NestJS API on `:4000` and the Next.js web app on `:3000`. With no AI keys configured it falls back to **mock mode**, so the full app still runs end to end. Local env lives in a root `.env` file (gitignored). Note: CPU transcription is slow (~1–3× real time), so prefer speech-heavy videos a few minutes long.

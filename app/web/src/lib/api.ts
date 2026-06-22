@@ -100,36 +100,6 @@ interface ApiBalanceView {
   creditBalance: number;
 }
 
-/** Mirrors billing.controller.ts checkout(): PayPal create-order result. */
-interface ApiCheckoutOrderView {
-  url: string;
-  orderId: string;
-  mock: boolean;
-  tier: string;
-}
-
-/** Mirrors billing.controller.ts capture(): { ok, plan, creditBalance }. */
-interface ApiCaptureView {
-  ok: boolean;
-  plan: PlanTier;
-  creditBalance: number;
-}
-
-/** Result of starting a PayPal checkout (snake_case wire shape). */
-export interface CheckoutOrder {
-  url: string;
-  order_id: string;
-  mock: boolean;
-  tier: string;
-}
-
-/** Result of capturing a PayPal order (snake_case wire shape). */
-export interface CaptureResult {
-  ok: boolean;
-  plan: string;
-  credit_balance: number;
-}
-
 /** Mirrors billing.controller.ts subscribe(): SubscriptionStart. */
 interface ApiSubscriptionStartView {
   url: string;
@@ -138,17 +108,15 @@ interface ApiSubscriptionStartView {
   tier: string;
 }
 
-/** Result of starting a PayPal recurring subscription (snake_case wire shape). */
+/** Result of starting a Polar recurring subscription (snake_case wire shape). */
 export interface SubscriptionStart {
-  /** PayPal approval URL to redirect to (mock: a local stub — don't redirect). */
+  /** Polar hosted-checkout URL to redirect to (mock: a local stub — don't redirect). */
   url: string;
   subscription_id: string;
-  /** True when no real PayPal redirect happened (offline/keyless: already granted). */
+  /** True when no real Polar redirect happened (offline/keyless: already granted). */
   mock: boolean;
   tier: string;
 }
-
-type PlanTier = "free" | "starter" | "pro";
 
 /** Mirrors clips.controller.ts WordView (clip-relative seconds). */
 interface ApiWordView {
@@ -421,43 +389,9 @@ export const api = {
   },
 
   /**
-   * Start a PayPal Orders v2 checkout for a paid tier (POST /billing/checkout).
-   * Returns the approval URL + orderId. In mock mode this is a local stub URL;
-   * the caller immediately captureOrder()s to simulate a completed purchase.
-   */
-  async createOrder(tier: "starter" | "pro"): Promise<CheckoutOrder> {
-    if (USING_MOCK_API) {
-      const r = mockStore.createOrder(tier);
-      return delay({ url: r.url, order_id: r.orderId, mock: r.mock, tier: r.tier });
-    }
-    const v = await http<ApiCheckoutOrderView>("/billing/checkout", {
-      method: "POST",
-      body: JSON.stringify({ tier }),
-    });
-    return { url: v.url, order_id: v.orderId, mock: v.mock, tier: v.tier };
-  },
-
-  /**
-   * Capture an approved PayPal order (POST /billing/capture) and grant the
-   * plan's monthly credits. Returns the new plan + balance. In mock mode the
-   * grant happens locally so the balance bar updates instantly.
-   */
-  async captureOrder(orderId: string): Promise<CaptureResult> {
-    if (USING_MOCK_API) {
-      const r = mockStore.captureOrder(orderId);
-      return delay({ ok: r.ok, plan: r.plan, credit_balance: r.credit_balance });
-    }
-    const v = await http<ApiCaptureView>("/billing/capture", {
-      method: "POST",
-      body: JSON.stringify({ orderId }),
-    });
-    return { ok: v.ok, plan: v.plan, credit_balance: v.creditBalance };
-  },
-
-  /**
-   * Start a PayPal recurring SUBSCRIPTION for a paid tier (POST /billing/subscribe).
-   * Returns the approval URL the buyer is redirected to (+ subscription id). In
-   * mock mode the URL is a local stub, mock=true, and the plan is already granted
+   * Start a Polar recurring SUBSCRIPTION for a paid tier (POST /billing/subscribe).
+   * Returns the hosted-checkout URL the buyer is redirected to (+ subscription id).
+   * In mock mode the URL is a local stub, mock=true, and the plan is already granted
    * locally — the caller refreshes the balance instead of redirecting.
    */
   async createSubscription(tier: "starter" | "pro"): Promise<SubscriptionStart> {
@@ -478,7 +412,7 @@ export const api = {
   },
 
   /**
-   * Cancel the org's PayPal subscription (POST /billing/subscription/cancel).
+   * Cancel the org's Polar subscription (POST /billing/subscription/cancel).
    * Downgrades to free (at period end in real mode, immediately in mock).
    */
   async cancelSubscription(): Promise<{ ok: boolean; plan: string }> {

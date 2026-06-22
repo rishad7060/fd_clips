@@ -11,8 +11,9 @@ import {
 import { PLANS } from './plans';
 
 /**
- * Polar.sh billing (active provider — replaces PayPal; see billing.service.ts
- * for the now-dormant PayPal code).
+ * Polar.sh billing — the payment provider for checkout, cancellation, and
+ * subscription webhooks. Credit/debit/true-up accounting lives in
+ * billing.service.ts.
  *
  * Flow (recurring subscription):
  *   1. createSubscription(org, tier) -> POST /v1/checkouts/ with the tier's
@@ -41,7 +42,7 @@ export class PolarService {
     @Inject(DATA_STORE) private readonly store: DataStore,
   ) {}
 
-  // ── Public seam (mirrors the old PayPal BillingService methods) ───────────
+  // ── Public seam (checkout / cancel / webhook) ─────────────────────────────
 
   /**
    * Start a Polar checkout for a paid tier. Returns the hosted checkout URL.
@@ -91,7 +92,7 @@ export class PolarService {
    */
   async cancelSubscription(organizationId: string): Promise<{ ok: boolean; plan: PlanTier }> {
     const org = await this.requireOrg(organizationId);
-    if (!org.paypalSubscriptionId) {
+    if (!org.subscriptionId) {
       throw new BadRequestException('No active subscription to cancel.');
     }
 
@@ -103,7 +104,7 @@ export class PolarService {
 
     // Only attempt the API cancel for a real subscription id (the checkout id we
     // store before activation is not a subscription id — guard on the prefix).
-    const subId = org.paypalSubscriptionId;
+    const subId = org.subscriptionId;
     const token = this.requireToken();
     try {
       await this.polarFetch(`/v1/subscriptions/${encodeURIComponent(subId)}`, token, {
@@ -177,7 +178,7 @@ export class PolarService {
       case 'subscription.revoked': {
         const subId: string | undefined = data.id;
         if (!subId) return `${type}: no subscription id; ignored`;
-        const org = await this.store.getOrganizationByPaypalSubscriptionId(subId);
+        const org = await this.store.getOrganizationBySubscriptionId(subId);
         if (!org) return `${type}: unknown subscription ${subId}; ignored`;
         const status: SubscriptionStatus = type === 'subscription.revoked' ? 'EXPIRED' : 'CANCELLED';
         await this.downgradeToFree(org.id, status);
@@ -189,7 +190,7 @@ export class PolarService {
     }
   }
 
-  // ── Grant / downgrade (shared semantics with the dormant PayPal path) ──────
+  // ── Grant / downgrade ──────────────────────────────────────────────────────
 
   /** Activate: store the subscription id + ACTIVE, then grant the month. */
   private async activate(
@@ -225,7 +226,7 @@ export class PolarService {
   private async downgradeToFree(organizationId: string, status: SubscriptionStatus): Promise<void> {
     const org = await this.store.getOrganization(organizationId);
     if (!org) return;
-    await this.store.setOrganizationSubscription(organizationId, org.paypalSubscriptionId, status);
+    await this.store.setOrganizationSubscription(organizationId, org.subscriptionId, status);
     if (org.plan !== 'free') {
       await this.store.setOrganizationPlan(organizationId, 'free');
       this.logger.log(`Downgraded org=${organizationId} to free (subscription ${status}).`);

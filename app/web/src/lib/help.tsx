@@ -281,8 +281,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
         </UL>
         <Note>
           Pricing is deliberately set at <B>half of Opus Clip&apos;s</B> for the same monthly minutes
-          (Opus Starter $15, Pro $29). Checkout is handled by PayPal — one-time credit packs and recurring monthly
-          subscriptions are both supported.
+          (Opus Starter $15, Pro $29). Checkout is handled by Polar.sh — recurring monthly
+          subscriptions, with cards and more supported (no account required).
         </Note>
         <P>
           You can upgrade, downgrade, or cancel anytime from the <B>Plans &amp; credits</B> page. Compare with

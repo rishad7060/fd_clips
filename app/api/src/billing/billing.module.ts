@@ -10,8 +10,8 @@ import { PolarService } from './polar.service';
 @Module({
   imports: [ConfigModule, PersistenceModule, AuthModule],
   controllers: [BillingController],
-  // BillingService stays (credits/debits/true-up + the now-dormant PayPal code);
-  // PolarService is the active payment provider for checkout/cancel/webhook.
+  // BillingService owns credits/debits/true-up; PolarService is the payment
+  // provider for checkout/cancel/webhook.
   providers: [BillingService, PolarService],
   exports: [BillingService, PolarService],
 })

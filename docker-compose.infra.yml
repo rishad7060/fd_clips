@@ -1,0 +1,56 @@
+# ============================================================
+# FocalDive Clips — INFRA ONLY (Postgres + Redis)
+# ============================================================
+# The app (NestJS API + Next.js web + Python pipeline) runs LOCALLY
+# on the host; only the stateful infra lives in Docker.
+#
+#   Start infra:   docker compose -f docker-compose.infra.yml up -d
+#   Stop infra:    docker compose -f docker-compose.infra.yml down
+#   Wipe data:     docker compose -f docker-compose.infra.yml down -v
+#   Status/logs:   docker compose -f docker-compose.infra.yml ps
+#
+# Then run the app locally:  powershell -ExecutionPolicy Bypass -File .\start-real.ps1
+#
+# The local app reads DATABASE_URL (and optionally REDIS_URL) from the
+# repo-root .env — see the values added there.
+# ============================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fd_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-focaldive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-focaldive}
+      POSTGRES_DB: ${POSTGRES_DB:-focaldive}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-focaldive} -d ${POSTGRES_DB:-focaldive}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      # Host 5433 → container 5432 (a local Postgres may already own host 5432).
+      # The local app connects via localhost:5433 (see DATABASE_URL in .env).
+      - "5433:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: fd_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
+  redisdata:

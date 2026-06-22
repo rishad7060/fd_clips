@@ -5,9 +5,8 @@ import { PlanTier } from '../persistence/store.types';
  * source-minute. monthlyCredits is granted on subscription / renewal.
  *
  * Pricing is set to HALF of Opus Clip's verified monthly prices for the same
- * minute allotments (Opus starter $15, pro $29). Billing runs through PayPal:
- *  - one-time Orders v2 (buy a credit pack), AND
- *  - recurring Subscriptions (the monthly plan path) — see billing.service.ts.
+ * minute allotments (Opus starter $15, pro $29). Billing runs through Polar.sh
+ * as recurring monthly subscriptions — see polar.service.ts.
  *
  * Capability flags (watermark / editingEnabled / clipRetentionDays /
  * maxResolution) mirror Opus's free-tier limits so the API, worker, and web can

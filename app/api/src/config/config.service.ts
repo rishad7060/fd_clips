@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 /**
- * Resolved feature flags. Each external dependency (DB, Redis, Clerk, PayPal)
+ * Resolved feature flags. Each external dependency (DB, Redis, Clerk, Polar.sh)
  * has a mock fallback so the API boots locally with an empty .env.
  */
 export interface ResolvedFlags {
@@ -16,7 +16,7 @@ export interface ResolvedFlags {
   mockDb: boolean;
   /** When true, signed URLs are faked. */
   mockStorage: boolean;
-  /** When true, PayPal is stubbed (no client id/secret); checkout grants locally. */
+  /** When true, billing is stubbed (no Polar token); checkout grants locally. */
   mockBilling: boolean;
   /**
    * When true, clip keys are served as local-disk files over HTTP via the
@@ -68,46 +68,10 @@ export class AppConfigService {
     return this.get<string>('CLERK_JWKS_URL', undefined);
   }
 
-  get paypalClientId(): string | undefined {
-    return this.get<string>('PAYPAL_CLIENT_ID', undefined);
-  }
-
-  get paypalSecret(): string | undefined {
-    return this.get<string>('PAYPAL_SECRET', undefined);
-  }
-
-  /** PayPal REST API base. Defaults to the sandbox host. */
-  get paypalBaseUrl(): string {
-    return this.get<string>('PAYPAL_BASE_URL', 'https://api-m.sandbox.paypal.com');
-  }
-
-  /** 'sandbox' | 'live' — informational; the base URL drives the actual host. */
-  get paypalMode(): string {
-    return this.get<string>('PAYPAL_MODE', 'sandbox');
-  }
-
-  /** Pre-created PayPal Billing Plan id for the Starter monthly subscription. */
-  get paypalPlanStarter(): string | undefined {
-    return this.get<string>('PAYPAL_PLAN_STARTER', undefined);
-  }
-
-  /** Pre-created PayPal Billing Plan id for the Pro monthly subscription. */
-  get paypalPlanPro(): string | undefined {
-    return this.get<string>('PAYPAL_PLAN_PRO', undefined);
-  }
-
-  /**
-   * PayPal webhook id (from the PayPal Dashboard). Required in real mode to
-   * verify webhook signatures via /v1/notifications/verify-webhook-signature.
-   */
-  get paypalWebhookId(): string | undefined {
-    return this.get<string>('PAYPAL_WEBHOOK_ID', undefined);
-  }
-
-  // ── Polar.sh (active payment provider) ───────────────────────────────────
+  // ── Polar.sh (payment provider) ──────────────────────────────────────────
   // Organization Access Token (polar_oat_...). When absent, billing runs in
   // MOCK mode (local grant, no real checkout). This is the single switch that
-  // flips real vs mock billing now that Polar replaces PayPal.
+  // flips real vs mock billing.
   get polarAccessToken(): string | undefined {
     return this.get<string>('POLAR_ACCESS_TOKEN', undefined);
   }
@@ -142,17 +106,11 @@ export class AppConfigService {
 
   /** Where the provider returns the buyer after a successful checkout. */
   get billingReturnUrl(): string {
-    return this.get<string>(
-      'BILLING_SUCCESS_URL',
-      this.get<string>('PAYPAL_RETURN_URL', 'http://localhost:3000/billing?ok=1'),
-    );
+    return this.get<string>('BILLING_SUCCESS_URL', 'http://localhost:3000/billing?ok=1');
   }
 
   get billingCancelUrl(): string {
-    return this.get<string>(
-      'BILLING_CANCEL_URL',
-      this.get<string>('PAYPAL_CANCEL_URL', 'http://localhost:3000/billing?canceled=1'),
-    );
+    return this.get<string>('BILLING_CANCEL_URL', 'http://localhost:3000/billing?canceled=1');
   }
 
   get r2Bucket(): string {
@@ -191,8 +149,8 @@ export class AppConfigService {
     const hasDb = this.hasValue('DATABASE_URL');
     const hasRedis = this.hasValue('REDIS_URL');
     const hasClerk = this.hasValue('CLERK_SECRET_KEY');
-    // Polar.sh is the active payment provider (replaces PayPal). Real billing is
-    // enabled when a Polar Organization Access Token is present.
+    // Polar.sh is the payment provider. Real billing is enabled when a Polar
+    // Organization Access Token is present.
     const hasPolar = this.hasValue('POLAR_ACCESS_TOKEN');
     const hasR2 = this.hasValue('R2_ACCESS_KEY_ID') && this.hasValue('R2_ENDPOINT');
 

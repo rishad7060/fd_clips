@@ -52,7 +52,7 @@ export class PrismaStore implements DataStore {
       plan: o.plan,
       creditBalance: o.creditBalance,
       stripeCustomerId: o.stripeCustomerId ?? null,
-      paypalSubscriptionId: o.paypalSubscriptionId ?? null,
+      subscriptionId: o.subscriptionId ?? null,
       subscriptionStatus: (o.subscriptionStatus as SubscriptionStatus | null) ?? null,
       createdAt: this.toIso(o.createdAt),
       updatedAt: this.toIso(o.updatedAt),
@@ -143,11 +143,11 @@ export class PrismaStore implements DataStore {
     return this.mapOrg(o);
   }
 
-  async getOrganizationByPaypalSubscriptionId(
+  async getOrganizationBySubscriptionId(
     subscriptionId: string,
   ): Promise<OrganizationRecord | null> {
     const o = await this.prisma.organization.findUnique({
-      where: { paypalSubscriptionId: subscriptionId },
+      where: { subscriptionId },
     });
     return o ? this.mapOrg(o) : null;
   }
@@ -159,7 +159,7 @@ export class PrismaStore implements DataStore {
   ): Promise<OrganizationRecord> {
     const o = await this.prisma.organization.update({
       where: { id: orgId },
-      data: { paypalSubscriptionId: subscriptionId, subscriptionStatus: status },
+      data: { subscriptionId, subscriptionStatus: status },
     });
     return this.mapOrg(o);
   }

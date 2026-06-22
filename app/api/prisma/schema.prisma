@@ -58,10 +58,10 @@ model Organization {
   // their balance. See migration note in app/api/.env.example.
   creditBalance Int   @default(60) @map("credit_balance")
   stripeCustomerId String? @unique @map("stripe_customer_id")
-  // PayPal recurring subscription id (I-XXXXXXXXXXXX) + last-known status from
-  // PayPal webhooks (ACTIVE | SUSPENDED | CANCELLED | EXPIRED). Null on the free
-  // tier / before any subscription. MIGRATION REQUIRED (new columns).
-  paypalSubscriptionId String? @unique @map("paypal_subscription_id")
+  // Recurring subscription id from the payment provider (Polar.sh) + last-known
+  // status from its webhooks (ACTIVE | SUSPENDED | CANCELLED | EXPIRED). Null on
+  // the free tier / before any subscription. MIGRATION REQUIRED (new columns).
+  subscriptionId       String? @unique @map("subscription_id")
   subscriptionStatus   String? @map("subscription_status")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

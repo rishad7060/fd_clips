@@ -11,8 +11,8 @@ import { Button } from "@/components/ui/Button";
  * Billing / plans page (the "Add credits" target). Shows the current plan + credit
  * balance and the three tiers. Credits are source-MINUTES (1 credit = 1 minute).
  * Pricing is half of Opus Clip's (Starter $15, Pro $29) for the same minutes.
- * Upgrade buttons run the PayPal checkout flow (createOrder -> capture); in
- * mock/MVP the capture grants credits locally so the balance bar updates live.
+ * Upgrade buttons start a Polar.sh subscription checkout; in mock/MVP the plan
+ * is granted locally so the balance bar updates live.
  */
 const PLANS = [
   { tier: "free", label: "Free", price: 0, credits: 60, features: ["60 source-minutes / mo", "Up to 1080p clips", "Auto captions + hooks", "Has watermark · clips expire in 3 days"] },
@@ -39,16 +39,16 @@ export default function BillingPage() {
     setPending(tier);
     try {
       // Recurring subscription flow: start the subscription, then hand off to
-      // PayPal's approval page. In mock mode there's no real redirect (the plan
+      // Polar's hosted checkout. In mock mode there's no real redirect (the plan
       // is granted locally), so we just refresh the balance.
       const sub = await api.createSubscription(tier);
       if (sub.mock) {
         const fresh = await api.getBalance();
         setBal(fresh);
       } else {
-        // Real PayPal: redirect to the sandbox/live approval page immediately.
-        // On approval PayPal returns to PAYPAL_RETURN_URL and the
-        // BILLING.SUBSCRIPTION.ACTIVATED webhook grants the first month's credits.
+        // Real Polar: redirect to the hosted checkout immediately. On success
+        // Polar returns to BILLING_SUCCESS_URL and the order.paid /
+        // subscription.active webhook grants the first month's credits.
         window.location.href = sub.url;
       }
     } catch (e) {
@@ -163,7 +163,7 @@ export default function BillingPage() {
                   onClick={() => {
                     if (p.tier === "starter" || p.tier === "pro") upgrade(p.tier);
                   }}
-                  title="Pay with PayPal"
+                  title="Subscribe with Polar"
                 >
                   {pending === p.tier ? "Processing…" : `Upgrade to ${p.label}`}
                 </Button>

@@ -55,7 +55,7 @@ export class MemoryStore implements DataStore {
       plan: 'free',
       creditBalance: defaultCredits,
       stripeCustomerId: null,
-      paypalSubscriptionId: null,
+      subscriptionId: null,
       subscriptionStatus: null,
       createdAt: now(),
       updatedAt: now(),
@@ -87,11 +87,11 @@ export class MemoryStore implements DataStore {
     return org;
   }
 
-  async getOrganizationByPaypalSubscriptionId(
+  async getOrganizationBySubscriptionId(
     subscriptionId: string,
   ): Promise<OrganizationRecord | null> {
     for (const org of this.orgs.values()) {
-      if (org.paypalSubscriptionId === subscriptionId) return org;
+      if (org.subscriptionId === subscriptionId) return org;
     }
     return null;
   }
@@ -103,7 +103,7 @@ export class MemoryStore implements DataStore {
   ): Promise<OrganizationRecord> {
     const org = this.orgs.get(orgId);
     if (!org) throw new Error(`Organization ${orgId} not found`);
-    org.paypalSubscriptionId = subscriptionId;
+    org.subscriptionId = subscriptionId;
     org.subscriptionStatus = status;
     org.updatedAt = now();
     return org;
