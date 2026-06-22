@@ -47,15 +47,14 @@ export function Sidebar() {
     <>
       {/* Desktop rail */}
       <aside className="sticky top-0 hidden h-screen w-16 shrink-0 flex-col items-center gap-1 border-r border-white/[0.08] bg-ink-950/70 py-4 md:flex">
-        {/* Brand mark — the real Logo glyph, not a hand-set letter. */}
+        {/* Brand mark — the real Clips emblem. */}
         <Link
           href="/dashboard"
           aria-label="Home"
-          className="mb-2 grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-brand to-cyan-400 shadow-glow transition hover:-translate-y-0.5"
+          className="mb-2 grid h-10 w-10 place-items-center rounded-xl shadow-glow transition hover:-translate-y-0.5"
         >
-          <svg viewBox="0 0 24 24" className="h-4 w-4 text-white" fill="currentColor">
-            <path d="M5 4v16l14-8z" />
-          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/emblem.png" alt="Clips" className="h-10 w-10 rounded-xl" />
         </Link>
 
         <nav className="flex flex-1 flex-col items-center gap-1">

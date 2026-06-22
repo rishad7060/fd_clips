@@ -107,7 +107,7 @@ function Handle({ posLeft, onPointerDown, label }: {
       aria-label={label}
       onPointerDown={onPointerDown}
       style={{ left: posLeft }}
-      className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 border-ink-950 bg-white shadow-[0_0_0_3px_rgba(109,94,252,0.35)] transition active:cursor-grabbing active:scale-110"
+      className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 border-ink-950 bg-white shadow-[0_0_0_3px_rgba(144,91,244,0.35)] transition active:cursor-grabbing active:scale-110"
     />
   );
 }

@@ -11,9 +11,9 @@ export function generateStaticParams() {
 
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
   const article = articleBySlug(params.slug);
-  if (!article) return { title: "Help center — FocalDive Clips" };
+  if (!article) return { title: "Help center — Clips" };
   return {
-    title: `${article.title} — FocalDive Clips`,
+    title: `${article.title} — Clips`,
     description: article.summary,
   };
 }

@@ -4,7 +4,7 @@ import { Card, SectionTitle } from "@/components/ui/Card";
 import { HELP_ARTICLES, HELP_CATEGORIES, OPUS_DOCS, articlesByCategory } from "@/lib/help";
 
 export const metadata: Metadata = {
-  title: "Help center — FocalDive Clips",
+  title: "Help center — Clips",
   description: "Guides for making clips, captions, credits, billing, sources, and languages.",
 };
 

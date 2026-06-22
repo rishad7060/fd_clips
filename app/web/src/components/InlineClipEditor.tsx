@@ -393,7 +393,7 @@ function HookControls({
         <ColorPicker
           value={hook.color}
           onChange={actions.setHookColor}
-          swatches={["#ffffff", "#FFE600", "#ff3b30", "#00e676", "#6d5efc", "#000000"]}
+          swatches={["#ffffff", "#FFE600", "#ff3b30", "#00e676", "#905BF4", "#000000"]}
         />
       </div>
 
@@ -402,7 +402,7 @@ function HookControls({
         <ColorPicker
           value={hook.boxColor}
           onChange={actions.setHookBoxColor}
-          swatches={["#000000", "#ffffff", "#6d5efc", "#FFE600", "#ff3b30", "#0b0f1a"]}
+          swatches={["#000000", "#ffffff", "#905BF4", "#FFE600", "#ff3b30", "#0b0f1a"]}
         />
       </div>
 

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { CLERK_ENABLED } from "@/lib/auth";
@@ -16,9 +16,13 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-geist-mono" 
 const interBody = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "FocalDive Clips — AI shorts from any long video",
+  title: "Clips — AI shorts from any long video",
   description:
     "Turn any podcast, interview, or long video into ranked, captioned, vertical clips. Built like Opus Clip.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#905BF4",
 };
 
 /**

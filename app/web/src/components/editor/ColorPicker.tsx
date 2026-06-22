@@ -17,7 +17,7 @@ export function ColorPicker({ value, onChange, swatches }: ColorPickerProps) {
   const colors = useMemo(() => {
     if (swatches && swatches.length) return swatches;
     const fromTemplates = STYLE_TEMPLATES.map((t) => t.style.highlight_color);
-    const extras = ["#6d5efc", "#ff3b30", "#00e676"];
+    const extras = ["#905BF4", "#ff3b30", "#00e676"];
     return Array.from(new Set([...fromTemplates, ...extras]));
   }, [swatches]);
 

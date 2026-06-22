@@ -15,7 +15,7 @@ body {
 /* Subtle product-grade page background: radial brand glow on dark ink. */
 body {
   background-image:
-    radial-gradient(60rem 60rem at 110% -10%, rgba(109, 94, 252, 0.18), transparent 55%),
+    radial-gradient(60rem 60rem at 110% -10%, rgba(144, 91, 244, 0.18), transparent 55%),
     radial-gradient(50rem 50rem at -10% 10%, rgba(34, 211, 238, 0.1), transparent 50%);
   background-attachment: fixed;
 }
@@ -35,16 +35,16 @@ input[type="range"]::-webkit-slider-thumb {
   width: 18px;
   height: 18px;
   border-radius: 9999px;
-  background: #8b7dff;
+  background: #ac82f7;
   border: 2px solid #0b0f1a;
   cursor: pointer;
-  box-shadow: 0 0 0 3px rgba(109, 94, 252, 0.25);
+  box-shadow: 0 0 0 3px rgba(144, 91, 244, 0.25);
 }
 input[type="range"]::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 9999px;
-  background: #8b7dff;
+  background: #ac82f7;
   border: 2px solid #0b0f1a;
   cursor: pointer;
 }
@@ -52,7 +52,7 @@ input[type="range"]::-moz-range-thumb {
 /* Premium focus ring — visible only for keyboard nav (:focus-visible), a
    lightened brand that clears 3:1 on dark surfaces. */
 :where(a, button, input, select, textarea, [role="button"], [tabindex]):focus-visible {
-  outline: 2px solid #a99dff;
+  outline: 2px solid #c3a8fa;
   outline-offset: 2px;
   border-radius: 8px;
 }
@@ -86,12 +86,12 @@ input[type="range"]::-moz-range-thumb {
   background:
     conic-gradient(
       from 0deg,
-      rgba(180, 168, 255, 0) 0deg,
-      rgba(139, 125, 255, 0.12) 150deg,
-      rgba(139, 125, 255, 0.5) 250deg,
-      rgba(205, 196, 255, 0.95) 322deg,
+      rgba(195, 168, 250, 0) 0deg,
+      rgba(172, 130, 247, 0.12) 150deg,
+      rgba(172, 130, 247, 0.5) 250deg,
+      rgba(216, 200, 252, 0.95) 322deg,
       #ffffff 350deg,
-      rgba(180, 168, 255, 0) 360deg
+      rgba(195, 168, 250, 0) 360deg
     );
   transform: translate(-50%, -50%) rotate(0deg);
   animation: scanSpin 1.5s linear infinite;
@@ -102,7 +102,7 @@ input[type="range"]::-moz-range-thumb {
 @media (prefers-reduced-motion: reduce) {
   .scan-border::before {
     animation: none;
-    background: rgba(139, 125, 255, 0.5);
+    background: rgba(172, 130, 247, 0.5);
   }
 }
 

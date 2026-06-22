@@ -9,7 +9,7 @@ type Size = "sm" | "md" | "lg";
 const VARIANTS: Record<Variant, string> = {
   // Primary = brand gradient, glow on hover. The ONE primary in the app.
   primary:
-    "bg-gradient-to-b from-brand-400 to-brand-600 text-white shadow-[0_2px_8px_-2px_rgba(109,94,252,0.5)] hover:from-brand-300 hover:to-brand-500 hover:shadow-glow",
+    "bg-gradient-to-b from-brand-400 to-brand-600 text-white shadow-[0_2px_8px_-2px_rgba(144,91,244,0.5)] hover:from-brand-300 hover:to-brand-500 hover:shadow-glow",
   secondary:
     "bg-ink-800 text-white ring-1 ring-white/10 hover:bg-ink-700 hover:ring-white/15",
   ghost: "text-ink-200 hover:bg-ink-800 hover:text-white",

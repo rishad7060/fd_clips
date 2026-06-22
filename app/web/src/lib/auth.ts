@@ -17,6 +17,6 @@ export const CLERK_ENABLED =
 /** The mock user shown in dev mode (no Clerk). */
 export const DEV_USER = {
   name: "Demo Creator",
-  email: "demo@focaldive.app",
+  email: "demo@clips.app",
   initials: "DC",
 };

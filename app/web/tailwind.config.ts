@@ -27,12 +27,12 @@ const config: Config = {
           950: "#070a12",  // app background
         },
         brand: {
-          DEFAULT: "#6d5efc",
-          300: "#a99dff",
-          400: "#8b7dff",
-          500: "#6d5efc",
-          600: "#5a4be0",
-          700: "#4a3dc4",
+          DEFAULT: "#905BF4",
+          300: "#c3a8fa",
+          400: "#ac82f7",
+          500: "#905BF4",
+          600: "#7a44e6",
+          700: "#6232c2",
         },
         // Semantic state colors (were raw Tailwind defaults before — inconsistent).
         success: { DEFAULT: "#34d399", 300: "#6ee7b7", 400: "#34d399", 500: "#10b981" },
@@ -46,7 +46,7 @@ const config: Config = {
         mono: ["var(--font-geist-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       boxShadow: {
-        glow: "0 0 0 1px rgba(109,94,252,0.30), 0 8px 40px -8px rgba(109,94,252,0.45)",
+        glow: "0 0 0 1px rgba(144,91,244,0.30), 0 8px 40px -8px rgba(144,91,244,0.45)",
         // Top-edge inner highlight — the glass-rim "lit from above" look on cards.
         rim: "inset 0 1px 0 0 rgba(255,255,255,0.06)",
         card: "inset 0 1px 0 0 rgba(255,255,255,0.05), 0 1px 2px 0 rgba(0,0,0,0.3)",

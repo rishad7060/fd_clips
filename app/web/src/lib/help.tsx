@@ -115,7 +115,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: () => (
       <>
         <P>
-          FocalDive Clips turns one long video — a podcast, interview, webinar, or stream — into a handful of
+          Clips turns one long video — a podcast, interview, webinar, or stream — into a handful of
           ranked, captioned, vertical <B>9:16</B> short clips, ready to post. You bring the source; the AI finds
           the moments worth cutting and frames them around whoever is speaking.
         </P>

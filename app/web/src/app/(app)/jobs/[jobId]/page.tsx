@@ -296,7 +296,7 @@ function ProgressRing({ value }: { value: number }) {
           cy="60"
           r={r}
           fill="none"
-          stroke="#6d5efc"
+          stroke="#905BF4"
           strokeWidth="10"
           strokeLinecap="round"
           strokeDasharray={c}
