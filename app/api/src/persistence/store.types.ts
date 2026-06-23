@@ -162,6 +162,39 @@ export interface AffiliateWithOwner extends AffiliateRecord {
   ownerEmail: string | null;
 }
 
+/**
+ * Global platform controls (a singleton row), editable from the admin dashboard.
+ * These let an operator put the product into maintenance, pause new work, close
+ * sign-ups, or broadcast an announcement without a redeploy.
+ */
+export interface PlatformSettings {
+  /** When on, the creator app/API is locked for non-admins (read via /platform/status). */
+  maintenanceMode: boolean;
+  /** Message shown to users on the maintenance screen. */
+  maintenanceMessage: string;
+  /** When false, new clip-job submissions are rejected (503). */
+  newJobsEnabled: boolean;
+  /** When false, new user registration is rejected. */
+  signupsEnabled: boolean;
+  /** Global announcement banner shown across the app; empty = hidden. */
+  announcement: string;
+  /** ISO timestamp of the last change. */
+  updatedAt: string;
+}
+
+/** Fields an admin may patch (everything except the server-managed timestamp). */
+export type PlatformSettingsPatch = Partial<Omit<PlatformSettings, 'updatedAt'>>;
+
+/** Baseline platform controls: everything open, nothing in maintenance. */
+export const DEFAULT_PLATFORM_SETTINGS: Omit<PlatformSettings, 'updatedAt'> = {
+  maintenanceMode: false,
+  maintenanceMessage:
+    "FocalDive Clips is undergoing scheduled maintenance. We'll be back shortly.",
+  newJobsEnabled: true,
+  signupsEnabled: true,
+  announcement: '',
+};
+
 export interface CreditLedgerRecord {
   id: string;
   organizationId: string;
@@ -356,6 +389,10 @@ export interface DataStore {
   // Affiliate settings (global default commission rate; admin-configurable).
   getAffiliateSettings(): Promise<{ commissionRate: number | null }>;
   setAffiliateSettings(commissionRate: number): Promise<{ commissionRate: number }>;
+
+  // Platform settings (maintenance / signups / new-jobs / announcement; admin-configurable).
+  getPlatformSettings(): Promise<PlatformSettings>;
+  setPlatformSettings(patch: PlatformSettingsPatch): Promise<PlatformSettings>;
 
   // ── Admin (cross-tenant) ──────────────────────────────────────────────────
   adminGetOverview(rangeDays: number): Promise<AdminOverviewStats>;

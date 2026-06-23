@@ -137,6 +137,11 @@ export class AuthController {
     if (!expected || secret !== expected) {
       throw new ForbiddenException('Invalid internal secret');
     }
+    // Platform control: operators can close new sign-ups without a redeploy.
+    const platform = await this.store.getPlatformSettings();
+    if (!platform.signupsEnabled) {
+      throw new ForbiddenException('New sign-ups are currently disabled.');
+    }
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const result = await this.store.registerUserWithPassword(
       { email: dto.email, name: dto.name, passwordHash },

@@ -21,6 +21,8 @@ import type {
   Paged,
   PlanPatch,
   PlanTier,
+  PlatformSettings,
+  PlatformSettingsPatch,
 } from "@/lib/adminTypes";
 
 /** Global default commission rate fallback - mirrors AFFILIATE_COMMISSION_RATE. */
@@ -45,7 +47,19 @@ interface DB {
   affiliates: AdminAffiliate[];
   referrals: AdminReferral[];
   settings: AffiliateSettings;
+  platform: PlatformSettings;
 }
+
+/** Baseline platform controls - mirrors DEFAULT_PLATFORM_SETTINGS in the API. */
+const DEFAULT_PLATFORM: PlatformSettings = {
+  maintenanceMode: false,
+  maintenanceMessage:
+    "FocalDive Clips is undergoing scheduled maintenance. We'll be back shortly.",
+  newJobsEnabled: true,
+  signupsEnabled: true,
+  announcement: "",
+  updatedAt: new Date().toISOString(),
+};
 
 function seed(): DB {
   const orgs: AdminOrg[] = [];
@@ -121,7 +135,7 @@ function seed(): DB {
     { id: "rf_3", affiliateId: "aff_1", code: "LIAM20", referredOrgId: "org_6", referredEmail: "ivy@example.com", status: "converted", earnedCents: 225, createdAt: daysAgo(8), convertedAt: daysAgo(6) },
   );
 
-  return { orgs, users, jobs, clips, ledger, affiliates, referrals, settings: { commissionRate: DEFAULT_COMMISSION_RATE } };
+  return { orgs, users, jobs, clips, ledger, affiliates, referrals, settings: { commissionRate: DEFAULT_COMMISSION_RATE }, platform: { ...DEFAULT_PLATFORM } };
 }
 
 const db: DB = seed();
@@ -265,5 +279,12 @@ export const adminMock = {
   setAffiliateSettings(commissionRate: number): AffiliateSettings {
     db.settings = { commissionRate };
     return db.settings;
+  },
+  getPlatformSettings(): PlatformSettings {
+    return { ...db.platform };
+  },
+  setPlatformSettings(patch: PlatformSettingsPatch): PlatformSettings {
+    db.platform = { ...db.platform, ...patch, updatedAt: new Date().toISOString() };
+    return { ...db.platform };
   },
 };

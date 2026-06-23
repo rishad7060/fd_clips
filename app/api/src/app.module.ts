@@ -10,6 +10,7 @@ import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 import { PersistenceModule } from './persistence/persistence.module';
 import { PlansModule } from './plans/plans.module';
+import { PlatformModule } from './platform/platform.module';
 import { PreviewModule } from './preview/preview.module';
 import { ProgressModule } from './progress/progress.module';
 import { QueueModule } from './queue/queue.module';
@@ -34,6 +35,7 @@ import { UploadsModule } from './uploads/uploads.module';
     HealthModule,
     AdminModule,
     AffiliatesModule,
+    PlatformModule,
   ],
 })
 export class AppModule {}

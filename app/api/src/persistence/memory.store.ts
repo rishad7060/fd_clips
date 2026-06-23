@@ -20,10 +20,13 @@ import {
   Paged,
   PlanRecord,
   PlanTier,
+  PlatformSettings,
+  PlatformSettingsPatch,
   ReferralRecord,
   SubscriptionStatus,
   UserRecord,
   UserRole,
+  DEFAULT_PLATFORM_SETTINGS,
 } from './store.types';
 import { PLANS } from '../billing/plans';
 
@@ -51,6 +54,7 @@ export class MemoryStore implements DataStore {
   private readonly referrals = new Map<string, ReferralRecord>();
   private readonly referralsByOrg = new Map<string, string>();
   private affiliateSettings: { commissionRate: number | null } = { commissionRate: null };
+  private platformSettings: PlatformSettings = { ...DEFAULT_PLATFORM_SETTINGS, updatedAt: now() };
 
   async init(): Promise<void> {
     this.logger.log('In-memory data store ready (data is ephemeral).');
@@ -732,6 +736,15 @@ export class MemoryStore implements DataStore {
   async setAffiliateSettings(commissionRate: number): Promise<{ commissionRate: number }> {
     this.affiliateSettings = { commissionRate };
     return { commissionRate };
+  }
+
+  async getPlatformSettings(): Promise<PlatformSettings> {
+    return { ...this.platformSettings };
+  }
+
+  async setPlatformSettings(patch: PlatformSettingsPatch): Promise<PlatformSettings> {
+    this.platformSettings = { ...this.platformSettings, ...patch, updatedAt: now() };
+    return { ...this.platformSettings };
   }
 
   // ── Admin (cross-tenant) ──────────────────────────────────────────────────

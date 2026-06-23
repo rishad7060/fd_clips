@@ -3,6 +3,7 @@ import { AuthControls } from "@/components/AuthControls";
 import { Sidebar } from "@/components/Sidebar";
 import { CreditsChip } from "@/components/CreditsChip";
 import { Logo } from "@/components/Logo";
+import { PlatformBanner } from "@/components/PlatformBanner";
 
 /**
  * App shell, Opus-style: a slim icon RAIL on the left + a top bar (brand mark,
@@ -23,7 +24,10 @@ export async function AppShell({ children }: { children: ReactNode }) {
             {authControls}
           </div>
         </header>
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className="min-w-0 flex-1">
+          <PlatformBanner />
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -178,3 +178,25 @@ export interface AdminReferral {
 export interface AffiliateSettings {
   commissionRate: number;
 }
+
+/** Global platform controls (maintenance / gating / announcement). */
+export interface PlatformSettings {
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+  newJobsEnabled: boolean;
+  signupsEnabled: boolean;
+  announcement: string;
+  updatedAt: string;
+}
+
+/** Fields an admin may patch (everything except the server-managed timestamp). */
+export type PlatformSettingsPatch = Partial<Omit<PlatformSettings, "updatedAt">>;
+
+/** Public subset of the platform controls (no admin token needed). */
+export interface PlatformStatus {
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+  announcement: string;
+  signupsEnabled: boolean;
+  updatedAt: string;
+}

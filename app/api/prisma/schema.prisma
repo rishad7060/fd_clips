@@ -261,3 +261,18 @@ model AffiliateSetting {
 
   @@map("affiliate_settings")
 }
+
+// Singleton row holding global platform controls (maintenance / signups /
+// new-jobs gating + a broadcast announcement), editable from the admin
+// dashboard. Defaults (see DEFAULT_PLATFORM_SETTINGS) keep everything open.
+model PlatformSetting {
+  id                 String   @id @default("global")
+  maintenanceMode    Boolean  @default(false) @map("maintenance_mode")
+  maintenanceMessage String   @map("maintenance_message")
+  newJobsEnabled     Boolean  @default(true) @map("new_jobs_enabled")
+  signupsEnabled     Boolean  @default(true) @map("signups_enabled")
+  announcement       String   @default("") @map("announcement")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_settings")
+}

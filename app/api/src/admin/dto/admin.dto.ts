@@ -176,3 +176,30 @@ export class SetAffiliateSettingsDto {
   @Max(1)
   commissionRate!: number;
 }
+
+// ── Platform controls ─────────────────────────────────────────────────────────
+
+/** Partial update to the global platform controls. Omitted fields are left as-is. */
+export class SetPlatformSettingsDto {
+  @IsOptional()
+  @IsBoolean()
+  maintenanceMode?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(280)
+  maintenanceMessage?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  newJobsEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  signupsEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(280)
+  announcement?: string;
+}

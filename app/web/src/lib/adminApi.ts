@@ -25,6 +25,8 @@ import type {
   Paged,
   PlanPatch,
   PlanTier,
+  PlatformSettings,
+  PlatformSettingsPatch,
   UserRole,
 } from "@/lib/adminTypes";
 
@@ -110,6 +112,14 @@ export const adminApi = {
   getSystem(): Promise<AdminSystemInfo> {
     if (USING_MOCK_ADMIN) return delay(adminMock.system());
     return http(`/admin/system`);
+  },
+  getPlatformSettings(): Promise<PlatformSettings> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.getPlatformSettings());
+    return http(`/admin/platform-settings`);
+  },
+  setPlatformSettings(patch: PlatformSettingsPatch): Promise<PlatformSettings> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.setPlatformSettings(patch));
+    return http(`/admin/platform-settings`, { method: "PATCH", body: JSON.stringify(patch) });
   },
   setUserRole(id: string, role: UserRole): Promise<AdminUser> {
     if (USING_MOCK_ADMIN) return delay(adminMock.setUserRole(id, role));

@@ -8,6 +8,7 @@ import {
   DATA_STORE,
   JobStatus,
   PlanTier,
+  PlatformSettingsPatch,
   UserRecord,
   UserRole,
 } from '../persistence/store.types';
@@ -153,6 +154,16 @@ export class AdminService {
 
   updatePlan(tier: PlanTier, patch: PlanPatch) {
     return this.plansService.update(tier, patch);
+  }
+
+  // ── Platform controls ───────────────────────────────────────────────────────
+
+  getPlatformSettings() {
+    return this.store.getPlatformSettings();
+  }
+
+  setPlatformSettings(patch: PlatformSettingsPatch) {
+    return this.store.setPlatformSettings(patch);
   }
 
   system() {

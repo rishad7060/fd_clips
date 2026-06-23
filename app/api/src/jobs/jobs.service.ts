@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { BillingService } from '../billing/billing.service';
 import { DataStore, DATA_STORE, JobRecord } from '../persistence/store.types';
 import { JOB_QUEUE, JobQueue, JobQueuePayload } from '../queue/queue.types';
@@ -20,6 +26,15 @@ export class JobsService {
   ) {}
 
   async create(organizationId: string, dto: CreateJobDto): Promise<JobRecord> {
+    // Platform control: operators can pause all new clip jobs (e.g. when the
+    // worker fleet is down for maintenance) without a redeploy.
+    const platform = await this.store.getPlatformSettings();
+    if (!platform.newJobsEnabled) {
+      throw new ServiceUnavailableException(
+        'New clip jobs are temporarily paused by the administrator. Please try again later.',
+      );
+    }
+
     const credits = this.billing.creditsForDuration(dto.durationSec ?? 0);
 
     // Opus-style per-job config. Persist the camelCase DTO fields (only those

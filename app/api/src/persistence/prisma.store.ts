@@ -18,11 +18,14 @@ import {
   Paged,
   PlanRecord,
   PlanTier,
+  PlatformSettings,
+  PlatformSettingsPatch,
   ReferralRecord,
   ReferralStatus,
   SubscriptionStatus,
   UserRecord,
   UserRole,
+  DEFAULT_PLATFORM_SETTINGS,
 } from './store.types';
 import { PLANS } from '../billing/plans';
 
@@ -619,6 +622,32 @@ export class PrismaStore implements DataStore {
       create: { id: 'global', commissionRate },
     });
     return { commissionRate: s.commissionRate };
+  }
+
+  private mapPlatformSettings(s: any): PlatformSettings {
+    // Fall back to defaults for any column missing on a partially-seeded row.
+    return {
+      maintenanceMode: s?.maintenanceMode ?? DEFAULT_PLATFORM_SETTINGS.maintenanceMode,
+      maintenanceMessage: s?.maintenanceMessage ?? DEFAULT_PLATFORM_SETTINGS.maintenanceMessage,
+      newJobsEnabled: s?.newJobsEnabled ?? DEFAULT_PLATFORM_SETTINGS.newJobsEnabled,
+      signupsEnabled: s?.signupsEnabled ?? DEFAULT_PLATFORM_SETTINGS.signupsEnabled,
+      announcement: s?.announcement ?? DEFAULT_PLATFORM_SETTINGS.announcement,
+      updatedAt: (s?.updatedAt ?? new Date()).toISOString?.() ?? new Date().toISOString(),
+    };
+  }
+
+  async getPlatformSettings(): Promise<PlatformSettings> {
+    const s = await this.prisma.platformSetting.findUnique({ where: { id: 'global' } });
+    return this.mapPlatformSettings(s);
+  }
+
+  async setPlatformSettings(patch: PlatformSettingsPatch): Promise<PlatformSettings> {
+    const s = await this.prisma.platformSetting.upsert({
+      where: { id: 'global' },
+      update: { ...patch },
+      create: { id: 'global', ...DEFAULT_PLATFORM_SETTINGS, ...patch },
+    });
+    return this.mapPlatformSettings(s);
   }
 
   // ── Admin (cross-tenant) ──────────────────────────────────────────────────

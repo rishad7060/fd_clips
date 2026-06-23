@@ -27,6 +27,7 @@ import {
   SetAffiliateRateDto,
   SetAffiliateSettingsDto,
   SetPlanDto,
+  SetPlatformSettingsDto,
   SetRoleDto,
   UpdatePlanDto,
 } from './dto/admin.dto';
@@ -138,6 +139,17 @@ export class AdminController {
   @Get('system')
   system() {
     return this.admin.system();
+  }
+
+  // ── Platform controls ───────────────────────────────────────────────────────
+  @Get('platform-settings')
+  getPlatformSettings() {
+    return this.admin.getPlatformSettings();
+  }
+
+  @Patch('platform-settings')
+  setPlatformSettings(@Body() dto: SetPlatformSettingsDto) {
+    return this.admin.setPlatformSettings(dto);
   }
 
   // ── Affiliates ──────────────────────────────────────────────────────────────
