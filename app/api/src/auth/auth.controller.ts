@@ -1,5 +1,6 @@
 import {
   Body,
+  ConflictException,
   Controller,
   ForbiddenException,
   Headers,
@@ -8,7 +9,7 @@ import {
   Inject,
   UnauthorizedException,
 } from '@nestjs/common';
-import { IsEmail, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 import * as bcrypt from 'bcryptjs';
 import { AppConfigService } from '../config/config.service';
 import { DataStore, DATA_STORE, UserRole } from '../persistence/store.types';
@@ -42,12 +43,26 @@ interface SyncUserResult {
   plan: string;
 }
 
-/** Body of the internal credentials-login call (admin sign-in). */
+/** Body of the internal credentials-login call (admin + basic-user sign-in). */
 class LoginDto {
   @IsEmail()
   email!: string;
 
   @IsString()
+  password!: string;
+}
+
+/** Body of the internal email/password registration call (basic users). */
+class RegisterDto {
+  @IsString()
+  @MinLength(1)
+  name!: string;
+
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @MinLength(8)
   password!: string;
 }
 
@@ -102,6 +117,43 @@ export class AuthController {
       organizationId: organization.id,
       orgName: organization.name,
       plan: organization.plan,
+    };
+  }
+
+  /**
+   * Email/password registration for basic users. Called server-to-server by the
+   * web app's /api/register route, gated by the same `x-internal-secret` as
+   * /auth/sync. Hashes the password here (crypto stays in the API), provisions a
+   * personal org, and returns the same shape as /auth/login so the web app can
+   * immediately establish a session via the user-credentials provider.
+   */
+  @Post('register')
+  @HttpCode(201)
+  async register(
+    @Headers('x-internal-secret') secret: string | undefined,
+    @Body() dto: RegisterDto,
+  ): Promise<LoginResult> {
+    const expected = this.config.authInternalSecret;
+    if (!expected || secret !== expected) {
+      throw new ForbiddenException('Invalid internal secret');
+    }
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const result = await this.store.registerUserWithPassword(
+      { email: dto.email, name: dto.name, passwordHash },
+      this.plans.freeTierCredits(),
+    );
+    if (!result) {
+      throw new ConflictException('An account with that email already exists.');
+    }
+    const { user, organization } = result;
+    return {
+      userId: user.id,
+      organizationId: organization.id,
+      orgName: organization.name,
+      plan: organization.plan,
+      role: user.role,
+      email: user.email,
+      name: user.name,
     };
   }
 

@@ -221,6 +221,15 @@ export interface DataStore {
     profile: GoogleProfile,
     defaultCredits: number,
   ): Promise<{ user: UserRecord; organization: OrganizationRecord }>;
+  /**
+   * Email+password registration (basic users). Creates a personal Organization
+   * (+ free-tier grant ledger entry) and a `user`-role account carrying the
+   * given bcrypt hash. Returns null if the email is already registered.
+   */
+  registerUserWithPassword(
+    input: { email: string; name: string; passwordHash: string },
+    defaultCredits: number,
+  ): Promise<{ user: UserRecord; organization: OrganizationRecord } | null>;
   getUser(id: string): Promise<UserRecord | null>;
   setOrganizationPlan(id: string, plan: PlanTier): Promise<OrganizationRecord>;
   /** Look up an org by its subscription id (webhook handling). */

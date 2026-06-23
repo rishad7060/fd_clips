@@ -217,6 +217,50 @@ export class PrismaStore implements DataStore {
     return { user: this.mapUser(user), organization: this.mapOrg(org) };
   }
 
+  async registerUserWithPassword(
+    input: { email: string; name: string; passwordHash: string },
+    defaultCredits: number,
+  ): Promise<{ user: UserRecord; organization: OrganizationRecord } | null> {
+    const email = input.email.trim();
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) return null;
+
+    // Create the personal org (+ free-tier grant) and the password user in one
+    // transaction so a user is never left without an organization.
+    try {
+      const { user, org } = await this.prisma.$transaction(async (tx: any) => {
+        const org = await tx.organization.create({
+          data: {
+            name: input.name ? `${input.name}'s workspace` : email,
+            creditBalance: defaultCredits,
+            plan: 'free',
+          },
+        });
+        await tx.creditLedger.create({
+          data: {
+            organizationId: org.id,
+            amount: defaultCredits,
+            reason: 'grant',
+            note: 'Free tier signup grant',
+          },
+        });
+        const user = await tx.user.create({
+          data: {
+            email,
+            name: input.name || null,
+            passwordHash: input.passwordHash,
+            organizationId: org.id,
+          },
+        });
+        return { user, org };
+      });
+      return { user: this.mapUser(user), organization: this.mapOrg(org) };
+    } catch {
+      // Unique-constraint race (email taken between the check and the insert).
+      return null;
+    }
+  }
+
   async getUser(userId: string): Promise<UserRecord | null> {
     const u = await this.prisma.user.findUnique({ where: { id: userId } });
     return u ? this.mapUser(u) : null;

@@ -22,17 +22,19 @@ export function StatCard({
   }[accent];
 
   return (
-    <Card className="p-4">
+    <Card className="p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {label}
           </div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</div>
-          {sub ? <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div> : null}
+          <div className="mt-1.5 text-3xl font-semibold tracking-tight tabular-nums text-foreground">
+            {value}
+          </div>
+          {sub ? <div className="mt-1 text-xs text-muted-foreground">{sub}</div> : null}
         </div>
         {Icon ? (
-          <div className={cn("flex h-9 w-9 items-center justify-center rounded-lg", accentCls)}>
+          <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", accentCls)}>
             <Icon className="h-5 w-5" />
           </div>
         ) : null}

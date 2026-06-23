@@ -323,6 +323,58 @@ export class MemoryStore implements DataStore {
     return { user, organization: org };
   }
 
+  async registerUserWithPassword(
+    input: { email: string; name: string; passwordHash: string },
+    defaultCredits: number,
+  ): Promise<{ user: UserRecord; organization: OrganizationRecord } | null> {
+    const email = input.email.trim();
+    if (this.usersByEmail.has(email)) return null;
+
+    // First-time registration: create a personal org (+ free-tier grant), mirror
+    // of the Google provisioning path but seeded with a password instead.
+    const orgName = input.name ? `${input.name}'s workspace` : email;
+    const org: OrganizationRecord = {
+      id: id(),
+      clerkOrgId: null,
+      name: orgName,
+      plan: 'free',
+      creditBalance: defaultCredits,
+      stripeCustomerId: null,
+      subscriptionId: null,
+      subscriptionStatus: null,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    this.orgs.set(org.id, org);
+    this.ledger.push({
+      id: id(),
+      organizationId: org.id,
+      amount: defaultCredits,
+      reason: 'grant',
+      jobId: null,
+      stripeEventId: null,
+      note: 'Free tier signup grant',
+      createdAt: now(),
+    });
+
+    const user: UserRecord = {
+      id: id(),
+      googleId: null,
+      email,
+      name: input.name || null,
+      avatarUrl: null,
+      role: 'user',
+      passwordHash: input.passwordHash,
+      lastLoginAt: null,
+      organizationId: org.id,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    this.users.set(user.id, user);
+    this.usersByEmail.set(email, user.id);
+    return { user, organization: org };
+  }
+
   async getUser(userId: string): Promise<UserRecord | null> {
     return this.users.get(userId) ?? null;
   }

@@ -13,11 +13,15 @@ export function AdminShell({
   name?: string | null;
 }) {
   return (
-    <div className="admin-theme flex min-h-screen bg-background text-foreground">
-      <AdminSidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <AdminTopbar name={name} />
-        <main className="flex-1 p-5 lg:p-6">{children}</main>
+    <div className="admin-theme min-h-screen bg-background text-foreground">
+      <div className="mx-auto flex min-h-screen max-w-[1600px] gap-3 p-3">
+        <AdminSidebar />
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <AdminTopbar name={name} />
+          <main className="flex-1 rounded-2xl border border-border bg-popover/40 p-5 shadow-card lg:p-6">
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );

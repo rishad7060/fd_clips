@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { AUTH_ENABLED } from "@/lib/auth";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
+import { CredentialsSignInForm, OrDivider } from "@/components/CredentialsAuthForm";
 
 /**
  * Self-hosted sign-in surface (Auth.js + Google OAuth). The catch-all segment is
@@ -29,8 +30,17 @@ function SignInCard() {
       <div className="mt-6">
         <GoogleSignInButton callbackUrl="/dashboard" />
       </div>
+      <div className="mt-5">
+        <OrDivider />
+      </div>
+      <div className="mt-4">
+        <CredentialsSignInForm callbackUrl="/dashboard" />
+      </div>
       <p className="mt-6 text-xs text-ink-400">
-        New here? Continuing with Google creates your account automatically.
+        New here?{" "}
+        <Link href="/sign-up" className="text-brand hover:underline">
+          Create an account
+        </Link>
       </p>
     </div>
   );

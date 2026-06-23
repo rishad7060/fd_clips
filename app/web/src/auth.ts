@@ -80,6 +80,28 @@ async function loginWithPassword(
   return (await res.json()) as LoginResult;
 }
 
+/** Shared authorize() for both Credentials providers (admin + basic user). The
+ *  API decides the role; the returned object seeds the JWT in the callback. */
+async function credentialsAuthorize(
+  creds: Partial<Record<"email" | "password", unknown>> | undefined,
+) {
+  const email = (creds?.email as string | undefined)?.trim();
+  const password = creds?.password as string | undefined;
+  if (!email || !password) return null;
+  const u = await loginWithPassword(email, password);
+  if (!u) return null;
+  return {
+    id: u.userId,
+    email: u.email,
+    name: u.name,
+    userId: u.userId,
+    organizationId: u.organizationId,
+    orgName: u.orgName,
+    plan: u.plan,
+    role: u.role,
+  } as never;
+}
+
 /** Mint the HS256 API access token consumed by the NestJS guard. */
 async function mintApiToken(claims: {
   userId: string;
@@ -114,24 +136,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(creds) {
-        const email = (creds?.email as string | undefined)?.trim();
-        const password = creds?.password as string | undefined;
-        if (!email || !password) return null;
-        const u = await loginWithPassword(email, password);
-        if (!u) return null;
-        // The returned object seeds the JWT in the `jwt` callback below.
-        return {
-          id: u.userId,
-          email: u.email,
-          name: u.name,
-          userId: u.userId,
-          organizationId: u.organizationId,
-          orgName: u.orgName,
-          plan: u.plan,
-          role: u.role,
-        } as never;
+      authorize: (creds) => credentialsAuthorize(creds),
+    }),
+    // Basic-user sign-in (email + password). Same server-side verification as
+    // the admin provider; the API returns role "user" for these accounts. New
+    // accounts are created via /api/register → API POST /auth/register first.
+    Credentials({
+      id: "user-credentials",
+      name: "Email and password",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
       },
+      authorize: (creds) => credentialsAuthorize(creds),
     }),
   ],
   session: { strategy: "jwt" },
@@ -153,7 +170,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.plan = result.plan;
         token.role = "user";
       }
-      if (account?.provider === "admin-credentials" && user) {
+      if (
+        (account?.provider === "admin-credentials" ||
+          account?.provider === "user-credentials") &&
+        user
+      ) {
         const u = user as unknown as {
           userId: string;
           organizationId: string;

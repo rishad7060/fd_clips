@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { AUTH_ENABLED } from "@/lib/auth";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
+import { RegisterForm, OrDivider } from "@/components/CredentialsAuthForm";
 
 /**
  * Self-hosted sign-up surface (Auth.js + Google OAuth). With Google there is no
@@ -29,6 +30,12 @@ function SignUpCard() {
       </p>
       <div className="mt-6">
         <GoogleSignInButton callbackUrl="/dashboard" label="Sign up with Google" />
+      </div>
+      <div className="mt-5">
+        <OrDivider />
+      </div>
+      <div className="mt-4">
+        <RegisterForm callbackUrl="/dashboard" />
       </div>
       <p className="mt-6 text-xs text-ink-400">
         Already have an account?{" "}

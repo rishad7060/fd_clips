@@ -3,7 +3,6 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { ShieldCheck } from "lucide-react";
 import { AUTH_ENABLED } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/shadcn/card";
 import { Button } from "@/components/ui/shadcn/button";
@@ -85,9 +84,8 @@ export default function AdminSignInPage() {
     <div className="admin-theme flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
-          <div className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary">
-            <ShieldCheck className="h-6 w-6" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/label-logo.svg" alt="Clips" className="mx-auto mb-3 h-9 w-auto" draggable={false} />
           <CardTitle>Admin sign in</CardTitle>
           <p className="text-sm text-muted-foreground">FocalDive system administration</p>
         </CardHeader>
