@@ -419,6 +419,21 @@ export const api = {
   },
 
   /**
+   * Confirm a Polar checkout after the post-payment redirect (POST
+   * /billing/confirm). Used when webhooks can't reach the API (e.g. localhost):
+   * the API verifies the checkout is paid with Polar and grants the plan. Safe
+   * to call with a stale/unpaid id - the API returns updated:false. Mock mode
+   * already granted at subscribe time, so this is a no-op.
+   */
+  async confirmCheckout(checkoutId: string): Promise<{ plan: string; updated: boolean }> {
+    if (USING_MOCK_API) return delay({ plan: "free", updated: false });
+    return http<{ plan: string; updated: boolean }>("/billing/confirm", {
+      method: "POST",
+      body: JSON.stringify({ checkoutId }),
+    });
+  },
+
+  /**
    * Cancel the org's Polar subscription (POST /billing/subscription/cancel).
    * Downgrades to free (at period end in real mode, immediately in mock).
    */

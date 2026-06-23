@@ -14,7 +14,7 @@ export function AdminShell({
 }) {
   return (
     <div className="admin-theme min-h-screen bg-background text-foreground">
-      <div className="mx-auto flex min-h-screen max-w-[1600px] gap-3 p-3">
+      <div className="flex min-h-screen gap-3 p-3">
         <AdminSidebar />
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <AdminTopbar name={name} />

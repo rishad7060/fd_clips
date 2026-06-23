@@ -22,7 +22,7 @@ export default function DashboardPage() {
           <span className="h-1.5 w-1.5 rounded-full bg-brand-400" />
           AI clips, captions &amp; reframing
         </p>
-        <h1 className="mx-auto mb-3 max-w-3xl text-balance text-4xl font-bold tracking-tighter text-white sm:text-5xl">
+        <h1 className="mx-auto mb-3 max-w-3xl text-balance text-4xl font-semibold tracking-tighter text-white sm:text-5xl">
           Turn any long video into ready-to-post shorts
         </h1>
         <p className="mx-auto mb-8 max-w-xl text-pretty text-sm text-ink-300 sm:text-base">

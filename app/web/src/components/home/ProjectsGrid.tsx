@@ -35,6 +35,9 @@ export function ProjectsGrid() {
         .then((j) => {
           if (!alive) return;
           setJobs(j);
+          // A success clears any earlier transient error (e.g. a 401 from the
+          // very first poll firing before the session token was ready).
+          setError(null);
           // Stop polling once nothing is left running/queued.
           if (timer && j.every((job) => isTerminal(job.status))) {
             clearInterval(timer);

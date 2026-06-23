@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { api } from "@/lib/api";
+import { onCreditsChanged } from "@/lib/creditsBus";
 import { Button } from "@/components/ui/Button";
 import type { CreditBalance } from "@/lib/types";
 
@@ -11,21 +13,41 @@ import type { CreditBalance } from "@/lib/types";
  * plus an "Add credits" button. Fetches GET /billing/balance (real or mock).
  * Shows a shimmer while loading and a quiet "-" fallback on error so the chip
  * never vanishes (the top bar shouldn't break if billing is unreachable).
+ *
+ * The chip lives in the persistent shell, so it re-fetches whenever the balance
+ * could have changed: on every route change, when a purchase/cancel pings the
+ * credits bus, and when the tab is refocused. Without this it would keep showing
+ * the value from first mount (e.g. 60 after upgrading to a 150-credit plan).
  */
 export function CreditsChip() {
   const [bal, setBal] = useState<CreditBalance | null>(null);
   const [failed, setFailed] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     let alive = true;
-    api
-      .getBalance()
-      .then((b) => alive && setBal(b))
-      .catch(() => alive && setFailed(true));
+    const refresh = () => {
+      api
+        .getBalance()
+        .then((b) => {
+          if (alive) {
+            setBal(b);
+            setFailed(false);
+          }
+        })
+        .catch(() => alive && setFailed(true));
+    };
+
+    refresh();
+    const off = onCreditsChanged(refresh);
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
     return () => {
       alive = false;
+      off();
+      window.removeEventListener("focus", onFocus);
     };
-  }, []);
+  }, [pathname]);
 
   return (
     <div className="flex items-center gap-2">

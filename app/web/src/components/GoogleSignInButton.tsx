@@ -6,6 +6,9 @@ import { signIn } from "next-auth/react";
  * "Continue with Google" button. For self-hosted Google OAuth, sign-in and
  * registration are the same flow - first login auto-provisions the user/org via
  * the API's /auth/sync. `callbackUrl` is where the user lands afterwards.
+ *
+ * Styled as a dark hairline pill (not a white button) so it recedes behind the
+ * brand-gradient primary CTA on the auth cards.
  */
 export function GoogleSignInButton({
   callbackUrl = "/dashboard",
@@ -17,7 +20,7 @@ export function GoogleSignInButton({
   return (
     <button
       onClick={() => signIn("google", { callbackUrl })}
-      className="flex w-full items-center justify-center gap-3 rounded-xl border border-ink-600 bg-white px-5 py-3 text-sm font-semibold text-ink-950 transition hover:bg-ink-50"
+      className="flex w-full items-center justify-center gap-3 rounded-full border border-white/12 bg-ink-950/40 px-5 py-3 text-sm font-semibold text-white transition duration-200 ease-premium hover:border-white/25 hover:bg-ink-800 active:scale-[0.98]"
     >
       <GoogleMark />
       {label}

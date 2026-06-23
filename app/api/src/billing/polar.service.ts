@@ -73,7 +73,10 @@ export class PolarService {
       method: 'POST',
       body: JSON.stringify({
         products: [productId],
-        success_url: this.config.billingReturnUrl,
+        // {CHECKOUT_ID} is interpolated by Polar on redirect so the return URL
+        // carries the checkout id for the post-payment confirmation fallback
+        // (used when webhooks can't reach a local API - see confirmCheckout).
+        success_url: this.withCheckoutId(this.config.billingReturnUrl),
         // metadata is echoed back on the checkout + order + subscription webhooks
         // so we can resolve the org/tier to grant without a separate lookup.
         metadata: { organizationId, tier },
@@ -87,9 +90,74 @@ export class PolarService {
   }
 
   /**
-   * Cancel the org's active Polar subscription. Real mode calls Polar to revoke
-   * (cancel_at_period_end), marks it CANCELLED, and lets the webhook downgrade
-   * at period end. Mock mode downgrades immediately.
+   * Confirm a checkout on the post-payment redirect. This is the fallback for
+   * environments where Polar's webhooks can't reach the API (e.g. a local dev
+   * server on localhost): instead of waiting for order.paid / subscription.active,
+   * the web app calls this with the checkout id from the return URL.
+   *
+   * Security: the paid status is verified SERVER-SIDE against the Polar API (the
+   * client only supplies a checkout id, never the grant), and the checkout's
+   * metadata org MUST match the authenticated caller. Idempotent with the
+   * subscription.active webhook (same ledger key), so running both never
+   * double-grants the activation.
+   */
+  async confirmCheckout(
+    organizationId: string,
+    checkoutId: string,
+  ): Promise<{ plan: PlanTier; updated: boolean }> {
+    const org = await this.requireOrg(organizationId);
+
+    // Mock billing grants at createSubscription time; nothing to confirm.
+    if (this.config.flags.mockBilling) {
+      return { plan: org.plan, updated: false };
+    }
+
+    const token = this.requireToken();
+    const res = await this.polarFetch(
+      `/v1/checkouts/${encodeURIComponent(checkoutId)}`,
+      token,
+      { method: 'GET' },
+    );
+    const checkout = (await res.json()) as {
+      id: string;
+      status?: string;
+      subscription_id?: string | null;
+      subscription?: { id?: string } | null;
+      metadata?: Record<string, unknown>;
+    };
+
+    // Only a paid checkout grants. 'open' / 'expired' / 'failed' => no-op so a
+    // user who bailed on the hosted page doesn't get upgraded.
+    const status = checkout.status ?? '';
+    if (status !== 'succeeded' && status !== 'confirmed') {
+      return { plan: org.plan, updated: false };
+    }
+
+    const parsed = this.resolveOrgTier(checkout);
+    if (!parsed) {
+      throw new BadRequestException('Checkout is missing org/tier metadata.');
+    }
+    // Never let one org confirm another org's checkout.
+    if (parsed.orgId !== organizationId) {
+      throw new BadRequestException('Checkout does not belong to this organization.');
+    }
+
+    const subId = checkout.subscription_id ?? checkout.subscription?.id ?? checkout.id;
+    // Same idempotency key the subscription.active webhook uses, so the two
+    // paths converge on a single activation grant.
+    await this.activate(parsed.orgId, parsed.tier, subId, `polar-sub:${subId}:active`);
+    return { plan: parsed.tier, updated: true };
+  }
+
+  /**
+   * Cancel the org's active Polar subscription and downgrade to Free.
+   *
+   * Real mode best-effort tells Polar to cancel (cancel_at_period_end), then
+   * downgrades locally NOW. The "keep access until period end" path depends on a
+   * subscription.canceled/revoked webhook to trigger the downgrade, which can't
+   * reach a local dev API - so we downgrade immediately for a consistent, visible
+   * result (mirrors mock mode). In a webhook-reachable production deployment you
+   * would instead retain the plan and let the period-end webhook downgrade.
    */
   async cancelSubscription(organizationId: string): Promise<{ ok: boolean; plan: PlanTier }> {
     const org = await this.requireOrg(organizationId);
@@ -103,8 +171,8 @@ export class PolarService {
       return { ok: true, plan: downgraded.plan };
     }
 
-    // Only attempt the API cancel for a real subscription id (the checkout id we
-    // store before activation is not a subscription id - guard on the prefix).
+    // Best-effort: tell Polar to cancel at period end. Wrapped in try/catch so a
+    // stale/checkout-id or transient failure still lets us reflect the cancel.
     const subId = org.subscriptionId;
     const token = this.requireToken();
     try {
@@ -115,8 +183,10 @@ export class PolarService {
     } catch (err) {
       this.logger.warn(`Polar cancel call failed for ${subId}: ${(err as Error).message}`);
     }
-    const updated = await this.store.setOrganizationSubscription(organizationId, subId, 'CANCELLED');
-    return { ok: true, plan: updated.plan };
+    // Reflect the cancellation locally now (see method doc) - mark CANCELLED and
+    // downgrade to Free so the UI updates without depending on a webhook.
+    await this.downgradeToFree(organizationId, 'CANCELLED');
+    return { ok: true, plan: 'free' };
   }
 
   /**
@@ -258,6 +328,13 @@ export class PolarService {
       default:
         return 'SUSPENDED';
     }
+  }
+
+  /** Append Polar's {CHECKOUT_ID} template token to the return URL so the
+   *  post-payment redirect carries the checkout id for confirmCheckout. */
+  private withCheckoutId(url: string): string {
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}checkout_id={CHECKOUT_ID}`;
   }
 
   private productIdFor(tier: Exclude<PlanTier, 'free'>): string {

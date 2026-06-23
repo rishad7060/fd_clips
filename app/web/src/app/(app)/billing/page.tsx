@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { emitCreditsChanged } from "@/lib/creditsBus";
 import type { CreditBalance } from "@/lib/types";
 import { Card, SectionTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -27,7 +28,38 @@ export default function BillingPage() {
 
   useEffect(() => {
     let alive = true;
-    api.getBalance().then((b) => alive && setBal(b)).catch(() => {});
+
+    async function load() {
+      // Returning from Polar's hosted checkout? The success URL carries the
+      // checkout id - confirm it server-side (grants the plan when webhooks
+      // can't reach the API, e.g. localhost), then strip the params so a refresh
+      // doesn't re-confirm.
+      const params = new URLSearchParams(window.location.search);
+      const checkoutId = params.get("checkout_id");
+      if (checkoutId && !api.usingMock) {
+        try {
+          await api.confirmCheckout(checkoutId);
+        } catch {
+          /* fall through - the balance fetch still reflects current state */
+        }
+        params.delete("checkout_id");
+        params.delete("ok");
+        const qs = params.toString();
+        window.history.replaceState(
+          {},
+          "",
+          window.location.pathname + (qs ? `?${qs}` : ""),
+        );
+      }
+
+      const b = await api.getBalance();
+      if (alive) setBal(b);
+      // A confirm above may have just granted the plan after the top-bar chip
+      // already fetched the old balance - ping it to re-fetch.
+      emitCreditsChanged();
+    }
+
+    load().catch(() => {});
     return () => { alive = false; };
   }, []);
 
@@ -45,6 +77,7 @@ export default function BillingPage() {
       if (sub.mock) {
         const fresh = await api.getBalance();
         setBal(fresh);
+        emitCreditsChanged();
       } else {
         // Real Polar: redirect to the hosted checkout immediately. On success
         // Polar returns to BILLING_SUCCESS_URL and the order.paid /
@@ -66,6 +99,7 @@ export default function BillingPage() {
       await api.cancelSubscription();
       const fresh = await api.getBalance();
       setBal(fresh);
+      emitCreditsChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not cancel. Please try again.");
     } finally {

@@ -11,9 +11,13 @@ import { CredentialsSignInForm, OrDivider } from "@/components/CredentialsAuthFo
  */
 export default function SignInPage() {
   return (
-    <main className="grid min-h-screen place-items-center px-6 py-12">
-      <div className="flex w-full max-w-sm flex-col items-center gap-8">
-        <Logo />
+    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-ink-950 px-6 py-12">
+      {/* Brand glow behind the card */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-[-10rem] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-brand/20 blur-[130px]"
+      />
+      <div className="relative w-full max-w-md">
         {AUTH_ENABLED ? <SignInCard /> : <DevNote />}
       </div>
     </main>
@@ -22,23 +26,27 @@ export default function SignInPage() {
 
 function SignInCard() {
   return (
-    <div className="w-full rounded-2xl border border-ink-700 bg-ink-900/70 p-8 text-center shadow-rim">
-      <h1 className="text-lg font-semibold text-white">Welcome back</h1>
-      <p className="mt-2 text-sm text-ink-300">
-        Sign in to turn long videos into ranked, captioned shorts.
+    <div className="rounded-3xl border border-white/[0.08] bg-gradient-to-b from-ink-900 to-ink-950 p-8 shadow-rim sm:p-10">
+      <Logo />
+      <h1 className="mt-8 text-3xl font-semibold tracking-tighter text-white">
+        Welcome back
+      </h1>
+      <p className="mt-3 text-sm leading-relaxed text-ink-300">
+        Sign in to turn long videos into ranked, captioned, vertical shorts -
+        delivered to your inbox in about 30 minutes.
       </p>
-      <div className="mt-6">
+
+      <div className="mt-7">
         <GoogleSignInButton callbackUrl="/dashboard" />
       </div>
-      <div className="mt-5">
+      <div className="my-5">
         <OrDivider />
       </div>
-      <div className="mt-4">
-        <CredentialsSignInForm callbackUrl="/dashboard" />
-      </div>
-      <p className="mt-6 text-xs text-ink-400">
-        New here?{" "}
-        <Link href="/sign-up" className="text-brand hover:underline">
+      <CredentialsSignInForm callbackUrl="/dashboard" />
+
+      <p className="mt-6 text-center text-sm text-ink-400">
+        New to Clips?{" "}
+        <Link href="/sign-up" className="font-semibold text-brand-300 transition hover:text-brand">
           Create an account
         </Link>
       </p>
@@ -48,15 +56,18 @@ function SignInCard() {
 
 function DevNote() {
   return (
-    <div className="w-full rounded-2xl border border-ink-700 bg-ink-900/70 p-8 text-center shadow-rim">
-      <h1 className="text-lg font-semibold text-white">Dev mode - no auth</h1>
-      <p className="mt-2 text-sm text-ink-300">
-        Authentication is mocked locally. Set NEXT_PUBLIC_AUTH_ENABLED=true (and
-        the Google OAuth keys) to enable real sign-in.
+    <div className="rounded-3xl border border-white/[0.08] bg-gradient-to-b from-ink-900 to-ink-950 p-8 text-center shadow-rim sm:p-10">
+      <Logo />
+      <h1 className="mt-8 text-2xl font-semibold tracking-tight text-white">
+        Dev mode - no auth
+      </h1>
+      <p className="mt-3 text-sm leading-relaxed text-ink-300">
+        Authentication is mocked locally. Set NEXT_PUBLIC_AUTH_ENABLED=true to
+        enable real sign-in.
       </p>
       <Link
         href="/dashboard"
-        className="mt-6 inline-block rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600"
+        className="mt-6 inline-block rounded-full bg-gradient-to-b from-brand-400 to-brand px-5 py-2.5 text-sm font-semibold text-white shadow-glow transition hover:from-brand hover:to-brand-600"
       >
         Open dashboard
       </Link>
