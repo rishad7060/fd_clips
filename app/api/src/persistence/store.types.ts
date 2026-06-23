@@ -10,6 +10,8 @@ export type SourceType = 'url' | 'upload';
 export type PlanTier = 'free' | 'starter' | 'pro';
 export type CreditReason = 'grant' | 'debit' | 'refund';
 export type UserRole = 'user' | 'admin';
+/** Lifecycle of a referred org: signed up via a link, then converted (paid). */
+export type ReferralStatus = 'signed_up' | 'converted';
 
 /** Subscription lifecycle (mirrors the payment provider's status values). */
 export type SubscriptionStatus = 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED';
@@ -110,6 +112,54 @@ export interface PlanRecord {
   editingEnabled: boolean;
   clipRetentionDays: number | null;
   maxResolution: string;
+}
+
+/**
+ * Affiliate account - one per organization (auto-created on first access). Tracks
+ * the full funnel (clicks → signups → conversions) and earnings. Money is stored
+ * in integer USD cents. `commissionRate` null = use the global default.
+ */
+export interface AffiliateRecord {
+  id: string;
+  organizationId: string;
+  code: string;
+  /** Per-affiliate override of the commission rate (0–1); null = global default. */
+  commissionRate: number | null;
+  clicks: number;
+  signups: number;
+  conversions: number;
+  /** Lifetime commission earned, USD cents. */
+  earnedCents: number;
+  /** Commission marked paid out by an admin, USD cents. Pending = earned − paid. */
+  paidCents: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A referred organization, attributed to one affiliate. Unique on referredOrgId
+ * (an org can only ever be referred once). `creditedEventIds` records the billing
+ * events already credited so a webhook + confirm replay never double-pays.
+ */
+export interface ReferralRecord {
+  id: string;
+  affiliateId: string;
+  code: string;
+  referredOrgId: string;
+  referredEmail: string | null;
+  status: ReferralStatus;
+  /** Commission earned from this referral so far, USD cents. */
+  earnedCents: number;
+  /** Billing event ids already credited (idempotency). */
+  creditedEventIds: string[];
+  createdAt: string;
+  convertedAt: string | null;
+}
+
+/** Admin view of an affiliate joined with its owner org/user. */
+export interface AffiliateWithOwner extends AffiliateRecord {
+  organizationName: string | null;
+  ownerEmail: string | null;
 }
 
 export interface CreditLedgerRecord {
@@ -273,8 +323,46 @@ export interface DataStore {
     patch: Partial<Pick<ClipRecord, 'start' | 'end'>>,
   ): Promise<ClipRecord | null>;
 
+  // Affiliates (referral program). Org-scoped lookups + funnel counters.
+  /** Get the org's affiliate, creating it (with a unique code) on first access. */
+  getOrCreateAffiliate(organizationId: string): Promise<AffiliateRecord>;
+  getAffiliateById(id: string): Promise<AffiliateRecord | null>;
+  getAffiliateByOrg(organizationId: string): Promise<AffiliateRecord | null>;
+  getAffiliateByCode(code: string): Promise<AffiliateRecord | null>;
+  /** Best-effort click counter bump; no-op on an unknown code. */
+  incrementAffiliateClicks(code: string): Promise<void>;
+  /** Set a per-affiliate commission rate override (null clears it). */
+  setAffiliateRate(affiliateId: string, rate: number | null): Promise<AffiliateRecord | null>;
+  /** Mark `cents` of pending commission as paid out (bumps paidCents). */
+  markAffiliatePaid(affiliateId: string, cents: number): Promise<AffiliateRecord | null>;
+
+  // Referrals (one per referred org).
+  createReferral(input: {
+    affiliateId: string;
+    code: string;
+    referredOrgId: string;
+    referredEmail?: string | null;
+  }): Promise<ReferralRecord>;
+  getReferralByReferredOrg(referredOrgId: string): Promise<ReferralRecord | null>;
+  listReferralsByAffiliate(affiliateId: string): Promise<ReferralRecord[]>;
+  /**
+   * Credit `cents` of commission for a referred org's paid invoice, idempotent on
+   * `eventId`. Flips the referral to 'converted' (and bumps the affiliate's
+   * conversions count) on first conversion. Returns true when credited, false if
+   * no referral exists or the event was already applied.
+   */
+  recordReferralConversion(referredOrgId: string, cents: number, eventId: string): Promise<boolean>;
+
+  // Affiliate settings (global default commission rate; admin-configurable).
+  getAffiliateSettings(): Promise<{ commissionRate: number | null }>;
+  setAffiliateSettings(commissionRate: number): Promise<{ commissionRate: number }>;
+
   // ── Admin (cross-tenant) ──────────────────────────────────────────────────
   adminGetOverview(rangeDays: number): Promise<AdminOverviewStats>;
+  adminListAffiliates(p: AdminListParams): Promise<Paged<AffiliateWithOwner>>;
+  adminListReferrals(
+    p: AdminListParams & { affiliateId?: string },
+  ): Promise<Paged<ReferralRecord>>;
   adminListOrganizations(p: AdminListParams): Promise<Paged<OrganizationWithCounts>>;
   adminGetOrganization(orgId: string): Promise<OrganizationWithCounts | null>;
   adminListUsers(p: AdminListParams): Promise<Paged<UserRecord>>;

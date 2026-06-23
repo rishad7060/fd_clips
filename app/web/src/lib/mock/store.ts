@@ -1,4 +1,6 @@
 import type {
+  AffiliateSummary,
+  AttributeResult,
   Clip,
   ClipsResponse,
   ClipTranscript,
@@ -6,6 +8,7 @@ import type {
   Job,
   JobProgressEvent,
   JobStage,
+  ReferralSummary,
   RenderClipInput,
   VideoPreview,
 } from "../types";
@@ -80,6 +83,73 @@ let billingState: { plan: string; credit_balance: number; monthly_credits: numbe
   credit_balance: 54,
   monthly_credits: 60,
 };
+
+/** Plan prices (USD) - mirrors PLANS in app/api/src/billing/plans.ts. */
+const MOCK_PLAN_PRICE: Record<"starter" | "pro", number> = {
+  starter: 7.5,
+  pro: 14.5,
+};
+
+/**
+ * In-session affiliate state for the offline demo. The demo creator owns an
+ * affiliate account (code DEMO123) with a seeded funnel + referral history. A
+ * mock upgrade (createSubscription) converts the oldest pending referral and
+ * adds commission, so the affiliate page demonstrates the earnings flow without
+ * the API. Money is tracked in USD cents to mirror the backend.
+ */
+const MOCK_AFFILIATE_CODE = "DEMO123";
+const MOCK_COMMISSION_RATE = 0.3;
+let affiliateState: {
+  code: string;
+  commissionRate: number;
+  clicks: number;
+  signups: number;
+  conversions: number;
+  earnedCents: number;
+  paidCents: number;
+  referrals: Array<{
+    id: string;
+    status: ReferralSummary["status"];
+    referredEmail: string | null;
+    earnedCents: number;
+    createdAt: string;
+    convertedAt: string | null;
+  }>;
+} = {
+  code: MOCK_AFFILIATE_CODE,
+  commissionRate: MOCK_COMMISSION_RATE,
+  clicks: 128,
+  signups: 9,
+  conversions: 3,
+  earnedCents: 1350,
+  paidCents: 450,
+  referrals: [
+    { id: "ref-1", status: "converted", referredEmail: "a***@gmail.com", earnedCents: 450, createdAt: new Date(Date.now() - 22 * 86_400_000).toISOString(), convertedAt: new Date(Date.now() - 20 * 86_400_000).toISOString() },
+    { id: "ref-2", status: "converted", referredEmail: "m***@outlook.com", earnedCents: 450, createdAt: new Date(Date.now() - 16 * 86_400_000).toISOString(), convertedAt: new Date(Date.now() - 15 * 86_400_000).toISOString() },
+    { id: "ref-3", status: "converted", referredEmail: "j***@yahoo.com", earnedCents: 450, createdAt: new Date(Date.now() - 9 * 86_400_000).toISOString(), convertedAt: new Date(Date.now() - 7 * 86_400_000).toISOString() },
+    { id: "ref-4", status: "signed_up", referredEmail: "n***@gmail.com", earnedCents: 0, createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(), convertedAt: null },
+  ],
+};
+
+function affiliateLink(): string {
+  const origin =
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "https://app.focaldive.local";
+  return `${origin}/?ref=${MOCK_AFFILIATE_CODE}`;
+}
+
+/** Demo helper: a paid upgrade converts the oldest pending referral + earns a cut. */
+function recordMockConversion(tier: "starter" | "pro"): void {
+  const pending = affiliateState.referrals.find((r) => r.status === "signed_up");
+  if (!pending) return;
+  const cents = Math.round(MOCK_PLAN_PRICE[tier] * affiliateState.commissionRate * 100);
+  pending.status = "converted";
+  pending.convertedAt = new Date().toISOString();
+  pending.earnedCents += cents;
+  affiliateState.conversions += 1;
+  affiliateState.earnedCents += cents;
+}
 
 /**
  * source_key -> original filename, populated by mockStore.uploadFile so a later
@@ -229,6 +299,10 @@ export const mockStore = {
         credit_balance: MOCK_PLAN_CREDITS[tier],
       };
     }
+    // Demo the affiliate funnel end-to-end: a paid upgrade flips a referral to
+    // converted and credits a commission (mirrors PolarService.grantMonthly →
+    // AffiliatesService.recordConversion in the real API).
+    recordMockConversion(tier);
     return {
       url: `https://mock-polar.local/checkout?product=${tier}`,
       subscriptionId,
@@ -403,5 +477,60 @@ export const mockStore = {
     rec.job.style = input.style;
     rec.job.updated_at = nowIso();
     return { ...clip };
+  },
+
+  /** The demo creator's affiliate account: link + funnel + referral history. */
+  getAffiliate(): AffiliateSummary {
+    const earned = affiliateState.earnedCents / 100;
+    const paid = affiliateState.paidCents / 100;
+    return {
+      code: affiliateState.code,
+      link: affiliateLink(),
+      commission_rate: affiliateState.commissionRate,
+      clicks: affiliateState.clicks,
+      signups: affiliateState.signups,
+      conversions: affiliateState.conversions,
+      earned_usd: earned,
+      paid_usd: paid,
+      pending_usd: earned - paid,
+      referrals: affiliateState.referrals
+        .slice()
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+        .map((r) => ({
+          id: r.id,
+          status: r.status,
+          referred_email: r.referredEmail,
+          earned_usd: r.earnedCents / 100,
+          created_at: r.createdAt,
+          converted_at: r.convertedAt,
+        })),
+    };
+  },
+
+  /**
+   * Mock attribution. Offline there is only one account, so we demonstrate the
+   * funnel by adding a fresh "signed up" referral (a creator you referred) - the
+   * later mock upgrade then converts it. No-op for the demo's own code.
+   */
+  attributeReferral(code: string): AttributeResult {
+    if (code === affiliateState.code) {
+      return { attributed: false, reason: "self_referral" };
+    }
+    affiliateState.signups += 1;
+    affiliateState.referrals.push({
+      id: "ref-" + Math.random().toString(36).slice(2, 8),
+      status: "signed_up",
+      referredEmail: "new***@example.com",
+      earnedCents: 0,
+      createdAt: new Date().toISOString(),
+      convertedAt: null,
+    });
+    return { attributed: true };
+  },
+
+  /** Mock click tracking: bump the demo affiliate's click counter. */
+  trackAffiliateClick(_code: string): { ok: boolean } {
+    affiliateState.clicks += 1;
+    return { ok: true };
   },
 };

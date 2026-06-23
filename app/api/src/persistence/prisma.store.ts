@@ -2,6 +2,8 @@ import { Logger } from '@nestjs/common';
 import {
   AdminListParams,
   AdminOverviewStats,
+  AffiliateRecord,
+  AffiliateWithOwner,
   ClipRecord,
   CreateClipInput,
   CreateJobInput,
@@ -16,6 +18,8 @@ import {
   Paged,
   PlanRecord,
   PlanTier,
+  ReferralRecord,
+  ReferralStatus,
   SubscriptionStatus,
   UserRecord,
   UserRole,
@@ -135,6 +139,37 @@ export class PrismaStore implements DataStore {
       stripeEventId: l.stripeEventId ?? null,
       note: l.note ?? null,
       createdAt: this.toIso(l.createdAt),
+    };
+  }
+
+  private mapAffiliate(a: any): AffiliateRecord {
+    return {
+      id: a.id,
+      organizationId: a.organizationId,
+      code: a.code,
+      commissionRate: a.commissionRate ?? null,
+      clicks: a.clicks,
+      signups: a.signups,
+      conversions: a.conversions,
+      earnedCents: a.earnedCents,
+      paidCents: a.paidCents,
+      createdAt: this.toIso(a.createdAt),
+      updatedAt: this.toIso(a.updatedAt),
+    };
+  }
+
+  private mapReferral(r: any): ReferralRecord {
+    return {
+      id: r.id,
+      affiliateId: r.affiliateId,
+      code: r.code,
+      referredOrgId: r.referredOrgId,
+      referredEmail: r.referredEmail ?? null,
+      status: (r.status as ReferralStatus) ?? 'signed_up',
+      earnedCents: r.earnedCents,
+      creditedEventIds: r.creditedEventIds ?? [],
+      createdAt: this.toIso(r.createdAt),
+      convertedAt: r.convertedAt ? this.toIso(r.convertedAt) : null,
     };
   }
 
@@ -442,6 +477,150 @@ export class PrismaStore implements DataStore {
     return this.mapClip(c);
   }
 
+  // ── Affiliates ──────────────────────────────────────────────────────────────
+
+  private async genAffiliateCode(): Promise<string> {
+    for (let i = 0; i < 8; i++) {
+      const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+      if (!code) continue;
+      const clash = await this.prisma.affiliate.findUnique({ where: { code } });
+      if (!clash) return code;
+    }
+    // Extremely unlikely fallback: widen the namespace.
+    return Math.random().toString(36).slice(2, 12).toUpperCase();
+  }
+
+  async getOrCreateAffiliate(organizationId: string): Promise<AffiliateRecord> {
+    const existing = await this.prisma.affiliate.findUnique({ where: { organizationId } });
+    if (existing) return this.mapAffiliate(existing);
+    const code = await this.genAffiliateCode();
+    const created = await this.prisma.affiliate.create({ data: { organizationId, code } });
+    return this.mapAffiliate(created);
+  }
+
+  async getAffiliateById(affiliateId: string): Promise<AffiliateRecord | null> {
+    const a = await this.prisma.affiliate.findUnique({ where: { id: affiliateId } });
+    return a ? this.mapAffiliate(a) : null;
+  }
+
+  async getAffiliateByOrg(organizationId: string): Promise<AffiliateRecord | null> {
+    const a = await this.prisma.affiliate.findUnique({ where: { organizationId } });
+    return a ? this.mapAffiliate(a) : null;
+  }
+
+  async getAffiliateByCode(code: string): Promise<AffiliateRecord | null> {
+    const a = await this.prisma.affiliate.findUnique({ where: { code } });
+    return a ? this.mapAffiliate(a) : null;
+  }
+
+  async incrementAffiliateClicks(code: string): Promise<void> {
+    await this.prisma.affiliate.updateMany({ where: { code }, data: { clicks: { increment: 1 } } });
+  }
+
+  async setAffiliateRate(affiliateId: string, rate: number | null): Promise<AffiliateRecord | null> {
+    const a = await this.prisma.affiliate.update({
+      where: { id: affiliateId },
+      data: { commissionRate: rate },
+    });
+    return a ? this.mapAffiliate(a) : null;
+  }
+
+  async markAffiliatePaid(affiliateId: string, cents: number): Promise<AffiliateRecord | null> {
+    const aff = await this.prisma.affiliate.findUnique({ where: { id: affiliateId } });
+    if (!aff) return null;
+    const pending = aff.earnedCents - aff.paidCents;
+    const pay = Math.max(0, Math.min(cents, pending));
+    const updated = await this.prisma.affiliate.update({
+      where: { id: affiliateId },
+      data: { paidCents: { increment: pay } },
+    });
+    return this.mapAffiliate(updated);
+  }
+
+  async createReferral(input: {
+    affiliateId: string;
+    code: string;
+    referredOrgId: string;
+    referredEmail?: string | null;
+  }): Promise<ReferralRecord> {
+    const existing = await this.prisma.referral.findUnique({
+      where: { referredOrgId: input.referredOrgId },
+    });
+    if (existing) return this.mapReferral(existing);
+    const [ref] = await this.prisma.$transaction([
+      this.prisma.referral.create({
+        data: {
+          affiliateId: input.affiliateId,
+          code: input.code,
+          referredOrgId: input.referredOrgId,
+          referredEmail: input.referredEmail ?? null,
+        },
+      }),
+      this.prisma.affiliate.update({
+        where: { id: input.affiliateId },
+        data: { signups: { increment: 1 } },
+      }),
+    ]);
+    return this.mapReferral(ref);
+  }
+
+  async getReferralByReferredOrg(referredOrgId: string): Promise<ReferralRecord | null> {
+    const r = await this.prisma.referral.findUnique({ where: { referredOrgId } });
+    return r ? this.mapReferral(r) : null;
+  }
+
+  async listReferralsByAffiliate(affiliateId: string): Promise<ReferralRecord[]> {
+    const rows = await this.prisma.referral.findMany({
+      where: { affiliateId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map((r: any) => this.mapReferral(r));
+  }
+
+  async recordReferralConversion(
+    referredOrgId: string,
+    cents: number,
+    eventId: string,
+  ): Promise<boolean> {
+    const ref = await this.prisma.referral.findUnique({ where: { referredOrgId } });
+    if (!ref) return false;
+    if ((ref.creditedEventIds ?? []).includes(eventId)) return false;
+    const wasConverted = ref.status === 'converted';
+    await this.prisma.$transaction([
+      this.prisma.referral.update({
+        where: { id: ref.id },
+        data: {
+          earnedCents: { increment: cents },
+          status: 'converted',
+          convertedAt: ref.convertedAt ?? new Date(),
+          creditedEventIds: { push: eventId },
+        },
+      }),
+      this.prisma.affiliate.update({
+        where: { id: ref.affiliateId },
+        data: {
+          earnedCents: { increment: cents },
+          ...(wasConverted ? {} : { conversions: { increment: 1 } }),
+        },
+      }),
+    ]);
+    return true;
+  }
+
+  async getAffiliateSettings(): Promise<{ commissionRate: number | null }> {
+    const s = await this.prisma.affiliateSetting.findUnique({ where: { id: 'global' } });
+    return { commissionRate: s?.commissionRate ?? null };
+  }
+
+  async setAffiliateSettings(commissionRate: number): Promise<{ commissionRate: number }> {
+    const s = await this.prisma.affiliateSetting.upsert({
+      where: { id: 'global' },
+      update: { commissionRate },
+      create: { id: 'global', commissionRate },
+    });
+    return { commissionRate: s.commissionRate };
+  }
+
   // ── Admin (cross-tenant) ──────────────────────────────────────────────────
 
   private pageArgs(p: AdminListParams): { skip: number; take: number; page: number; pageSize: number } {
@@ -648,6 +827,58 @@ export class PrismaStore implements DataStore {
     return { rows: rows.map((l: any) => this.mapLedger(l)), total, page, pageSize };
   }
 
+  async adminListAffiliates(p: AdminListParams): Promise<Paged<AffiliateWithOwner>> {
+    const { skip, take, page, pageSize } = this.pageArgs(p);
+    const where = p.search
+      ? {
+          OR: [
+            { code: { contains: p.search, mode: 'insensitive' } },
+            { organization: { name: { contains: p.search, mode: 'insensitive' } } },
+            { organizationId: { contains: p.search } },
+          ],
+        }
+      : {};
+    const [rows, total] = await Promise.all([
+      this.prisma.affiliate.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+        include: { organization: { include: { users: { take: 1, orderBy: { createdAt: 'asc' } } } } },
+      }),
+      this.prisma.affiliate.count({ where }),
+    ]);
+    return {
+      rows: rows.map((a: any) => ({
+        ...this.mapAffiliate(a),
+        organizationName: a.organization?.name ?? null,
+        ownerEmail: a.organization?.users?.[0]?.email ?? null,
+      })),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  async adminListReferrals(
+    p: AdminListParams & { affiliateId?: string },
+  ): Promise<Paged<ReferralRecord>> {
+    const { skip, take, page, pageSize } = this.pageArgs(p);
+    const where: any = {};
+    if (p.affiliateId) where.affiliateId = p.affiliateId;
+    if (p.search)
+      where.OR = [
+        { code: { contains: p.search, mode: 'insensitive' } },
+        { referredEmail: { contains: p.search, mode: 'insensitive' } },
+        { referredOrgId: { contains: p.search } },
+      ];
+    const [rows, total] = await Promise.all([
+      this.prisma.referral.findMany({ where, skip, take, orderBy: { createdAt: 'desc' } }),
+      this.prisma.referral.count({ where }),
+    ]);
+    return { rows: rows.map((r: any) => this.mapReferral(r)), total, page, pageSize };
+  }
+
   async adminGetUserByEmail(email: string): Promise<UserRecord | null> {
     const u = await this.prisma.user.findUnique({ where: { email } });
     return u ? this.mapUser(u) : null;
@@ -674,10 +905,18 @@ export class PrismaStore implements DataStore {
 
   async adminDeleteOrganization(orgId: string): Promise<boolean> {
     // Remove dependent rows first (no DB-level cascade defined in the schema).
+    // Referrals reference an affiliate, so drop them before affiliates; drop both
+    // the org's own affiliate and any referral that attributed this org.
+    const ownAff = await this.prisma.affiliate.findUnique({ where: { organizationId: orgId } });
     await this.prisma.$transaction([
       this.prisma.clip.deleteMany({ where: { organizationId: orgId } }),
       this.prisma.job.deleteMany({ where: { organizationId: orgId } }),
       this.prisma.creditLedger.deleteMany({ where: { organizationId: orgId } }),
+      this.prisma.referral.deleteMany({ where: { referredOrgId: orgId } }),
+      ...(ownAff
+        ? [this.prisma.referral.deleteMany({ where: { affiliateId: ownAff.id } })]
+        : []),
+      this.prisma.affiliate.deleteMany({ where: { organizationId: orgId } }),
       this.prisma.user.deleteMany({ where: { organizationId: orgId } }),
       this.prisma.organization.deleteMany({ where: { id: orgId } }),
     ]);

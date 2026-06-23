@@ -4,6 +4,8 @@ import * as bcrypt from 'bcryptjs';
 import {
   AdminListParams,
   AdminOverviewStats,
+  AffiliateRecord,
+  AffiliateWithOwner,
   ClipRecord,
   CreateClipInput,
   CreateJobInput,
@@ -18,6 +20,7 @@ import {
   Paged,
   PlanRecord,
   PlanTier,
+  ReferralRecord,
   SubscriptionStatus,
   UserRecord,
   UserRole,
@@ -42,6 +45,12 @@ export class MemoryStore implements DataStore {
   private readonly clips = new Map<string, ClipRecord>();
   private readonly ledger: CreditLedgerRecord[] = [];
   private readonly plans = new Map<PlanTier, PlanRecord>();
+  private readonly affiliates = new Map<string, AffiliateRecord>();
+  private readonly affiliatesByOrg = new Map<string, string>();
+  private readonly affiliatesByCode = new Map<string, string>();
+  private readonly referrals = new Map<string, ReferralRecord>();
+  private readonly referralsByOrg = new Map<string, string>();
+  private affiliateSettings: { commissionRate: number | null } = { commissionRate: null };
 
   async init(): Promise<void> {
     this.logger.log('In-memory data store ready (data is ephemeral).');
@@ -104,6 +113,7 @@ export class MemoryStore implements DataStore {
       { name: "Zoe's workspace", plan: 'starter', email: 'zoe@example.com' },
     ];
     const statuses: JobStatus[] = ['completed', 'completed', 'running', 'failed', 'queued'];
+    const demoOrgIds: string[] = [];
     demos.forEach((d, oi) => {
       const created = this.daysAgo(20 - oi * 3);
       const org: OrganizationRecord = {
@@ -119,6 +129,7 @@ export class MemoryStore implements DataStore {
         updatedAt: created,
       };
       this.orgs.set(org.id, org);
+      demoOrgIds.push(org.id);
       this.ledger.push({
         id: id(),
         organizationId: org.id,
@@ -203,6 +214,48 @@ export class MemoryStore implements DataStore {
         }
       }
     });
+
+    // Seed affiliates + a converted referral so the affiliate dashboards (both
+    // the creator page and /admin/affiliates) render against real demo data.
+    const seedCodes = ['AVA10', 'LIAM20'];
+    demoOrgIds.slice(0, 2).forEach((orgId, i) => {
+      const code = seedCodes[i]!;
+      const converted = i === 0;
+      const aff: AffiliateRecord = {
+        id: id(),
+        organizationId: orgId,
+        code,
+        commissionRate: null,
+        clicks: 42 - i * 15,
+        signups: converted ? 3 : 1,
+        conversions: converted ? 1 : 0,
+        earnedCents: converted ? 225 : 0,
+        paidCents: 0,
+        createdAt: this.daysAgo(15),
+        updatedAt: now(),
+      };
+      this.affiliates.set(aff.id, aff);
+      this.affiliatesByOrg.set(orgId, aff.id);
+      this.affiliatesByCode.set(code, aff.id);
+    });
+    // Ava (AVA10) referred Noah's org, who converted to Starter (7.5 * 0.30 = $2.25).
+    const avaAffId = this.affiliatesByCode.get('AVA10');
+    if (avaAffId && demoOrgIds[2]) {
+      const ref: ReferralRecord = {
+        id: id(),
+        affiliateId: avaAffId,
+        code: 'AVA10',
+        referredOrgId: demoOrgIds[2],
+        referredEmail: 'noah@example.com',
+        status: 'converted',
+        earnedCents: 225,
+        creditedEventIds: ['seed-order'],
+        createdAt: this.daysAgo(10),
+        convertedAt: this.daysAgo(8),
+      };
+      this.referrals.set(ref.id, ref);
+      this.referralsByOrg.set(ref.referredOrgId, ref.id);
+    }
   }
 
   private daysAgo(n: number): string {
@@ -217,6 +270,11 @@ export class MemoryStore implements DataStore {
     this.jobs.clear();
     this.clips.clear();
     this.ledger.length = 0;
+    this.affiliates.clear();
+    this.affiliatesByOrg.clear();
+    this.affiliatesByCode.clear();
+    this.referrals.clear();
+    this.referralsByOrg.clear();
   }
 
   async upsertOrganizationByClerkId(
@@ -532,6 +590,150 @@ export class MemoryStore implements DataStore {
     return updated;
   }
 
+  // ── Affiliates ──────────────────────────────────────────────────────────────
+
+  private genAffiliateCode(): string {
+    let code = '';
+    do {
+      code = Math.random().toString(36).slice(2, 8).toUpperCase();
+    } while (!code || this.affiliatesByCode.has(code));
+    return code;
+  }
+
+  async getOrCreateAffiliate(organizationId: string): Promise<AffiliateRecord> {
+    const existingId = this.affiliatesByOrg.get(organizationId);
+    if (existingId) return this.affiliates.get(existingId)!;
+    const aff: AffiliateRecord = {
+      id: id(),
+      organizationId,
+      code: this.genAffiliateCode(),
+      commissionRate: null,
+      clicks: 0,
+      signups: 0,
+      conversions: 0,
+      earnedCents: 0,
+      paidCents: 0,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    this.affiliates.set(aff.id, aff);
+    this.affiliatesByOrg.set(organizationId, aff.id);
+    this.affiliatesByCode.set(aff.code, aff.id);
+    return aff;
+  }
+
+  async getAffiliateById(affiliateId: string): Promise<AffiliateRecord | null> {
+    return this.affiliates.get(affiliateId) ?? null;
+  }
+
+  async getAffiliateByOrg(organizationId: string): Promise<AffiliateRecord | null> {
+    const aid = this.affiliatesByOrg.get(organizationId);
+    return aid ? this.affiliates.get(aid) ?? null : null;
+  }
+
+  async getAffiliateByCode(code: string): Promise<AffiliateRecord | null> {
+    const aid = this.affiliatesByCode.get(code);
+    return aid ? this.affiliates.get(aid) ?? null : null;
+  }
+
+  async incrementAffiliateClicks(code: string): Promise<void> {
+    const aid = this.affiliatesByCode.get(code);
+    const aff = aid ? this.affiliates.get(aid) : undefined;
+    if (!aff) return;
+    aff.clicks += 1;
+    aff.updatedAt = now();
+  }
+
+  async setAffiliateRate(affiliateId: string, rate: number | null): Promise<AffiliateRecord | null> {
+    const aff = this.affiliates.get(affiliateId);
+    if (!aff) return null;
+    aff.commissionRate = rate;
+    aff.updatedAt = now();
+    return aff;
+  }
+
+  async markAffiliatePaid(affiliateId: string, cents: number): Promise<AffiliateRecord | null> {
+    const aff = this.affiliates.get(affiliateId);
+    if (!aff) return null;
+    const pending = aff.earnedCents - aff.paidCents;
+    aff.paidCents += Math.max(0, Math.min(cents, pending));
+    aff.updatedAt = now();
+    return aff;
+  }
+
+  async createReferral(input: {
+    affiliateId: string;
+    code: string;
+    referredOrgId: string;
+    referredEmail?: string | null;
+  }): Promise<ReferralRecord> {
+    const existing = this.referralsByOrg.get(input.referredOrgId);
+    if (existing) return this.referrals.get(existing)!;
+    const ref: ReferralRecord = {
+      id: id(),
+      affiliateId: input.affiliateId,
+      code: input.code,
+      referredOrgId: input.referredOrgId,
+      referredEmail: input.referredEmail ?? null,
+      status: 'signed_up',
+      earnedCents: 0,
+      creditedEventIds: [],
+      createdAt: now(),
+      convertedAt: null,
+    };
+    this.referrals.set(ref.id, ref);
+    this.referralsByOrg.set(ref.referredOrgId, ref.id);
+    const aff = this.affiliates.get(input.affiliateId);
+    if (aff) {
+      aff.signups += 1;
+      aff.updatedAt = now();
+    }
+    return ref;
+  }
+
+  async getReferralByReferredOrg(referredOrgId: string): Promise<ReferralRecord | null> {
+    const rid = this.referralsByOrg.get(referredOrgId);
+    return rid ? this.referrals.get(rid) ?? null : null;
+  }
+
+  async listReferralsByAffiliate(affiliateId: string): Promise<ReferralRecord[]> {
+    return [...this.referrals.values()]
+      .filter((r) => r.affiliateId === affiliateId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async recordReferralConversion(
+    referredOrgId: string,
+    cents: number,
+    eventId: string,
+  ): Promise<boolean> {
+    const rid = this.referralsByOrg.get(referredOrgId);
+    const ref = rid ? this.referrals.get(rid) : undefined;
+    if (!ref) return false;
+    if (ref.creditedEventIds.includes(eventId)) return false;
+    ref.creditedEventIds.push(eventId);
+    ref.earnedCents += cents;
+    const wasConverted = ref.status === 'converted';
+    ref.status = 'converted';
+    ref.convertedAt = ref.convertedAt ?? now();
+    const aff = this.affiliates.get(ref.affiliateId);
+    if (aff) {
+      aff.earnedCents += cents;
+      if (!wasConverted) aff.conversions += 1;
+      aff.updatedAt = now();
+    }
+    return true;
+  }
+
+  async getAffiliateSettings(): Promise<{ commissionRate: number | null }> {
+    return { commissionRate: this.affiliateSettings.commissionRate };
+  }
+
+  async setAffiliateSettings(commissionRate: number): Promise<{ commissionRate: number }> {
+    this.affiliateSettings = { commissionRate };
+    return { commissionRate };
+  }
+
   // ── Admin (cross-tenant) ──────────────────────────────────────────────────
 
   private paginate<T>(rows: T[], p: AdminListParams): Paged<T> {
@@ -697,6 +899,38 @@ export class MemoryStore implements DataStore {
     return this.paginate(rows, p);
   }
 
+  private affiliateWithOwner(a: AffiliateRecord): AffiliateWithOwner {
+    const org = this.orgs.get(a.organizationId);
+    let ownerEmail: string | null = null;
+    for (const u of this.users.values()) {
+      if (u.organizationId === a.organizationId) {
+        ownerEmail = u.email;
+        break;
+      }
+    }
+    return { ...a, organizationName: org?.name ?? null, ownerEmail };
+  }
+
+  async adminListAffiliates(p: AdminListParams): Promise<Paged<AffiliateWithOwner>> {
+    const rows = [...this.affiliates.values()]
+      .map((a) => this.affiliateWithOwner(a))
+      .filter((a) =>
+        this.matches([a.code, a.organizationName, a.ownerEmail, a.organizationId], p.search),
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.paginate(rows, p);
+  }
+
+  async adminListReferrals(
+    p: AdminListParams & { affiliateId?: string },
+  ): Promise<Paged<ReferralRecord>> {
+    const rows = [...this.referrals.values()]
+      .filter((r) => (p.affiliateId ? r.affiliateId === p.affiliateId : true))
+      .filter((r) => this.matches([r.code, r.referredEmail, r.referredOrgId, r.status], p.search))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.paginate(rows, p);
+  }
+
   async adminGetUserByEmail(email: string): Promise<UserRecord | null> {
     const userId = this.usersByEmail.get(email);
     return userId ? this.users.get(userId) ?? null : null;
@@ -745,6 +979,19 @@ export class MemoryStore implements DataStore {
     for (const [cid, c] of this.clips) if (c.organizationId === orgId) this.clips.delete(cid);
     for (let i = this.ledger.length - 1; i >= 0; i--) {
       if (this.ledger[i].organizationId === orgId) this.ledger.splice(i, 1);
+    }
+    // Remove the org's own affiliate account and any referral attributing it.
+    const affId = this.affiliatesByOrg.get(orgId);
+    if (affId) {
+      const aff = this.affiliates.get(affId);
+      if (aff) this.affiliatesByCode.delete(aff.code);
+      this.affiliates.delete(affId);
+      this.affiliatesByOrg.delete(orgId);
+    }
+    const refId = this.referralsByOrg.get(orgId);
+    if (refId) {
+      this.referrals.delete(refId);
+      this.referralsByOrg.delete(orgId);
     }
     return true;
   }

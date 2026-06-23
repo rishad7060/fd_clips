@@ -141,4 +141,40 @@ export interface ListParams {
   status?: JobStatus;
   organizationId?: string;
   jobId?: string;
+  affiliateId?: string;
+}
+
+/** Affiliate row (cross-tenant), joined with its owner org/user. Money in cents. */
+export interface AdminAffiliate {
+  id: string;
+  organizationId: string;
+  organizationName: string | null;
+  ownerEmail: string | null;
+  code: string;
+  /** Per-affiliate override (null = global default). */
+  commissionRate: number | null;
+  clicks: number;
+  signups: number;
+  conversions: number;
+  earnedCents: number;
+  paidCents: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminReferral {
+  id: string;
+  affiliateId: string;
+  code: string;
+  referredOrgId: string;
+  referredEmail: string | null;
+  status: "signed_up" | "converted";
+  earnedCents: number;
+  createdAt: string;
+  convertedAt: string | null;
+}
+
+/** Global default commission rate (0–1). */
+export interface AffiliateSettings {
+  commissionRate: number;
 }

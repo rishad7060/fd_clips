@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
+import { ReferralAttribute } from "@/components/ReferralAttribute";
 
 export default function AppGroupLayout({ children }: { children: ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <AppShell>
+      <ReferralAttribute />
+      {children}
+    </AppShell>
+  );
 }

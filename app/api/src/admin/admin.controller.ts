@@ -21,7 +21,11 @@ import {
   LedgerQueryDto,
   ListQueryDto,
   OverviewQueryDto,
+  PayoutAffiliateDto,
   PLAN_TIER_VALUES,
+  ReferralsQueryDto,
+  SetAffiliateRateDto,
+  SetAffiliateSettingsDto,
   SetPlanDto,
   SetRoleDto,
   UpdatePlanDto,
@@ -134,5 +138,37 @@ export class AdminController {
   @Get('system')
   system() {
     return this.admin.system();
+  }
+
+  // ── Affiliates ──────────────────────────────────────────────────────────────
+  @Get('affiliates')
+  listAffiliates(@Query() q: ListQueryDto) {
+    return this.admin.listAffiliates(q);
+  }
+
+  @Get('referrals')
+  listReferrals(@Query() q: ReferralsQueryDto) {
+    return this.admin.listReferrals(q);
+  }
+
+  @Post('affiliates/:id/payout')
+  @HttpCode(200)
+  payoutAffiliate(@Param('id') id: string, @Body() dto: PayoutAffiliateDto) {
+    return this.admin.payoutAffiliate(id, dto.amountUsd);
+  }
+
+  @Patch('affiliates/:id')
+  setAffiliateRate(@Param('id') id: string, @Body() dto: SetAffiliateRateDto) {
+    return this.admin.setAffiliateRate(id, dto.commissionRate ?? null);
+  }
+
+  @Get('affiliate-settings')
+  getAffiliateSettings() {
+    return this.admin.getAffiliateSettings();
+  }
+
+  @Patch('affiliate-settings')
+  setAffiliateSettings(@Body() dto: SetAffiliateSettingsDto) {
+    return this.admin.setAffiliateSettings(dto.commissionRate);
   }
 }

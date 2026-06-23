@@ -17,6 +17,8 @@ const NAV: { href: string; label: string; icon: string; exact?: boolean }[] = [
   { href: "/new", label: "New clips", icon: "M12 5v14M5 12h14" },
   // Projects - scroll-anchors to the grid on the home page
   { href: "/dashboard#projects", label: "Projects", icon: "M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" },
+  // Affiliates - referral program (share glyph: three linked nodes)
+  { href: "/affiliates", label: "Affiliates", icon: "M8.7 10.7l6.6-3.4M8.7 13.3l6.6 3.4M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6z" },
 ];
 
 // The bottom "?" entry opens the help center.

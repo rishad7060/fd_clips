@@ -123,6 +123,25 @@ export class AppConfigService {
     return this.get<string>('BILLING_CANCEL_URL', 'http://localhost:3000/billing?canceled=1');
   }
 
+  /**
+   * Public base URL of the web app (no trailing slash). Used to build affiliate
+   * referral links (`${appBaseUrl}/?ref=CODE`). Defaults to the local web dev
+   * server.
+   */
+  get appBaseUrl(): string {
+    return this.get<string>('WEB_APP_URL', 'http://localhost:3000').replace(/\/$/, '');
+  }
+
+  /**
+   * Global default affiliate commission rate (0–1, e.g. 0.30 = 30% of each paid
+   * invoice from a referred org). This is the fallback; an admin can override it
+   * globally (stored) or per-affiliate. Invalid/absent → 0.30.
+   */
+  get affiliateCommissionRate(): number {
+    const n = parseFloat(this.get<string>('AFFILIATE_COMMISSION_RATE', '0.30'));
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? n : 0.3;
+  }
+
   get r2Bucket(): string {
     return this.get<string>('R2_BUCKET', 'focaldive-clips');
   }

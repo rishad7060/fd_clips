@@ -1,5 +1,6 @@
 import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
+import { AffiliatesService } from '../affiliates/affiliates.service';
 import { AppConfigService } from '../config/config.service';
 import {
   DataStore,
@@ -41,6 +42,7 @@ export class PolarService {
     private readonly config: AppConfigService,
     @Inject(DATA_STORE) private readonly store: DataStore,
     private readonly plans: PlansService,
+    private readonly affiliates: AffiliatesService,
   ) {}
 
   // ── Public seam (checkout / cancel / webhook) ─────────────────────────────
@@ -288,10 +290,20 @@ export class PolarService {
       return this.requireOrg(organizationId);
     }
     await this.store.setOrganizationPlan(organizationId, tier);
-    return this.store.addCredits(organizationId, plan.monthlyCredits, 'grant', {
+    const org = await this.store.addCredits(organizationId, plan.monthlyCredits, 'grant', {
       stripeEventId: externalEventId,
       note: `${plan.label} plan grant (${plan.monthlyCredits} min)`,
     });
+    // Referral commission: if this org was referred, credit the affiliate a % of
+    // this invoice. Idempotent on externalEventId (same key as the grant), so a
+    // webhook + confirm replay never double-pays. Best-effort - never block the
+    // grant on an affiliate bookkeeping error.
+    try {
+      await this.affiliates.recordConversion(organizationId, plan.priceUsd, externalEventId);
+    } catch (err) {
+      this.logger.warn(`Affiliate commission skipped for org=${organizationId}: ${(err as Error).message}`);
+    }
+    return org;
   }
 
   private async downgradeToFree(organizationId: string, status: SubscriptionStatus): Promise<void> {

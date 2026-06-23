@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AUTH_ENABLED } from "@/lib/auth";
+import { ReferralCapture } from "@/components/ReferralCapture";
 import type { ReactNode } from "react";
 
 // Inter (display + body) with tight tracking, plus a mono for scores/durations/
@@ -46,6 +47,7 @@ export default async function RootLayout({
         <body className={bodyClass}>
           <SessionProvider>
             <AuthTokenBridge />
+            <ReferralCapture />
             {children}
           </SessionProvider>
         </body>
@@ -55,7 +57,10 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body className={bodyClass}>{children}</body>
+      <body className={bodyClass}>
+        <ReferralCapture />
+        {children}
+      </body>
     </html>
   );
 }

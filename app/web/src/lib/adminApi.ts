@@ -10,14 +10,17 @@ import { getSession } from "next-auth/react";
 import { getAuthHeader } from "@/lib/api";
 import { adminMock } from "@/lib/mock/adminStore";
 import type {
+  AdminAffiliate,
   AdminClip,
   AdminJob,
   AdminLedgerEntry,
   AdminOrg,
   AdminOverview,
   AdminPlan,
+  AdminReferral,
   AdminSystemInfo,
   AdminUser,
+  AffiliateSettings,
   ListParams,
   Paged,
   PlanPatch,
@@ -142,5 +145,38 @@ export const adminApi = {
   deleteClip(id: string): Promise<{ deleted: boolean }> {
     if (USING_MOCK_ADMIN) return delay(adminMock.deleteClip(id));
     return http(`/admin/clips/${id}`, { method: "DELETE" });
+  },
+  listAffiliates(p: ListParams = {}): Promise<Paged<AdminAffiliate>> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.listAffiliates(p));
+    return http(`/admin/affiliates${qs(p)}`);
+  },
+  listReferrals(p: ListParams = {}): Promise<Paged<AdminReferral>> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.listReferrals(p));
+    return http(`/admin/referrals${qs(p)}`);
+  },
+  payoutAffiliate(id: string, amountUsd?: number): Promise<AdminAffiliate> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.payoutAffiliate(id, amountUsd));
+    return http(`/admin/affiliates/${id}/payout`, {
+      method: "POST",
+      body: JSON.stringify(amountUsd != null ? { amountUsd } : {}),
+    });
+  },
+  setAffiliateRate(id: string, commissionRate: number | null): Promise<AdminAffiliate> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.setAffiliateRate(id, commissionRate));
+    return http(`/admin/affiliates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ commissionRate }),
+    });
+  },
+  getAffiliateSettings(): Promise<AffiliateSettings> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.getAffiliateSettings());
+    return http(`/admin/affiliate-settings`);
+  },
+  setAffiliateSettings(commissionRate: number): Promise<AffiliateSettings> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.setAffiliateSettings(commissionRate));
+    return http(`/admin/affiliate-settings`, {
+      method: "PATCH",
+      body: JSON.stringify({ commissionRate }),
+    });
   },
 };

@@ -110,6 +110,43 @@ export class AdminService {
     return { deleted: true };
   }
 
+  // ── Affiliates ──────────────────────────────────────────────────────────────
+
+  listAffiliates(p: AdminListParams) {
+    return this.store.adminListAffiliates(p);
+  }
+
+  listReferrals(p: AdminListParams & { affiliateId?: string }) {
+    return this.store.adminListReferrals(p);
+  }
+
+  /** Mark commission paid out: a given USD amount, or the full pending balance. */
+  async payoutAffiliate(affiliateId: string, amountUsd?: number) {
+    const aff = await this.store.getAffiliateById(affiliateId);
+    if (!aff) throw new NotFoundException('Affiliate not found');
+    const pendingCents = aff.earnedCents - aff.paidCents;
+    const cents = amountUsd != null ? Math.round(amountUsd * 100) : pendingCents;
+    const updated = await this.store.markAffiliatePaid(affiliateId, cents);
+    if (!updated) throw new NotFoundException('Affiliate not found');
+    return updated;
+  }
+
+  async setAffiliateRate(affiliateId: string, rate: number | null) {
+    const updated = await this.store.setAffiliateRate(affiliateId, rate);
+    if (!updated) throw new NotFoundException('Affiliate not found');
+    return updated;
+  }
+
+  /** The effective global default rate (admin override, else the config default). */
+  async getAffiliateSettings() {
+    const s = await this.store.getAffiliateSettings();
+    return { commissionRate: s.commissionRate ?? this.config.affiliateCommissionRate };
+  }
+
+  setAffiliateSettings(commissionRate: number) {
+    return this.store.setAffiliateSettings(commissionRate);
+  }
+
   plans() {
     return this.plansService.getAll();
   }

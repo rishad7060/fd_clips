@@ -5,20 +5,26 @@
  * the session so dialogs/row-actions feel real.
  */
 import type {
+  AdminAffiliate,
   AdminClip,
   AdminJob,
   AdminLedgerEntry,
   AdminOrg,
   AdminOverview,
   AdminPlan,
+  AdminReferral,
   AdminSystemInfo,
   AdminUser,
+  AffiliateSettings,
   JobStatus,
   ListParams,
   Paged,
   PlanPatch,
   PlanTier,
 } from "@/lib/adminTypes";
+
+/** Global default commission rate fallback - mirrors AFFILIATE_COMMISSION_RATE. */
+const DEFAULT_COMMISSION_RATE = 0.3;
 
 const PLANS: AdminPlan[] = [
   { tier: "free", label: "Free", priceUsd: 0, monthlyCredits: 60, watermark: true, editingEnabled: false, clipRetentionDays: 3, maxResolution: "1080p" },
@@ -36,6 +42,9 @@ interface DB {
   jobs: AdminJob[];
   clips: AdminClip[];
   ledger: AdminLedgerEntry[];
+  affiliates: AdminAffiliate[];
+  referrals: AdminReferral[];
+  settings: AffiliateSettings;
 }
 
 function seed(): DB {
@@ -77,7 +86,42 @@ function seed(): DB {
     users.push({ id: `user_${i}`, googleId: `g_${i}`, email: `${nm.toLowerCase()}@example.com`, name: nm, avatarUrl: null, role: "user", lastLoginAt: daysAgo(i), organizationId: orgId, createdAt: created, updatedAt: created });
   });
 
-  return { orgs, users, jobs, clips, ledger };
+  // Affiliates for the first few orgs + a couple of referrals so the admin
+  // affiliate console renders against real demo data.
+  const affiliates: AdminAffiliate[] = [];
+  const referrals: AdminReferral[] = [];
+  const affSpec = [
+    { i: 0, code: "AVA10", clicks: 142, signups: 6, conversions: 2, earnedCents: 450, paidCents: 225 },
+    { i: 1, code: "LIAM20", clicks: 88, signups: 3, conversions: 1, earnedCents: 225, paidCents: 0 },
+    { i: 4, code: "ZOE30", clicks: 51, signups: 2, conversions: 0, earnedCents: 0, paidCents: 0 },
+  ];
+  affSpec.forEach((a, idx) => {
+    const org = orgs.find((o) => o.id === `org_${a.i}`)!;
+    const user = users.find((u) => u.organizationId === `org_${a.i}`)!;
+    affiliates.push({
+      id: `aff_${a.i}`,
+      organizationId: org.id,
+      organizationName: org.name,
+      ownerEmail: user.email,
+      code: a.code,
+      commissionRate: null,
+      clicks: a.clicks,
+      signups: a.signups,
+      conversions: a.conversions,
+      earnedCents: a.earnedCents,
+      paidCents: a.paidCents,
+      createdAt: daysAgo(20 - idx * 3),
+      updatedAt: daysAgo(idx),
+    });
+  });
+  // Ava (AVA10) referred Noah's + Mia's orgs; Noah converted.
+  referrals.push(
+    { id: "rf_1", affiliateId: "aff_0", code: "AVA10", referredOrgId: "org_2", referredEmail: "noah@example.com", status: "converted", earnedCents: 225, createdAt: daysAgo(12), convertedAt: daysAgo(10) },
+    { id: "rf_2", affiliateId: "aff_0", code: "AVA10", referredOrgId: "org_3", referredEmail: "mia@example.com", status: "signed_up", earnedCents: 0, createdAt: daysAgo(5), convertedAt: null },
+    { id: "rf_3", affiliateId: "aff_1", code: "LIAM20", referredOrgId: "org_6", referredEmail: "ivy@example.com", status: "converted", earnedCents: 225, createdAt: daysAgo(8), convertedAt: daysAgo(6) },
+  );
+
+  return { orgs, users, jobs, clips, ledger, affiliates, referrals, settings: { commissionRate: DEFAULT_COMMISSION_RATE } };
 }
 
 const db: DB = seed();
@@ -195,4 +239,31 @@ export const adminMock = {
   },
   deleteJob(id: string) { db.jobs = db.jobs.filter((x) => x.id !== id); db.clips = db.clips.filter((x) => x.jobId !== id); return { deleted: true }; },
   deleteClip(id: string) { db.clips = db.clips.filter((x) => x.id !== id); return { deleted: true }; },
+  listAffiliates(p: ListParams): Paged<AdminAffiliate> {
+    return page(db.affiliates.filter((a) => match([a.code, a.organizationName, a.ownerEmail, a.organizationId], p.search)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), p);
+  },
+  listReferrals(p: ListParams): Paged<AdminReferral> {
+    return page(db.referrals.filter((r) => (p.affiliateId ? r.affiliateId === p.affiliateId : true)).filter((r) => match([r.code, r.referredEmail, r.referredOrgId, r.status], p.search)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), p);
+  },
+  payoutAffiliate(id: string, amountUsd?: number): AdminAffiliate {
+    const a = db.affiliates.find((x) => x.id === id)!;
+    const pending = a.earnedCents - a.paidCents;
+    const cents = amountUsd != null ? Math.round(amountUsd * 100) : pending;
+    a.paidCents += Math.max(0, Math.min(cents, pending));
+    a.updatedAt = new Date().toISOString();
+    return a;
+  },
+  setAffiliateRate(id: string, commissionRate: number | null): AdminAffiliate {
+    const a = db.affiliates.find((x) => x.id === id)!;
+    a.commissionRate = commissionRate;
+    a.updatedAt = new Date().toISOString();
+    return a;
+  },
+  getAffiliateSettings(): AffiliateSettings {
+    return { commissionRate: db.settings.commissionRate ?? DEFAULT_COMMISSION_RATE };
+  },
+  setAffiliateSettings(commissionRate: number): AffiliateSettings {
+    db.settings = { commissionRate };
+    return db.settings;
+  },
 };

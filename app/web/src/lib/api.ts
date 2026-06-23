@@ -1,6 +1,8 @@
 "use client";
 
 import type {
+  AffiliateSummary,
+  AttributeResult,
   Clip,
   ClipsResponse,
   ClipStyle,
@@ -9,6 +11,7 @@ import type {
   CreditBalance,
   Job,
   JobProgressEvent,
+  ReferralSummary,
   RenderClipInput,
   SourceType,
   VideoPreview,
@@ -118,6 +121,30 @@ export interface SubscriptionStart {
   tier: string;
 }
 
+/** Mirrors affiliates.mapper.ts ReferralView. */
+interface ApiReferralView {
+  id: string;
+  status: ReferralSummary["status"];
+  referredEmail: string | null;
+  earnedUsd: number;
+  createdAt: string;
+  convertedAt: string | null;
+}
+
+/** Mirrors affiliates.mapper.ts AffiliateView. */
+interface ApiAffiliateView {
+  code: string;
+  link: string;
+  commissionRate: number;
+  clicks: number;
+  signups: number;
+  conversions: number;
+  earnedUsd: number;
+  paidUsd: number;
+  pendingUsd: number;
+  referrals: ApiReferralView[];
+}
+
 /** Mirrors clips.controller.ts WordView (clip-relative seconds). */
 interface ApiWordView {
   word: string;
@@ -175,6 +202,28 @@ function toClip(v: ApiClipView): Clip {
     // The real /clips endpoint does not return per-word caption lines; the
     // editor lazily falls back to an empty list (re-render is a later feature).
     caption_lines: [],
+  };
+}
+
+function toAffiliateSummary(v: ApiAffiliateView): AffiliateSummary {
+  return {
+    code: v.code,
+    link: v.link,
+    commission_rate: v.commissionRate,
+    clicks: v.clicks,
+    signups: v.signups,
+    conversions: v.conversions,
+    earned_usd: v.earnedUsd,
+    paid_usd: v.paidUsd,
+    pending_usd: v.pendingUsd,
+    referrals: v.referrals.map((r) => ({
+      id: r.id,
+      status: r.status,
+      referred_email: r.referredEmail,
+      earned_usd: r.earnedUsd,
+      created_at: r.createdAt,
+      converted_at: r.convertedAt,
+    })),
   };
 }
 
@@ -441,6 +490,42 @@ export const api = {
     if (USING_MOCK_API) return delay(mockStore.cancelSubscription());
     return http<{ ok: boolean; plan: string }>("/billing/subscription/cancel", {
       method: "POST",
+    });
+  },
+
+  /**
+   * The caller's affiliate account: referral link, full-funnel stats (clicks →
+   * signups → conversions), earnings, and referral history (GET /affiliates/me).
+   * Auto-creates the account on first access. Mock mode serves an offline demo.
+   */
+  async getAffiliate(): Promise<AffiliateSummary> {
+    if (USING_MOCK_API) return delay(mockStore.getAffiliate(), 150);
+    return toAffiliateSummary(await http<ApiAffiliateView>("/affiliates/me"));
+  },
+
+  /**
+   * Attribute the current org to a referral code (POST /affiliates/attribute),
+   * called once after sign-in when the `fd_ref` cookie is present. Idempotent and
+   * safe: a no-op (with a reason) for an unknown/own/already-referred code.
+   */
+  async attributeReferral(code: string): Promise<AttributeResult> {
+    if (USING_MOCK_API) return delay(mockStore.attributeReferral(code), 150);
+    return http<AttributeResult>("/affiliates/attribute", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
+  },
+
+  /**
+   * Register a click on a referral link (public POST /affiliates/click), fired
+   * when a visitor lands on `/?ref=CODE`. Best-effort; failures are swallowed by
+   * the caller so they never block the page.
+   */
+  async trackAffiliateClick(code: string): Promise<{ ok: boolean }> {
+    if (USING_MOCK_API) return delay(mockStore.trackAffiliateClick(code), 80);
+    return http<{ ok: boolean }>("/affiliates/click", {
+      method: "POST",
+      body: JSON.stringify({ code }),
     });
   },
 

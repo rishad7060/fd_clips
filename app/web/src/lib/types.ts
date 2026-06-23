@@ -272,6 +272,44 @@ export interface CreateJobInput {
   process_range?: ProcessRange;
 }
 
+/** Referral status: a referred org signed up, then converted (paid). */
+export type ReferralStatus = "signed_up" | "converted";
+
+/** One referred org in the creator's affiliate dashboard (GET /affiliates/me). */
+export interface ReferralSummary {
+  id: string;
+  status: ReferralStatus;
+  /** Lightly masked email of the referred user. */
+  referred_email: string | null;
+  earned_usd: number;
+  created_at: string;
+  converted_at: string | null;
+}
+
+/**
+ * The caller's affiliate account + funnel stats + referral history. Mirrors the
+ * API's camelCase AffiliateView, normalized to snake_case at the client boundary.
+ */
+export interface AffiliateSummary {
+  code: string;
+  link: string;
+  /** Effective commission rate (0–1). */
+  commission_rate: number;
+  clicks: number;
+  signups: number;
+  conversions: number;
+  earned_usd: number;
+  paid_usd: number;
+  pending_usd: number;
+  referrals: ReferralSummary[];
+}
+
+/** Result of POST /affiliates/attribute (always 200; reason explains a no-op). */
+export interface AttributeResult {
+  attributed: boolean;
+  reason?: string;
+}
+
 /** Body for a re-render of a single clip (10c). */
 export interface RenderClipInput {
   job_id: string;

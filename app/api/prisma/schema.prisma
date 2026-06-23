@@ -80,6 +80,8 @@ model Organization {
   clips       Clip[]
   credits     CreditLedger[]
   users       User[]
+  // The org's own affiliate account (referral program). Auto-created on demand.
+  affiliate   Affiliate?
 
   @@map("organizations")
 }
@@ -204,4 +206,58 @@ model CreditLedger {
 
   @@index([organizationId])
   @@map("credit_ledger")
+}
+
+// Affiliate account - one per organization (auto-created on first access). Tracks
+// the referral funnel (clicks → signups → conversions) and earnings in USD cents.
+// commissionRate null = use the global default (AffiliateSetting / config).
+model Affiliate {
+  id             String   @id @default(cuid())
+  organizationId String   @unique @map("organization_id")
+  code           String   @unique
+  commissionRate Float?   @map("commission_rate")
+  clicks         Int      @default(0)
+  signups        Int      @default(0)
+  conversions    Int      @default(0)
+  earnedCents    Int      @default(0) @map("earned_cents")
+  paidCents      Int      @default(0) @map("paid_cents")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  referrals    Referral[]
+
+  @@map("affiliates")
+}
+
+// A referred organization, attributed to one affiliate. Unique on referredOrgId
+// (an org can only ever be referred once). creditedEventIds records the billing
+// events already credited so a webhook + confirm replay never double-pays.
+model Referral {
+  id               String    @id @default(cuid())
+  affiliateId      String    @map("affiliate_id")
+  code             String
+  referredOrgId    String    @unique @map("referred_org_id")
+  referredEmail    String?   @map("referred_email")
+  // 'signed_up' | 'converted'
+  status           String    @default("signed_up")
+  earnedCents      Int       @default(0) @map("earned_cents")
+  creditedEventIds String[]  @map("credited_event_ids")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  convertedAt      DateTime? @map("converted_at")
+
+  affiliate Affiliate @relation(fields: [affiliateId], references: [id])
+
+  @@index([affiliateId])
+  @@map("referrals")
+}
+
+// Singleton row holding the global default affiliate commission rate (0–1),
+// admin-editable. Falls back to AFFILIATE_COMMISSION_RATE when absent.
+model AffiliateSetting {
+  id             String   @id @default("global")
+  commissionRate Float    @map("commission_rate")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("affiliate_settings")
 }

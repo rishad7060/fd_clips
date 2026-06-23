@@ -9,6 +9,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import { JobStatus, PlanTier, UserRole } from '../../persistence/store.types';
 
@@ -137,3 +138,41 @@ export class UpdatePlanDto {
 }
 
 export const PLAN_TIER_VALUES = PLAN_TIERS;
+
+// ── Affiliates ───────────────────────────────────────────────────────────────
+
+export class ReferralsQueryDto extends ListQueryDto {
+  @IsOptional()
+  @IsString()
+  affiliateId?: string;
+}
+
+/** Mark commission paid out. Omit amountUsd to pay the full pending balance. */
+export class PayoutAffiliateDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(1000000)
+  amountUsd?: number;
+}
+
+/** Per-affiliate commission-rate override (0–1). null clears it (use default). */
+export class SetAffiliateRateDto {
+  @IsOptional()
+  @ValidateIf((o) => o.commissionRate !== null)
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  commissionRate?: number | null;
+}
+
+/** Global default commission rate (0–1). */
+export class SetAffiliateSettingsDto {
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  commissionRate!: number;
+}
