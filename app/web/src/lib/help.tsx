@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 /**
- * Help-center content as a typed data array — no MDX tooling. Each article is a
+ * Help-center content as a typed data array - no MDX tooling. Each article is a
  * slug + metadata + a `body` render function returning React, so we get full
  * control over styling (the design-system primitives) without a markdown layer.
  *
@@ -39,7 +39,7 @@ export const HELP_CATEGORIES: { name: HelpCategory; blurb: string; icon: string 
   { name: "Languages", blurb: "Speech languages and RTL captions.", icon: "M3 5h12M9 3v2c0 6-3 9-6 11M5 9c0 3 3 6 7 7M14 19l4-9 4 9M15.5 16h5" },
 ];
 
-/** Opus's public docs — linked as authoritative "Learn more" references. */
+/** Opus's public docs - linked as authoritative "Learn more" references. */
 export const OPUS_DOCS = "https://help.opus.pro/docs/article";
 
 /* ── Prose primitives (on-brand, dark, ink/brand tokens) ─────────────────── */
@@ -108,14 +108,14 @@ function OpusLink({ href = OPUS_DOCS, children }: { href?: string; children?: Re
 export const HELP_ARTICLES: HelpArticle[] = [
   {
     slug: "getting-started",
-    title: "Getting started — create your first clips",
+    title: "Getting started - create your first clips",
     summary: "Paste a link or upload a file, let the AI find the best moments, and download captioned vertical clips.",
     category: "Getting started",
     readMins: 3,
     body: () => (
       <>
         <P>
-          Clips turns one long video — a podcast, interview, webinar, or stream — into a handful of
+          Clips turns one long video - a podcast, interview, webinar, or stream - into a handful of
           ranked, captioned, vertical <B>9:16</B> short clips, ready to post. You bring the source; the AI finds
           the moments worth cutting and frames them around whoever is speaking.
         </P>
@@ -126,7 +126,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
             <>From the home dashboard, click <B>New clips</B> (the <B>+</B> in the left rail).</>,
             <>Paste a video URL (YouTube, TikTok, Instagram, X, Vimeo) or <B>upload a file</B> directly.</>,
             <>Pick your options: aspect ratio, clip length, number of moments, caption preset, and which part of the video to process.</>,
-            <>Press <B>Get clips</B>. The job runs in the background — you can leave the page and come back.</>,
+            <>Press <B>Get clips</B>. The job runs in the background - you can leave the page and come back.</>,
             <>When it finishes, your clips appear on the dashboard. Preview, edit captions, and download each one.</>,
           ]}
         />
@@ -134,15 +134,15 @@ export const HELP_ARTICLES: HelpArticle[] = [
         <H>What happens under the hood</H>
         <P>The pipeline runs the same stages a human editor would, automatically:</P>
         <UL>
-          <LI><B>Transcribe</B> — word-level transcript with timestamps.</LI>
-          <LI><B>Score</B> — an LLM ranks candidate moments against a virality rubric (hooks, payoff, self-contained story), blended with YouTube&apos;s &quot;most replayed&quot; heatmap when available.</LI>
-          <LI><B>Cut</B> — clean cuts on sentence boundaries, so clips never start mid-thought.</LI>
-          <LI><B>Reframe</B> — crops to vertical and follows the active speaker.</LI>
-          <LI><B>Caption</B> — burns word-by-word karaoke captions in your chosen style.</LI>
+          <LI><B>Transcribe</B> - word-level transcript with timestamps.</LI>
+          <LI><B>Score</B> - an LLM ranks candidate moments against a virality rubric (hooks, payoff, self-contained story), blended with YouTube&apos;s &quot;most replayed&quot; heatmap when available.</LI>
+          <LI><B>Cut</B> - clean cuts on sentence boundaries, so clips never start mid-thought.</LI>
+          <LI><B>Reframe</B> - crops to vertical and follows the active speaker.</LI>
+          <LI><B>Caption</B> - burns word-by-word karaoke captions in your chosen style.</LI>
         </UL>
 
         <Note>
-          Most jobs finish in a few minutes. Longer sources take longer — processing time scales with the
+          Most jobs finish in a few minutes. Longer sources take longer - processing time scales with the
           length of the video you submit (and how much of it you ask us to process).
         </Note>
 
@@ -150,7 +150,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         <UL>
           <LI>Conversational, single-topic content (podcasts, talking-head) clips best.</LI>
           <LI>Use the <B>process range</B> control to skip long intros and only mine the good middle.</LI>
-          <LI>Try a couple of caption presets — see <B>Caption presets &amp; styles</B>.</LI>
+          <LI>Try a couple of caption presets - see <B>Caption presets &amp; styles</B>.</LI>
         </UL>
         <P>
           Want the deeper background on how AI clipping works? <OpusLink>Learn more on Opus</OpusLink>.
@@ -168,7 +168,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: () => (
       <>
         <P>
-          Every clip ships with burned-in, word-by-word <B>karaoke captions</B> — each word lights up as it&apos;s
+          Every clip ships with burned-in, word-by-word <B>karaoke captions</B> - each word lights up as it&apos;s
           spoken. You choose the look from <B>11 presets</B>, set the on-screen placement, and can edit the actual
           caption text before exporting.
         </P>
@@ -176,35 +176,35 @@ export const HELP_ARTICLES: HelpArticle[] = [
         <H>The 11 presets</H>
         <P>One of these is <B>No caption</B> (clips render clean, no subtitles). The other ten are styled looks:</P>
         <UL>
-          <LI><B>No caption</B> — render clips with no burned-in subtitles.</LI>
-          <LI><B>Mozi</B> — big bold UPPERCASE, yellow active-word pop. The viral business/hook look (the default).</LI>
-          <LI><B>Beasty</B> — heavy ALL-CAPS, thick black stroke, bright green keyword pop.</LI>
-          <LI><B>Karaoke</B> — sentence-case, ~5 words per line, white text with a cyan sweep.</LI>
-          <LI><B>Devin Glow</B> — bold uppercase with a soft purple glow. Aesthetic, premium.</LI>
-          <LI><B>Ali Clean</B> — sentence-case, semibold, subtle green highlight. Calm, educational.</LI>
-          <LI><B>Pod P</B> — soft amber on a translucent black pill. Podcast / interview clips.</LI>
-          <LI><B>Popline</B> — extrabold UPPERCASE with a hot-pink pop. Trendy, punchy social.</LI>
-          <LI><B>Glitch Infinite</B> — condensed caps with an RGB-split cyan/magenta highlight. Gaming, edgy.</LI>
-          <LI><B>Deep Diver</B> — cream text, teal reveal, no shout. Storytelling / documentary.</LI>
-          <LI><B>Simple</B> — lowercase, thin, bottom-placed, no colour pop. Neutral, brand-safe, B2B.</LI>
+          <LI><B>No caption</B> - render clips with no burned-in subtitles.</LI>
+          <LI><B>Mozi</B> - big bold UPPERCASE, yellow active-word pop. The viral business/hook look (the default).</LI>
+          <LI><B>Beasty</B> - heavy ALL-CAPS, thick black stroke, bright green keyword pop.</LI>
+          <LI><B>Karaoke</B> - sentence-case, ~5 words per line, white text with a cyan sweep.</LI>
+          <LI><B>Devin Glow</B> - bold uppercase with a soft purple glow. Aesthetic, premium.</LI>
+          <LI><B>Ali Clean</B> - sentence-case, semibold, subtle green highlight. Calm, educational.</LI>
+          <LI><B>Pod P</B> - soft amber on a translucent black pill. Podcast / interview clips.</LI>
+          <LI><B>Popline</B> - extrabold UPPERCASE with a hot-pink pop. Trendy, punchy social.</LI>
+          <LI><B>Glitch Infinite</B> - condensed caps with an RGB-split cyan/magenta highlight. Gaming, edgy.</LI>
+          <LI><B>Deep Diver</B> - cream text, teal reveal, no shout. Storytelling / documentary.</LI>
+          <LI><B>Simple</B> - lowercase, thin, bottom-placed, no colour pop. Neutral, brand-safe, B2B.</LI>
         </UL>
 
         <H>Placement &amp; size</H>
         <P>
-          Independently of the preset, set caption <B>placement</B> — <B>Top</B>, <B>Center</B>, or <B>Bottom</B> —
+          Independently of the preset, set caption <B>placement</B> - <B>Top</B>, <B>Center</B>, or <B>Bottom</B> -
           and a <B>font size</B> (Default, S, M, L, XL). Lines that would overflow are auto-shrunk to fit the
           1080×1920 frame, so even XL stays safe.
         </P>
 
         <H>Editing the caption text</H>
         <P>
-          The transcript is good, but not perfect — names, brands, and slang sometimes need a touch-up. Open a
+          The transcript is good, but not perfect - names, brands, and slang sometimes need a touch-up. Open a
           finished clip and use the inline editor to fix the wording, reposition captions, change the highlight
           colour, or trim the clip. On paid plans these edits apply instantly, without a re-render.
         </P>
         <Note>
           Caption editing is a paid-plan feature. On the free tier you still pick a preset and placement up front,
-          but the in-app editor is locked — upgrade to Starter or Pro to edit after the fact.
+          but the in-app editor is locked - upgrade to Starter or Pro to edit after the fact.
         </Note>
         <P>
           For more on Opus-style captions and best practices, <OpusLink>Learn more on Opus</OpusLink>.
@@ -230,11 +230,11 @@ export const HELP_ARTICLES: HelpArticle[] = [
 
         <H>What uses credits</H>
         <UL>
-          <LI><B>Submitting a job</B> — credits are reserved/spent based on the length of the source (and the slice you choose with the process-range control).</LI>
+          <LI><B>Submitting a job</B> - credits are reserved/spent based on the length of the source (and the slice you choose with the process-range control).</LI>
           <LI>Generating more clips from the <B>same</B> source again is a fresh job and spends credits again.</LI>
         </UL>
         <P>
-          Previewing, downloading, and (on paid plans) the instant inline edits do <B>not</B> cost credits — only
+          Previewing, downloading, and (on paid plans) the instant inline edits do <B>not</B> cost credits - only
           processing video does.
         </P>
 
@@ -245,7 +245,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
           at the top of the app and on the <B>Plans &amp; credits</B> page.
         </P>
         <Note>
-          Running low? You can upgrade at any time, or buy a one-time credit pack — both top up the same balance.
+          Running low? You can upgrade at any time, or buy a one-time credit pack - both top up the same balance.
           See <B>Free trial &amp; plans</B> for what each tier includes.
         </Note>
       </>
@@ -255,38 +255,38 @@ export const HELP_ARTICLES: HelpArticle[] = [
   {
     slug: "free-trial-and-plans",
     title: "Free trial & plans",
-    summary: "Free forever (60 credits, 1080p, watermark, 3-day clips), plus Starter and Pro — half of Opus's price.",
+    summary: "Free forever (60 credits, 1080p, watermark, 3-day clips), plus Starter and Pro - half of Opus's price.",
     category: "Billing",
     readMins: 3,
     body: () => (
       <>
         <H>Free, forever</H>
         <P>
-          There&apos;s no time-limited trial to expire — the <B>Free</B> plan is free forever. You get <B>60
+          There&apos;s no time-limited trial to expire - the <B>Free</B> plan is free forever. You get <B>60
           source-minutes per month</B> to make real clips. The catch is a few limits, mirrored from Opus&apos;s
           free tier:
         </P>
         <UL>
           <LI><B>1080p</B> output (same resolution as paid).</LI>
           <LI>A <B>watermark</B> burned into clips.</LI>
-          <LI>Clips <B>expire after 3 days</B> — download what you want to keep.</LI>
-          <LI><B>No in-app editing</B> — the post-export caption/trim editor is locked.</LI>
+          <LI>Clips <B>expire after 3 days</B> - download what you want to keep.</LI>
+          <LI><B>No in-app editing</B> - the post-export caption/trim editor is locked.</LI>
         </UL>
 
         <H>Paid plans</H>
         <P>Both paid tiers lift the watermark, keep your clips indefinitely, and unlock the editor:</P>
         <UL>
-          <LI><B>Starter — $7.50/mo</B> · 150 source-minutes/mo · 1080p, no watermark · clips kept · editing on · priority queue.</LI>
-          <LI><B>Pro — $14.50/mo</B> · 300 source-minutes/mo · everything in Starter · active-speaker reframe · clips kept.</LI>
+          <LI><B>Starter - $7.50/mo</B> · 150 source-minutes/mo · 1080p, no watermark · clips kept · editing on · priority queue.</LI>
+          <LI><B>Pro - $14.50/mo</B> · 300 source-minutes/mo · everything in Starter · active-speaker reframe · clips kept.</LI>
         </UL>
         <Note>
           Pricing is deliberately set at <B>half of Opus Clip&apos;s</B> for the same monthly minutes
-          (Opus Starter $15, Pro $29). Checkout is handled by Polar.sh — recurring monthly
+          (Opus Starter $15, Pro $29). Checkout is handled by Polar.sh - recurring monthly
           subscriptions, with cards and more supported (no account required).
         </Note>
         <P>
           You can upgrade, downgrade, or cancel anytime from the <B>Plans &amp; credits</B> page. Compare with
-          Opus&apos;s plans — <OpusLink>Learn more on Opus</OpusLink>.
+          Opus&apos;s plans - <OpusLink>Learn more on Opus</OpusLink>.
         </P>
       </>
     ),
@@ -295,7 +295,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
   {
     slug: "supported-sources",
     title: "Supported sources",
-    summary: "YouTube, TikTok, Instagram, X, Vimeo, and direct file upload — plus what to do when a link fails.",
+    summary: "YouTube, TikTok, Instagram, X, Vimeo, and direct file upload - plus what to do when a link fails.",
     category: "Sources",
     readMins: 3,
     body: () => (
@@ -303,12 +303,12 @@ export const HELP_ARTICLES: HelpArticle[] = [
         <H>Where you can pull video from</H>
         <P>Paste a public link from any of these, or skip links entirely and upload a file:</P>
         <UL>
-          <LI><B>YouTube</B> — videos and (long-form) shorts.</LI>
+          <LI><B>YouTube</B> - videos and (long-form) shorts.</LI>
           <LI><B>TikTok</B></LI>
-          <LI><B>Instagram</B> — Reels and video posts.</LI>
-          <LI><B>X (Twitter)</B> — video posts.</LI>
+          <LI><B>Instagram</B> - Reels and video posts.</LI>
+          <LI><B>X (Twitter)</B> - video posts.</LI>
           <LI><B>Vimeo</B></LI>
-          <LI><B>Direct file upload</B> — your own MP4 / MOV, no link required.</LI>
+          <LI><B>Direct file upload</B> - your own MP4 / MOV, no link required.</LI>
         </UL>
         <P>
           For URLs, we fetch the best available quality up to <B>1080p</B>. Uploading a file is the most reliable
@@ -318,10 +318,10 @@ export const HELP_ARTICLES: HelpArticle[] = [
         <H>When a link fails</H>
         <P>Most link failures fall into one of these buckets:</P>
         <UL>
-          <LI><B>Private / unlisted / members-only</B> — we can only fetch public videos. Make it public, or upload the file.</LI>
-          <LI><B>403 / &quot;sign in to confirm&quot; / bot check</B> — the platform blocked the download. Try a different link, wait and retry, or upload the file directly.</LI>
-          <LI><B>Age- or region-restricted</B> — gated content often can&apos;t be fetched; upload the file instead.</LI>
-          <LI><B>Live or still-processing</B> — wait until the VOD is fully published, then submit the link.</LI>
+          <LI><B>Private / unlisted / members-only</B> - we can only fetch public videos. Make it public, or upload the file.</LI>
+          <LI><B>403 / &quot;sign in to confirm&quot; / bot check</B> - the platform blocked the download. Try a different link, wait and retry, or upload the file directly.</LI>
+          <LI><B>Age- or region-restricted</B> - gated content often can&apos;t be fetched; upload the file instead.</LI>
+          <LI><B>Live or still-processing</B> - wait until the VOD is fully published, then submit the link.</LI>
         </UL>
         <Note>
           When in doubt, <B>download the video yourself and upload the file</B>. It sidesteps every link-side
@@ -341,7 +341,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       <>
         <H>Languages we understand</H>
         <P>
-          Transcription auto-detects the spoken language — there&apos;s nothing to set. We support <B>20+ languages</B>,
+          Transcription auto-detects the spoken language - there&apos;s nothing to set. We support <B>20+ languages</B>,
           including English, Spanish, Portuguese, French, German, Italian, Dutch, Hindi, <B>Arabic</B>, <B>Urdu</B>,
           Turkish, Russian, Japanese, Korean, Chinese, and more. Captions are generated in the same language that&apos;s
           spoken.

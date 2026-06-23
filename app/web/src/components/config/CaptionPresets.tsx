@@ -7,7 +7,7 @@ import { CaptionSwatch } from "./CaptionSwatch";
 
 /**
  * Opus-style caption presets: a 2×6 GRID of tiles, each showing a LIVE styled
- * preview of the caption (the sample words rendered in that preset's look) —
+ * preview of the caption (the sample words rendered in that preset's look) -
  * with a leading "No caption" option and "New" badges. Below it, a placement
  * (top/center/bottom) row. Drives the per-job caption style.
  */
@@ -60,7 +60,7 @@ export function CaptionPresets({ templateId, setTemplateId, alignment, setAlignm
         })}
       </div>
 
-      {/* Placement — hidden for "No caption" (nothing to place). */}
+      {/* Placement - hidden for "No caption" (nothing to place). */}
       {!isNoCaption && (
         <div className="mt-3 flex items-center gap-2">
           <span className="text-xs font-medium text-ink-300">Placement:</span>

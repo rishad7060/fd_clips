@@ -80,7 +80,7 @@ export function ProjectsGrid() {
 
       {jobs && jobs.length === 0 && (
         <Card className="p-12 text-center">
-          <p className="text-ink-200">No projects yet — paste a link above to make your first clips.</p>
+          <p className="text-ink-200">No projects yet - paste a link above to make your first clips.</p>
         </Card>
       )}
 

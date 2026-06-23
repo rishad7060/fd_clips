@@ -4,8 +4,8 @@ import type { HookLayer, SubtitleLayer, SubtitleSegment } from "@/lib/types";
 
 /**
  * The two INDEPENDENT live overlays rendered over the playing <video>:
- *   1) HOOK — the white-marker banner box (white text on a dark box by default).
- *   2) SUBTITLE — per-word karaoke: only the active segment's words render; the
+ *   1) HOOK - the white-marker banner box (white text on a dark box by default).
+ *   2) SUBTITLE - per-word karaoke: only the active segment's words render; the
  *      active word (last word whose start <= currentRel) pops in the highlight
  *      color. An overridden segment renders its override text as one block,
  *      highlighted whole while the segment is active (per-word timing no longer

@@ -15,7 +15,7 @@ const NAV: { href: string; label: string; icon: string; exact?: boolean }[] = [
   { href: "/dashboard", label: "Home", icon: "M3 11l9-8 9 8M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10", exact: true },
   // New clips
   { href: "/new", label: "New clips", icon: "M12 5v14M5 12h14" },
-  // Projects — scroll-anchors to the grid on the home page
+  // Projects - scroll-anchors to the grid on the home page
   { href: "/dashboard#projects", label: "Projects", icon: "M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" },
 ];
 
@@ -47,7 +47,7 @@ export function Sidebar() {
     <>
       {/* Desktop rail */}
       <aside className="sticky top-0 hidden h-screen w-16 shrink-0 flex-col items-center gap-1 border-r border-white/[0.08] bg-ink-950/70 py-4 md:flex">
-        {/* Brand mark — the real Clips emblem. */}
+        {/* Brand mark - the real Clips emblem. */}
         <Link
           href="/dashboard"
           aria-label="Home"
@@ -82,7 +82,7 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Help at the bottom — opens the help center. */}
+        {/* Help at the bottom - opens the help center. */}
         <Link
           href={HELP_HREF}
           title={HELP_LABEL}
@@ -104,7 +104,7 @@ export function Sidebar() {
         </Link>
       </aside>
 
-      {/* Mobile bottom bar — the rail is hidden below md, so give mobile real nav. */}
+      {/* Mobile bottom bar - the rail is hidden below md, so give mobile real nav. */}
       <nav className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-white/[0.08] bg-ink-950/90 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         {NAV.map((item) => {
           const active = isActive(pathname, item);

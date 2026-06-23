@@ -65,7 +65,7 @@ export interface RealPipelineWorkerDeps {
   /**
    * Duration true-up: after ingest the REAL source duration is known. Reconcile
    * the up-front charge against it. Returns whether the org could afford the
-   * full video — false means fail the job (charge was refunded). Optional so the
+   * full video - false means fail the job (charge was refunded). Optional so the
    * mock queue can omit it.
    */
   onIngestDuration?: (
@@ -140,7 +140,7 @@ export class RealPipelineWorker implements JobWorker {
       // Server-side duration true-up: the pipeline wrote the REAL source
       // duration to workspace/<jobId>/source.meta.json. Reconcile the up-front
       // (client-estimated) charge against it. If the org can't afford the full
-      // video the charge is already refunded inside the true-up — fail the job
+      // video the charge is already refunded inside the true-up - fail the job
       // here (no extra refund) with a clear message instead of silently
       // under-charging (the create-time revenue leak).
       const insufficient = await this.reconcileDuration(payload);
@@ -291,7 +291,7 @@ export class RealPipelineWorker implements JobWorker {
         } else if (userError) {
           // Clean user-facing failure (e.g. video too long → upgrade). Surface
           // the friendly message to the UI instead of a raw exit code/trace.
-          this.logger.warn(`Pipeline user error for ${jobId}: ${userError.code} — ${userError.message}`);
+          this.logger.warn(`Pipeline user error for ${jobId}: ${userError.code} - ${userError.message}`);
           const err = new Error(userError.message) as Error & { code?: string };
           err.code = userError.code;
           reject(err);
@@ -366,7 +366,7 @@ export class RealPipelineWorker implements JobWorker {
     const doc = JSON.parse(raw) as ClipsDoc;
     const candidates = Array.isArray(doc.candidates) ? doc.candidates : [];
 
-    // Take up to clip_count candidates — but DON'T floor at 1: the scorer can
+    // Take up to clip_count candidates - but DON'T floor at 1: the scorer can
     // legitimately return 0 (e.g. a short video with no 20-60s complete-thought
     // segment). Flooring at 1 here previously indexed candidates[0]===undefined
     // and crashed with "Cannot read properties of undefined (reading 'start')".
@@ -388,7 +388,7 @@ export class RealPipelineWorker implements JobWorker {
         reason: c.reason,
         suggestedTitle: c.suggested_title ?? '',
         // R2-shaped keys (CONTRACTS.md §5); the file lives at
-        // workspace/<jobId>/clips/<rank>_final.mp4 — the storage layer maps
+        // workspace/<jobId>/clips/<rank>_final.mp4 - the storage layer maps
         // this key back to that local file when serving.
         finalKey: `${orgId}/${jobId}/clips/${rank}_final.mp4`,
         thumbKey: `${orgId}/${jobId}/clips/${rank}_thumb.jpg`,
@@ -400,7 +400,7 @@ export class RealPipelineWorker implements JobWorker {
     const doneMsg =
       clipsReady > 0
         ? `${clipsReady} clip${clipsReady === 1 ? '' : 's'} ready`
-        : 'No clips found — the video had no 20-60s standout moment. Try a longer/more substantive video.';
+        : 'No clips found - the video had no 20-60s standout moment. Try a longer/more substantive video.';
     this.emit(payload, 'completed', 'done', 100, doneMsg, clipsReady);
     this.logger.log(
       `Real pipeline job ${jobId} completed with ${clipsReady} clips` +

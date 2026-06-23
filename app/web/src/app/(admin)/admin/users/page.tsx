@@ -17,7 +17,7 @@ export default function AdminUsersPage() {
       header: "User",
       cell: (u) => (
         <div className="min-w-0">
-          <div className="truncate font-medium text-foreground">{u.name ?? "—"}</div>
+          <div className="truncate font-medium text-foreground">{u.name ?? "-"}</div>
           <div className="truncate text-xs text-muted-foreground">{u.email}</div>
         </div>
       ),

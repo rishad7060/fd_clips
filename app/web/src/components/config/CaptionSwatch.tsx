@@ -3,8 +3,8 @@ import type { CaptionPreviewSpec } from "@/lib/templates";
 
 /**
  * A live mini-preview of a caption style (Opus-style). Renders the sample words
- * in the preset's exact look — base colour, an active/highlighted word, weight,
- * case, text-stroke, optional translucent pill box and glow — so a picker tile
+ * in the preset's exact look - base colour, an active/highlighted word, weight,
+ * case, text-stroke, optional translucent pill box and glow - so a picker tile
  * shows what the burned-in caption will actually look like, not just a name.
  *
  * The middle word is treated as the "active" (spoken) word and gets the

@@ -11,7 +11,7 @@ import { PlansService } from '../plans/plans.service';
 
 /** Ledger notes used as idempotency markers for the duration true-up. */
 const TRUEUP_NOTE = 'Duration true-up (full video)';
-const TRUEUP_REFUND_NOTE = 'Refund — insufficient credits for full video';
+const TRUEUP_REFUND_NOTE = 'Refund - insufficient credits for full video';
 
 /** Org plan + balance + capability flags (for the web to gate features). */
 export interface PlanStatus {

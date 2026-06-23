@@ -125,7 +125,7 @@ def _render_single_stage_passthrough(
     # Build a doc where candidates[0..rank-1] exist but only index rank-1 is ours;
     # simplest correct approach: a list of length `rank` where the last is `cand`
     # and the rest are copies of `cand` (they'd write {1..rank-1} but we only keep
-    # rank by passing top_n=rank and then the stages overwrite 1..rank — so we
+    # rank by passing top_n=rank and then the stages overwrite 1..rank - so we
     # instead render exactly one by temporarily making a single-item list and
     # renaming outputs. Cleanest: single-item list + post-rename.
     clips_dir = ws / "clips"

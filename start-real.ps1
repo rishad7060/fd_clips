@@ -28,7 +28,7 @@ if (Test-Path $envFile) {
 
 # 1. Make sure FFmpeg is reachable for the API process (the pipeline also reads
 #    FFMPEG_PATH from .env, but exporting it on PATH covers yt-dlp + child procs).
-$ffbin = "C:/Users/Rs Computers/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-8.1.1-full_build/bin"
+$ffbin = "C:/Users/ARSHAQ SHAZLY/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-8.1.1-full_build/bin"
 if (Test-Path $ffbin) { $env:Path = "$ffbin;$env:Path" }
 if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
   Write-Warning "ffmpeg not on PATH and not at the expected WinGet location. Real ingest may fail. Set FFMPEG_PATH in .env."

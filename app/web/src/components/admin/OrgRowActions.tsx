@@ -84,7 +84,7 @@ export function OrgRowActions({ org, onChanged }: { org: AdminOrg; onChanged: ()
       <Dialog open={creditsOpen} onOpenChange={setCreditsOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Adjust credits — {org.name}</DialogTitle>
+            <DialogTitle>Adjust credits - {org.name}</DialogTitle>
             <DialogDescription>
               Current balance: {org.creditBalance}. Positive grants, negative refunds.
             </DialogDescription>
@@ -118,7 +118,7 @@ export function OrgRowActions({ org, onChanged }: { org: AdminOrg; onChanged: ()
       <Dialog open={planOpen} onOpenChange={setPlanOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Change plan — {org.name}</DialogTitle>
+            <DialogTitle>Change plan - {org.name}</DialogTitle>
             <DialogDescription>Overrides the subscription tier directly.</DialogDescription>
           </DialogHeader>
           <div className="flex gap-2">

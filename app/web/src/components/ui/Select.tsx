@@ -11,7 +11,7 @@ interface Props extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"
 }
 
 /**
- * Styled select — replaces raw <select> OS chrome (the most off-brand element).
+ * Styled select - replaces raw <select> OS chrome (the most off-brand element).
  * Keeps a real <select> under the hood for accessibility + native mobile picker,
  * but skins it with the design-system surface + a chevron.
  */

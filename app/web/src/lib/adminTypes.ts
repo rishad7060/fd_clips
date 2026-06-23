@@ -1,6 +1,6 @@
 /**
  * Wire shapes for the admin API (app/api/src/admin). The admin endpoints return
- * the store records directly, which are already camelCase — so unlike the
+ * the store records directly, which are already camelCase - so unlike the
  * creator api.ts there is no snake_case normalization here.
  */
 

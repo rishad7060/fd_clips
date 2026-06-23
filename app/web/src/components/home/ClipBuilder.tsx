@@ -17,11 +17,11 @@ import { ScanBorder } from "@/components/ui/ScanBorder";
 /**
  * The home clip builder: a URL/upload box that, ONCE a source is added, reveals
  * the full Opus-style config inline (preview, AI clipping, caption presets, My
- * templates, email, Save-as-default). Until then the page stays a clean hero —
+ * templates, email, Save-as-default). Until then the page stays a clean hero -
  * config never dumps onto an empty screen. Submitting creates a job and routes
  * to its live-progress page.
  */
-// Like Opus, we DON'T ask "how many clips" — the AI decides. We send a generous
+// Like Opus, we DON'T ask "how many clips" - the AI decides. We send a generous
 // cap and the scorer only emits clips that clear its quality bar, so weak/short
 // videos naturally yield fewer (3–10).
 const CLIP_COUNT_CAP = 10;
@@ -56,12 +56,12 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
   const hasSource = looksLikeUrl || Boolean(sourceKey);
 
   // The details (thumbnail, timeframe, config) only make sense once we actually
-  // KNOW the video — for a URL that means the duration fetch resolved with real
+  // KNOW the video - for a URL that means the duration fetch resolved with real
   // data (so the timeframe has a real length); uploads have no fetch, so they're
-  // ready immediately. Until then the scan border runs and nothing reveals — no
+  // ready immediately. Until then the scan border runs and nothing reveals - no
   // half-loaded details popping in before the thumbnail/timeframe exist.
   // Reveal once the source read SETTLES (uploads: immediately; URLs: when the
-  // duration fetch resolves — success or failure, so a failed/duration-less
+  // duration fetch resolves - success or failure, so a failed/duration-less
   // fetch can't hang the spinner forever; the timeframe falls back to "whole
   // video" when the duration is unknown).
   const detailsReady = sourceKey ? true : looksLikeUrl && !durationLoading;
@@ -152,7 +152,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
         ...(emailOk ? { email: email.trim() } : {}),
       };
       await api.createJob(input);
-      // Don't block on a full-screen progress page — drop the user back on the
+      // Don't block on a full-screen progress page - drop the user back on the
       // dashboard where the new job appears in the projects grid with live
       // status (the grid polls until terminal). Clear the source so the grid
       // (hidden while a source is staged) reveals on this same page if the
@@ -170,7 +170,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
 
   return (
     <div className="mx-auto w-full max-w-2xl text-left">
-      {/* Source box — while the pasted link's details load, a scanning light
+      {/* Source box - while the pasted link's details load, a scanning light
           traces around the WHOLE box (Opus-style), not just the input. */}
       <ScanBorder active={reading} radius="rounded-2xl">
         <div className="space-y-3 rounded-2xl bg-ink-900/40 p-3 shadow-rim">
@@ -184,7 +184,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
               <input
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="Paste a video link — YouTube, TikTok, Instagram, X…"
+                placeholder="Paste a video link - YouTube, TikTok, Instagram, X…"
                 className="w-full bg-transparent text-sm text-white placeholder:text-ink-400 focus:outline-none"
                 autoFocus
               />
@@ -228,7 +228,7 @@ export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean
 
       {/* Details (language, credits, thumbnail, config) reveal ONLY once the
           source is fully read (duration known for URLs, immediate for uploads)
-          — nothing dumps below the box while the scan border is still running. */}
+          - nothing dumps below the box while the scan border is still running. */}
       {detailsReady && (
         <div className="animate-[fadeIn_.25s_ease]">
           {/* Language · credit usage */}

@@ -1,4 +1,4 @@
-// YT Shorts Clips — Prisma schema (Postgres)
+// YT Shorts Clips - Prisma schema (Postgres)
 // Every table carries organization_id for tenant scoping + RLS (PROMPT 9b).
 // Shapes mirror CONTRACTS.md §1 (Job), §3 (Clip), and §9d (Credit/billing).
 
@@ -155,7 +155,7 @@ model Clip {
   viralityScore  Int     @map("virality_score")
   reason         String
   suggestedTitle String  @map("suggested_title")
-  // R2 keys (never exposed raw to the browser — see CONTRACTS.md §5).
+  // R2 keys (never exposed raw to the browser - see CONTRACTS.md §5).
   finalKey       String? @map("final_key")
   thumbKey       String? @map("thumb_key")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -186,7 +186,7 @@ model Plan {
   @@map("plans")
 }
 
-// Credit ledger — append-only record of grants/debits/refunds.
+// Credit ledger - append-only record of grants/debits/refunds.
 // Organization.creditBalance is the materialized running total.
 model CreditLedger {
   id             String       @id @default(cuid())

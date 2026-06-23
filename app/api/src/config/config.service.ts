@@ -6,7 +6,7 @@ import { ConfigService } from '@nestjs/config';
  * has a mock fallback so the API boots locally with an empty .env.
  */
 export interface ResolvedFlags {
-  /** auto | true | false — mirrors pipeline/config.py MOCK_MODE semantics. */
+  /** auto | true | false - mirrors pipeline/config.py MOCK_MODE semantics. */
   mockMode: boolean;
   /** When true, an Authorization header is not required; a fake org is injected. */
   mockAuth: boolean;
@@ -91,7 +91,7 @@ export class AppConfigService {
     return this.get<string>('POLAR_BASE_URL', 'https://sandbox-api.polar.sh');
   }
 
-  /** 'sandbox' | 'production' — informational; the base URL drives the host. */
+  /** 'sandbox' | 'production' - informational; the base URL drives the host. */
   get polarMode(): string {
     return this.get<string>('POLAR_MODE', 'sandbox');
   }
@@ -186,7 +186,7 @@ export class AppConfigService {
       mockQueue: forced === true ? true : !hasRedis,
       mockDb: forced === true ? true : !hasDb,
       mockStorage: forced === true ? true : !hasR2,
-      // Billing is money — never force MOCK when a real Polar token is present
+      // Billing is money - never force MOCK when a real Polar token is present
       // (a stray MOCK_MODE=true in prod must NOT enable the forgeable mock-grant
       // path). Mock only when the token is genuinely absent.
       mockBilling: hasPolar ? false : true,
@@ -197,7 +197,7 @@ export class AppConfigService {
 
   private logBanner(): void {
     const f = this.flags;
-    this.logger.log('YT Shorts Clips API — feature flags resolved:');
+    this.logger.log('YT Shorts Clips API - feature flags resolved:');
     this.logger.log(`  MOCK_MODE   = ${f.mockMode}`);
     this.logger.log(`  auth        = ${f.mockAuth ? 'MOCK (fake org injected)' : 'Google OAuth (app JWT)'}`);
     this.logger.log(`  database    = ${f.mockDb ? 'IN-MEMORY (no Postgres)' : 'Postgres via Prisma'}`);
@@ -207,7 +207,7 @@ export class AppConfigService {
     this.logger.log(`  billing     = ${f.mockBilling ? 'STUBBED (no Polar token)' : `Polar.sh (${this.polarMode})`}`);
     this.logger.log(`  pipeline    = ${f.useRealPipeline ? 'REAL (spawns pipeline/run.py)' : 'MOCK worker'}`);
     if (f.mockMode) {
-      this.logger.warn('Running in MOCK MODE — no external services required.');
+      this.logger.warn('Running in MOCK MODE - no external services required.');
     }
   }
 }

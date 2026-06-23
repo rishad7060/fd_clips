@@ -4,7 +4,7 @@ import { signIn } from "next-auth/react";
 
 /**
  * "Continue with Google" button. For self-hosted Google OAuth, sign-in and
- * registration are the same flow — first login auto-provisions the user/org via
+ * registration are the same flow - first login auto-provisions the user/org via
  * the API's /auth/sync. `callbackUrl` is where the user lands afterwards.
  */
 export function GoogleSignInButton({

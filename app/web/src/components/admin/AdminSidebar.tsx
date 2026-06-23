@@ -37,11 +37,11 @@ export function AdminSidebar() {
 
   return (
     <aside className="sticky top-3 hidden h-[calc(100vh-1.5rem)] w-[76px] shrink-0 flex-col items-center rounded-2xl border border-border bg-popover/60 py-4 shadow-card md:flex">
-      {/* Brand emblem — the app logo, cropped to its gradient mark (the 533×533
+      {/* Brand emblem - the app logo, cropped to its gradient mark (the 533×533
           square that sits at the left of the full lockup) for the narrow rail. */}
       <Link
         href="/admin"
-        aria-label="FocalDive Clips — Admin"
+        aria-label="FocalDive Clips - Admin"
         className="block h-11 w-11 overflow-hidden rounded-xl shadow-glow transition hover:opacity-90"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -63,7 +63,7 @@ export function AdminSidebar() {
         })}
       </nav>
 
-      {/* Exit / logout — pinned to the bottom like the reference rail */}
+      {/* Exit / logout - pinned to the bottom like the reference rail */}
       <div className="mt-4 flex flex-col items-center gap-1.5">
         <span className="my-1 h-px w-7 bg-border" aria-hidden />
         <RailButton

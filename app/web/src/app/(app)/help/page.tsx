@@ -4,14 +4,14 @@ import { Card, SectionTitle } from "@/components/ui/Card";
 import { HELP_ARTICLES, HELP_CATEGORIES, OPUS_DOCS, articlesByCategory } from "@/lib/help";
 
 export const metadata: Metadata = {
-  title: "Help center — Clips",
+  title: "Help center - Clips",
   description: "Guides for making clips, captions, credits, billing, sources, and languages.",
 };
 
 /**
  * Help center index. A clean, on-brand directory: a hero, a category strip, and
  * an article grid grouped by category. Articles render from the typed HELP_ARTICLES
- * data (lib/help.tsx) via the [slug] template — no MDX tooling.
+ * data (lib/help.tsx) via the [slug] template - no MDX tooling.
  */
 export default function HelpIndexPage() {
   return (
@@ -25,7 +25,7 @@ export default function HelpIndexPage() {
       </div>
       <h1 className="text-3xl font-semibold tracking-tight text-white">Help center</h1>
       <p className="mt-2 max-w-2xl text-[15px] leading-7 text-ink-300">
-        Everything you need to turn long videos into ranked, captioned vertical clips — getting started,
+        Everything you need to turn long videos into ranked, captioned vertical clips - getting started,
         captions, credits and billing, supported sources, and languages.
       </p>
 

@@ -11,7 +11,7 @@ const config: Config = {
       colors: {
         // ── Shadcn semantic tokens (admin dashboard) ───────────────────────
         // Driven by CSS variables defined under `.admin-theme` in globals.css,
-        // mapped to the ink/brand palette below. Additive — none of these names
+        // mapped to the ink/brand palette below. Additive - none of these names
         // are used by the existing creator UI, so it is unaffected.
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -55,7 +55,7 @@ const config: Config = {
         },
         // Dark product surface palette. Low numbers = LIGHT text, high = dark
         // surfaces (an inverted ramp, since this is dark-mode-only). The 100–400
-        // tiers were MISSING before — muted text classes (ink-400/300/200)
+        // tiers were MISSING before - muted text classes (ink-400/300/200)
         // rendered with no color app-wide. Now complete.
         ink: {
           50: "#f4f6fb",   // near-white (rare)
@@ -79,7 +79,7 @@ const config: Config = {
           600: "#7a44e6",
           700: "#6232c2",
         },
-        // Semantic state colors (were raw Tailwind defaults before — inconsistent).
+        // Semantic state colors (were raw Tailwind defaults before - inconsistent).
         success: { DEFAULT: "#34d399", 300: "#6ee7b7", 400: "#34d399", 500: "#10b981" },
         warning: { DEFAULT: "#fbbf24", 300: "#fcd34d", 400: "#fbbf24", 500: "#f59e0b" },
         danger: { DEFAULT: "#f87171", 300: "#fca5a5", 400: "#f87171", 500: "#ef4444" },
@@ -99,7 +99,7 @@ const config: Config = {
       },
       boxShadow: {
         glow: "0 0 0 1px rgba(144,91,244,0.30), 0 8px 40px -8px rgba(144,91,244,0.45)",
-        // Top-edge inner highlight — the glass-rim "lit from above" look on cards.
+        // Top-edge inner highlight - the glass-rim "lit from above" look on cards.
         rim: "inset 0 1px 0 0 rgba(255,255,255,0.06)",
         card: "inset 0 1px 0 0 rgba(255,255,255,0.05), 0 1px 2px 0 rgba(0,0,0,0.3)",
         lift: "0 12px 32px -12px rgba(0,0,0,0.6)",

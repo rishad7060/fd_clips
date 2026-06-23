@@ -29,7 +29,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   full?: boolean;
 }
 
-/** The single button system. Never hand-roll a button — use this with a variant. */
+/** The single button system. Never hand-roll a button - use this with a variant. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   { variant = "primary", size = "md", loading = false, full = false, className = "", disabled, children, ...props },
   ref,

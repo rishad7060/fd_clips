@@ -107,11 +107,11 @@ export function RegisterForm({
       return;
     }
 
-    // Account created — establish the session with the same credentials.
+    // Account created - establish the session with the same credentials.
     const login = await signIn("user-credentials", { email, password, redirect: false });
     setBusy(false);
     if (login?.error) {
-      // Created but auto-login failed — send them to sign in manually.
+      // Created but auto-login failed - send them to sign in manually.
       router.push("/sign-in");
       return;
     }

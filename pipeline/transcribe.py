@@ -1,14 +1,14 @@
-"""Stage 2 — Transcription + diarization.
+"""Stage 2 - Transcription + diarization.
 
 Produces ``workspace/{job_id}/transcript.json`` conforming to CONTRACTS.md §2:
 top-level {job_id, language, duration, source, segments[]}, each segment with
 {text, start, end, speaker, words[]} and per-word {word, start, end}.
 
-Groq branch (MOCK_MODE=false, GROQ_API_KEY set — the v2 $0 MVP default):
+Groq branch (MOCK_MODE=false, GROQ_API_KEY set - the v2 $0 MVP default):
     * Extract a compressed mono 16kHz mp3 audio track with ffmpeg (keeps long
       videos under Groq's ~25MB upload cap; audio, not video).
     * Send it to Groq's whisper-large-v3 with word + segment timestamps.
-    * No diarization on the free MVP path — every segment is 'SPEAKER_00'.
+    * No diarization on the free MVP path - every segment is 'SPEAKER_00'.
       (PHASE 2: pyannote diarization for multi-speaker; see WhisperX branch below.)
 
 Real branch (MOCK_MODE=false, GPU box):
@@ -189,7 +189,7 @@ def _extract_audio_for_groq(source_path: Path, out_path: Path) -> Path:
     cmd = [
         ffmpeg, "-y",
         "-i", str(source_path),
-        "-vn",                 # drop video — audio only
+        "-vn",                 # drop video - audio only
         "-ac", "1",            # mono
         "-ar", "16000",        # 16kHz (Whisper's native rate)
         "-c:a", "libmp3lame",  # mp3; compact and universally accepted by Groq
@@ -202,14 +202,14 @@ def _extract_audio_for_groq(source_path: Path, out_path: Path) -> Path:
 
 
 def _transcribe_groq(job_id: str, source_path: Path) -> dict[str, Any]:
-    """Transcribe via Groq's hosted whisper-large-v3 — the v2 $0 MVP default.
+    """Transcribe via Groq's hosted whisper-large-v3 - the v2 $0 MVP default.
 
     No GPU and no self-hosting: extracts a compressed audio track, uploads it to
     Groq, and maps the verbose_json response to the CONTRACTS.md §2 transcript
     shape. Retries with exponential backoff on rate-limit (429) errors.
 
     PHASE 2: no diarization on the free MVP path, so every segment is labelled
-    'SPEAKER_00'. Multi-speaker support (podcasts) is the Phase-2 upgrade — run
+    'SPEAKER_00'. Multi-speaker support (podcasts) is the Phase-2 upgrade - run
     pyannote speaker-diarization and assign speakers, exactly like the WhisperX
     branch (``_transcribe_real``) does. See fd_clips_v2.md Part 5
     ("Users ask for podcasts/2-speakers" → add active-speaker / diarization).
@@ -231,7 +231,7 @@ def _transcribe_groq(job_id: str, source_path: Path) -> dict[str, Any]:
         # clear error is sufficient here.
         raise RuntimeError(
             f"audio.mp3 is {size / 1_048_576:.1f}MB, over Groq's "
-            f"~{_GROQ_MAX_UPLOAD_BYTES // 1_048_576}MB limit — chunking is a "
+            f"~{_GROQ_MAX_UPLOAD_BYTES // 1_048_576}MB limit - chunking is a "
             "Phase-2 upgrade (see fd_clips_v2.md Part 2)."
         )
 
@@ -240,7 +240,7 @@ def _transcribe_groq(job_id: str, source_path: Path) -> dict[str, Any]:
     # 2. Call Groq with word + segment granularities, retrying on rate limits.
     #
     # PHASE 2: the production approach is to QUEUE jobs (BullMQ) so we never burst
-    # past Groq's free daily quota — backoff only covers transient 429s within a
+    # past Groq's free daily quota - backoff only covers transient 429s within a
     # single job. See fd_clips_v2.md Part 2 caveat ("queue jobs to stay inside it").
     result: Any = None
     last_exc: Optional[BaseException] = None
@@ -254,19 +254,19 @@ def _transcribe_groq(job_id: str, source_path: Path) -> dict[str, Any]:
                     timestamp_granularities=["word", "segment"],
                 )
             break
-        except Exception as exc:  # noqa: BLE001 — narrow to rate limits below
+        except Exception as exc:  # noqa: BLE001 - narrow to rate limits below
             if not _is_rate_limit_error(exc) or backoff is None:
                 # Non-retryable, or we've exhausted the retry budget.
                 if _is_rate_limit_error(exc):
                     raise RuntimeError(
                         "Groq rate limit hit and retries exhausted "
                         f"({len(_GROQ_RETRY_BACKOFFS) + 1} attempts). Free daily "
-                        "quota may be spent — queue jobs (fd_clips_v2.md Part 2)."
+                        "quota may be spent - queue jobs (fd_clips_v2.md Part 2)."
                     ) from exc
                 raise
             last_exc = exc
             time.sleep(backoff)
-    if result is None:  # pragma: no cover — defensive
+    if result is None:  # pragma: no cover - defensive
         raise RuntimeError("Groq transcription failed") from last_exc
 
     return _map_groq_response(job_id, result, source_path)

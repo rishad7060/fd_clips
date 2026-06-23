@@ -39,7 +39,7 @@ function load(): NamedTemplate[] {
 function persist(list: NamedTemplate[]) {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
-  } catch {/* quota / private mode — non-fatal */}
+  } catch {/* quota / private mode - non-fatal */}
 }
 
 export function MyTemplates({ current, onApply }: {

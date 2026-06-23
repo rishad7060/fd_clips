@@ -27,7 +27,7 @@ export function SubtitleTimeline({
   if (!segments.length) {
     return (
       <p className="text-xs text-ink-500">
-        No transcript words for this clip — edit the single subtitle line in the
+        No transcript words for this clip - edit the single subtitle line in the
         preview, or use the Hook layer.
       </p>
     );

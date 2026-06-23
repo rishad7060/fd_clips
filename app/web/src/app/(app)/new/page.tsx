@@ -1,7 +1,7 @@
 import { ClipBuilder } from "@/components/home/ClipBuilder";
 
 /**
- * Direct "new clips" route. Same builder as the home hero — the config reveals
+ * Direct "new clips" route. Same builder as the home hero - the config reveals
  * once a source is added. (Kept so existing links to /new still work.)
  */
 export default function NewClipsPage() {

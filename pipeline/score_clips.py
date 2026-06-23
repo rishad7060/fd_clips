@@ -1,4 +1,4 @@
-"""Stage 3 — Clip scoring (the core IP).
+"""Stage 3 - Clip scoring (the core IP).
 
 Reads ``workspace/{job_id}/transcript.json`` and produces
 ``workspace/{job_id}/clips.json`` conforming to CONTRACTS.md §3:
@@ -107,10 +107,10 @@ def _scoring_bias_instruction(
     if g and g != "auto":
         hint = _GENRE_HINTS.get(g)
         if hint:
-            parts.append(f"GENRE: this is a {g} video — {hint} and pick "
+            parts.append(f"GENRE: this is a {g} video - {hint} and pick "
                          f"{g}-appropriate hooks.")
         else:
-            parts.append(f"GENRE: this is a {g} video — favor "
+            parts.append(f"GENRE: this is a {g} video - favor "
                          f"{g}-appropriate hooks.")
     focus = (include_moments or "").strip()
     if focus:
@@ -118,7 +118,7 @@ def _scoring_bias_instruction(
     return ("\n\n" + " ".join(parts)) if parts else ""
 
 # Penalty applied to a clip the LLM couldn't give a payoff_line for (an
-# "orphaned hook" — the #1 reason a clip fails). Heavy so these drop in ranking.
+# "orphaned hook" - the #1 reason a clip fails). Heavy so these drop in ranking.
 NO_PAYOFF_PENALTY = 25
 
 # Heuristic keyword banks for the deterministic mock scorer.
@@ -226,7 +226,7 @@ def _apply_replay_blend(ws: "Path", result: dict[str, Any]) -> None:
     candidate, computes its replay score, normalizes the set to 0..100, and sets
     ``virality_score = (1-W)*rubric + W*replay``. Also records ``replay_score``
     (0..100) and a short note per candidate. No-op (and unchanged scores) when
-    the source has no heatmap — so non-YouTube/new videos behave exactly as before.
+    the source has no heatmap - so non-YouTube/new videos behave exactly as before.
     """
     meta_file = ws / "source.meta.json"
     if not meta_file.exists():
@@ -313,7 +313,7 @@ def _shorten_hook(text: str, *, max_chars: int = 42, max_words: int = 7) -> str:
         t = " ".join(words[:max_words])
     if len(t) > max_chars:
         t = t[:max_chars].rsplit(" ", 1)[0]
-    t = t.rstrip(" ,.;:—-")
+    t = t.rstrip(" ,.;:--")
     if is_q and not t.endswith("?"):
         t += "?"
     return t
@@ -323,7 +323,7 @@ def _shorten_hook(text: str, *, max_chars: int = 42, max_words: int = 7) -> str:
 # away the comforting answer ("X Won't Make You Dumber", "AI Doesn't Take Jobs").
 # Opus poses the scary question instead. We flip ONLY the auxiliary-verb negations
 # (won't / doesn't / can't + base verb), where dropping the negation yields a
-# clean "Will X <verb>...?" — NOT copula negations (isn't/aren't) where that
+# clean "Will X <verb>...?" - NOT copula negations (isn't/aren't) where that
 # breaks grammar ("Coding isn't dead" -> "Will coding dead?").
 _REASSURE_RE = re.compile(
     r"^(?P<subj>.+?)\s+(won'?t|will\s+not|does\s*n'?t|do\s*n'?t|can'?t|cannot)\s+"
@@ -354,7 +354,7 @@ def _punch_up_hook(title: str) -> str:
     """
     t = " ".join(str(title or "").split())
     if not t or t.endswith("?"):
-        return t  # already a question (open loop) — leave it
+        return t  # already a question (open loop) - leave it
     m = _REASSURE_RE.match(t)
     if not m:
         return t
@@ -390,7 +390,7 @@ def _apply_completeness_and_length(candidates: list[dict[str, Any]]) -> None:
 
     - Orphaned-hook penalty: a clip whose hook is a question/open-loop but has no
       ``payoff_line`` inside it loses NO_PAYOFF_PENALTY points (the #1 failure
-      mode — 'cuts the question, not the answer').
+      mode - 'cuts the question, not the answer').
     - Length tier: multiply by _length_multiplier so 30-60s clips rank above
       equally-good clips that are too short or too long.
     """
@@ -606,10 +606,10 @@ def _score_mock(job_id: str, transcript: dict[str, Any]) -> dict[str, Any]:
 # return raw float timestamps (which land mid-sentence / cut the question off
 # from the answer), we reconstruct SENTENCES from the word-level transcript, feed
 # the LLM an indexed sentence list, and have it return start/end SENTENCE INDICES.
-# We then look up the real word-level start/end in code — boundaries fall on
+# We then look up the real word-level start/end in code - boundaries fall on
 # sentence edges by construction, and the LLM can't hallucinate a timestamp.
 
-# A clip MUST NOT start on one of these — an orphan pronoun/conjunction/discourse
+# A clip MUST NOT start on one of these - an orphan pronoun/conjunction/discourse
 # marker whose referent lives in an earlier, un-included sentence ("So…", "And…",
 # "But it…", "That's why…"). Nobody else does this; it's our differentiator.
 _ORPHAN_START_WORDS = {
@@ -635,7 +635,7 @@ def _reconstruct_sentences(transcript: dict[str, Any]) -> list["_Sentence"]:
 
     Walks every word in order, accumulating into a sentence until a terminal
     punctuation (``.?!``) closes it (or a long pause / the segment ends). Each
-    sentence's start = its first word's start, end = its last word's end — so any
+    sentence's start = its first word's start, end = its last word's end - so any
     boundary we pick from these is guaranteed to land on a real sentence edge.
     Falls back to segment-level when words are absent.
     """
@@ -659,7 +659,7 @@ def _reconstruct_sentences(transcript: dict[str, Any]) -> list["_Sentence"]:
         if not words:
             # No word timing: close any open sentence, then treat the whole
             # segment as one sentence so order/timing stay consistent. Guard the
-            # timing access — a malformed segment may lack start/end.
+            # timing access - a malformed segment may lack start/end.
             flush()
             txt = str(seg.get("text", "")).strip()
             try:
@@ -678,7 +678,7 @@ def _reconstruct_sentences(transcript: dict[str, Any]) -> list["_Sentence"]:
             except (KeyError, TypeError, ValueError):
                 continue
             # A >0.8s gap between words ends a sentence (natural pause). We do NOT
-            # flush at segment boundaries — WhisperX segments often split a single
+            # flush at segment boundaries - WhisperX segments often split a single
             # spoken sentence, so flushing there would cut a sentence in half. A
             # sentence ends only on terminal punctuation or a real pause.
             if buf and s_start is not None and (w_start - last_end) > 0.8:
@@ -698,7 +698,7 @@ def _starts_on_orphan(text: str) -> bool:
     first = text.strip().split()
     if not first:
         return False
-    w = first[0].lower().strip(",.;:—-\"'")
+    w = first[0].lower().strip(",.;:--\"'")
     return w in _ORPHAN_START_WORDS
 
 
@@ -735,7 +735,7 @@ def _indices_to_clip(
     n = len(sentences)
     if n == 0:
         return None
-    # LLM JSON may hand back "5", 5.0, "5.0", or null — coerce defensively so a
+    # LLM JSON may hand back "5", 5.0, "5.0", or null - coerce defensively so a
     # stray type never crashes the whole scoring run; un-coercible → drop.
     try:
         start_idx = int(float(start_idx))
@@ -946,7 +946,7 @@ def _score_gemini(
                 )
                 used_model = model
                 break
-            except Exception as e:  # noqa: BLE001 — inspect status to decide retry
+            except Exception as e:  # noqa: BLE001 - inspect status to decide retry
                 last_err = e
                 msg = str(e)
                 transient = any(s in msg for s in ("503", "UNAVAILABLE", "429", "overloaded"))

@@ -17,9 +17,9 @@ api  (NestJS, :4000)  ──spawns──►  Python pipeline (bundled in the api
    └──►  Redis      (BullMQ job queue)
 ```
 
-- **web** — Next.js 14 + Tailwind UI on port `3000`. Submit a URL/upload, watch live progress, browse and edit clips.
-- **api** — NestJS on port `4000`. Owns jobs, billing, and progress. The api image bundles Node **and** Python 3 + ffmpeg, because it spawns `python pipeline/run.py` as a child process. Clips are written to a shared `workspace` volume and served over `/files`.
-- **Postgres + Redis** — Postgres stores job/clip/billing data (schema synced via `prisma db push` on boot); Redis backs the BullMQ queue.
+- **web** - Next.js 14 + Tailwind UI on port `3000`. Submit a URL/upload, watch live progress, browse and edit clips.
+- **api** - NestJS on port `4000`. Owns jobs, billing, and progress. The api image bundles Node **and** Python 3 + ffmpeg, because it spawns `python pipeline/run.py` as a child process. Clips are written to a shared `workspace` volume and served over `/files`.
+- **Postgres + Redis** - Postgres stores job/clip/billing data (schema synced via `prisma db push` on boot); Redis backs the BullMQ queue.
 
 **Pipeline stages:** `ingest` → `transcribe` (Groq Whisper, CPU) → `score` (Gemini) → `extract` (FFmpeg cuts) → `reframe` (MediaPipe face tracking → 9:16) → `captions` (burned-in karaoke captions).
 
@@ -27,7 +27,7 @@ api  (NestJS, :4000)  ──spawns──►  Python pipeline (bundled in the api
 
 ## Prerequisites
 
-- **Docker Desktop** (recommended path) — installed and running (`docker info` must succeed).
+- **Docker Desktop** (recommended path) - installed and running (`docker info` must succeed).
 - **OR for local dev without Docker:** Node 20, Python 3.12, and `ffmpeg` on your PATH.
 
 ## Quick start with Docker (recommended)
@@ -39,7 +39,7 @@ cp .env.docker.example .env.docker        # then edit .env.docker
 docker compose --env-file .env.docker up --build -d
 ```
 
-The first build takes a while — the api image installs Python + ffmpeg + MediaPipe.
+The first build takes a while - the api image installs Python + ffmpeg + MediaPipe.
 
 | Service  | URL / port |
 |----------|------------|
@@ -81,7 +81,7 @@ All variables are documented in [`.env.docker.example`](.env.docker.example). Ke
 | `AUTH_INTERNAL_SECRET` | Shared secret guarding the API's internal `/auth/sync` (web **and** api) |
 | `MOCK_AUTH` | `true` injects a dev org so the app works without real auth |
 
-Secrets are gitignored (`.env`, `.env.local`, `.env.docker`). Never commit real secrets — copy `.env.docker.example` to `.env.docker` and fill it in.
+Secrets are gitignored (`.env`, `.env.local`, `.env.docker`). Never commit real secrets - copy `.env.docker.example` to `.env.docker` and fill it in.
 
 ## Project structure
 
@@ -100,4 +100,4 @@ Secrets are gitignored (`.env`, `.env.local`, `.env.docker`). Never commit real 
 
 - **Authentication is self-hosted (Auth.js v5 + Google OAuth).** It is off by default so the app runs keyless (`MOCK_AUTH` injects a dev org; the web shows a dev user). To enable real Google login/registration: create a Google OAuth 2.0 client (redirect URI `http://localhost:3000/api/auth/callback/google`), set the web vars (`NEXT_PUBLIC_AUTH_ENABLED=true`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`) in `app/web/.env.local`, and set the shared `AUTH_JWT_SECRET` + `AUTH_INTERNAL_SECRET` in **both** `app/web/.env.local` and the repo-root `.env`. First Google login auto-provisions a `User` + a personal `Organization` (60 free credits).
 - **Billing runs on the Polar.sh sandbox** by default. Switch to live with a production `POLAR_BASE_URL`, `POLAR_MODE=production`, and production token + product ids.
-- **Transcription is CPU-based via Groq** — no GPU is required to run the stack.
+- **Transcription is CPU-based via Groq** - no GPU is required to run the stack.

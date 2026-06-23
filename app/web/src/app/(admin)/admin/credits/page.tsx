@@ -28,8 +28,8 @@ export default function AdminCreditsPage() {
       ),
     },
     { header: "Org", cell: (l) => <span className="font-mono text-xs">{shortId(l.organizationId)}</span> },
-    { header: "Note", cell: (l) => <span className="text-muted-foreground">{l.note ?? "—"}</span> },
-    { header: "Job", cell: (l) => <span className="font-mono text-xs">{l.jobId ? shortId(l.jobId) : "—"}</span> },
+    { header: "Note", cell: (l) => <span className="text-muted-foreground">{l.note ?? "-"}</span> },
+    { header: "Job", cell: (l) => <span className="font-mono text-xs">{l.jobId ? shortId(l.jobId) : "-"}</span> },
     { header: "When", cell: (l) => <span className="text-muted-foreground">{fmtDateTime(l.createdAt)}</span> },
   ];
 

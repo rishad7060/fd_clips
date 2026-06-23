@@ -1,5 +1,5 @@
 # ============================================================
-# FocalDive Clips — NestJS API  (build context = repo root)
+# FocalDive Clips - NestJS API  (build context = repo root)
 # ============================================================
 # The API spawns the Python pipeline as a child process, so the
 # image bundles Node 20 + Python 3 + FFmpeg + pipeline code.
@@ -9,7 +9,7 @@
 # ============================================================
 
 # ------------------------------------------------------------
-# Stage 1: builder — compile TypeScript → dist/
+# Stage 1: builder - compile TypeScript → dist/
 # ------------------------------------------------------------
 FROM node:20-bookworm-slim AS builder
 
@@ -29,14 +29,14 @@ RUN npx prisma generate
 RUN npm run build
 
 # ------------------------------------------------------------
-# Stage 2: runner — lean production image with Python + FFmpeg
+# Stage 2: runner - lean production image with Python + FFmpeg
 # ------------------------------------------------------------
 FROM node:20-bookworm-slim AS runner
 
 # OS dependencies:
-#   python3 / pip / venv  — pipeline runtime
-#   ffmpeg                — video processing
-#   ca-certificates       — HTTPS (yt-dlp, API calls)
+#   python3 / pip / venv  - pipeline runtime
+#   ffmpeg                - video processing
+#   ca-certificates       - HTTPS (yt-dlp, API calls)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         python3 \
@@ -75,7 +75,7 @@ COPY --from=builder /app/api/prisma      ./app/api/prisma
 COPY pipeline/       ./pipeline/
 COPY requirements.docker.txt ./requirements.docker.txt
 
-# Install slim Python deps (no GPU libs — see requirements.docker.txt header)
+# Install slim Python deps (no GPU libs - see requirements.docker.txt header)
 # --break-system-packages is needed on Debian bookworm where pip is externally
 # managed; using a venv is the cleaner alternative but adds path complexity.
 RUN pip3 install --no-cache-dir --break-system-packages -r requirements.docker.txt
@@ -100,6 +100,6 @@ EXPOSE 4000
 # schema are found at their expected relative paths.
 WORKDIR /app/app/api
 
-# No prisma/migrations/ folder exists — use db push (idempotent schema sync)
+# No prisma/migrations/ folder exists - use db push (idempotent schema sync)
 # instead of migrate deploy (which requires migration history files).
 CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/main.js"]

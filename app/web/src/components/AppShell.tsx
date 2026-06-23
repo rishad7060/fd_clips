@@ -16,7 +16,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-white/[0.08] bg-ink-950/80 px-4 py-2.5 backdrop-blur sm:px-6">
-          {/* Left: brand mark — visible on mobile (where the rail is hidden) and as a header anchor on desktop. */}
+          {/* Left: brand mark - visible on mobile (where the rail is hidden) and as a header anchor on desktop. */}
           <Logo href="/dashboard" />
           <div className="flex items-center gap-3">
             <CreditsChip />

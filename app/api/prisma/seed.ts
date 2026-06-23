@@ -1,12 +1,12 @@
 /**
- * Prisma seed — provisions the system admin (real/Postgres mode).
+ * Prisma seed - provisions the system admin (real/Postgres mode).
  *
  * Idempotent: upserts an "FocalDive Admin" organization and an admin User keyed
  * by ADMIN_EMAIL. The password is bcrypt-hashed from ADMIN_PASSWORD. Run with:
  *   npx prisma db seed   (or `npm run prisma:seed`)
  *
  * In MOCK mode the API uses the in-memory store, which seeds an equivalent admin
- * on boot (see app/api/src/persistence/memory.store.ts) — this script is only
+ * on boot (see app/api/src/persistence/memory.store.ts) - this script is only
  * needed against a real database.
  */
 import { PrismaClient } from '@prisma/client';

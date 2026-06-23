@@ -72,7 +72,7 @@ export function AdminTopbar({ name }: { name?: string | null }) {
   );
 }
 
-/** Square icon control — links when `href` is given, otherwise an inert button. */
+/** Square icon control - links when `href` is given, otherwise an inert button. */
 function IconButton({
   href,
   label,

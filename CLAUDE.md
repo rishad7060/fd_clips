@@ -1,17 +1,17 @@
-# FocalDive Clips — Project Guide (CLAUDE.md)
+# FocalDive Clips - Project Guide (CLAUDE.md)
 
 ## Goal
 An AI pipeline + SaaS that takes a long video (YouTube URL or file) and outputs
-5–10 ranked, captioned, vertical 9:16 short clips — like Opus Clip.
+5–10 ranked, captioned, vertical 9:16 short clips - like Opus Clip.
 
 ## Repository layout
 ```
 focaldive-clips/
-├── CLAUDE.md                 # this file — read first every session
+├── CLAUDE.md                 # this file - read first every session
 ├── requirements.txt          # Python deps for the pipeline
 ├── .env.example              # all required env vars (no secrets committed)
 ├── .gitignore
-├── pipeline/                 # Python AI pipeline — each module runnable standalone & chainable
+├── pipeline/                 # Python AI pipeline - each module runnable standalone & chainable
 │   ├── config.py             # loads .env, central settings
 │   ├── ingest.py             # yt-dlp + ffprobe → normalized source.mp4 + metadata
 │   ├── transcribe.py         # WhisperX large-v3 + pyannote → transcript.json
@@ -51,9 +51,9 @@ GPU/paid paths are **mocked** so everything runs and is testable locally:
 - In MOCK_MODE: transcribe returns a canned transcript fixture, score uses a deterministic
   heuristic instead of the LLM, reframe/captions use libx264 fallback if nvenc unavailable.
 - The NestJS API and Next.js web app run fully locally against a mocked worker.
-- Swap mocks for real implementations on a RunPod 4090 pod with keys — interfaces are identical.
+- Swap mocks for real implementations on a RunPod 4090 pod with keys - interfaces are identical.
 
 ## Build workflow
 1. One module at a time; test each before moving on.
 2. `git add -A && git commit -m "step X works"` after each green step.
-3. If a step goes wrong, `git checkout .` and retry — don't pile on.
+3. If a step goes wrong, `git checkout .` and retry - don't pile on.

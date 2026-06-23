@@ -20,7 +20,7 @@ export interface AuthedRequest extends Request {
   auth?: AuthContext;
 }
 
-/** Principal for admin (cross-tenant) endpoints — set by AdminGuard. */
+/** Principal for admin (cross-tenant) endpoints - set by AdminGuard. */
 export interface AdminContext {
   userId: string;
   email?: string;

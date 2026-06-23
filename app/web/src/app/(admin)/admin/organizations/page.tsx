@@ -32,7 +32,7 @@ export default function AdminOrganizationsPage() {
     {
       header: "Subscription",
       cell: (o) => (
-        <span className="text-xs text-muted-foreground">{o.subscriptionStatus ?? "—"}</span>
+        <span className="text-xs text-muted-foreground">{o.subscriptionStatus ?? "-"}</span>
       ),
     },
     { header: "Created", cell: (o) => <span className="text-muted-foreground">{fmtDate(o.createdAt)}</span> },

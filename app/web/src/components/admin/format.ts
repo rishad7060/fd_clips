@@ -28,7 +28,7 @@ export function shortId(id: string): string {
 }
 
 export function relTime(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.round(diff / 60000);
   if (mins < 1) return "just now";

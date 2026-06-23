@@ -22,7 +22,7 @@ export interface JobView {
    * Number of clips the pipeline ACTUALLY produced (rows in the Clip store),
    * as opposed to `clipCount` which is how many were *requested*. A completed
    * job can have 0 produced clips when the scorer found no standout moment, so
-   * the UI must use this — not clipCount — to label/route the card.
+   * the UI must use this - not clipCount - to label/route the card.
    */
   clipsProduced: number;
 }

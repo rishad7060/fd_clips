@@ -3,7 +3,7 @@ import { JobQueue, JobQueuePayload, JobWorker } from './queue.types';
 
 /**
  * In-memory queue for local dev (no Redis). Enqueued jobs are handed to a
- * JobWorker — the MockWorker (full simulation) or the RealPipelineWorker
+ * JobWorker - the MockWorker (full simulation) or the RealPipelineWorker
  * (spawns the Python pipeline). Processing is async (next tick) so POST /jobs
  * returns immediately, just like BullMQ.
  */

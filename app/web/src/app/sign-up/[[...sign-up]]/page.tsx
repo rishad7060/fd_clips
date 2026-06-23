@@ -6,7 +6,7 @@ import { RegisterForm, OrDivider } from "@/components/CredentialsAuthForm";
 
 /**
  * Self-hosted sign-up surface (Auth.js + Google OAuth). With Google there is no
- * separate registration step — the first sign-in auto-provisions the user/org —
+ * separate registration step - the first sign-in auto-provisions the user/org -
  * so this mirrors the sign-in page. Kept as its own route for friendly links and
  * the catch-all segment for backwards compatibility.
  */
@@ -26,7 +26,7 @@ function SignUpCard() {
     <div className="w-full rounded-2xl border border-ink-700 bg-ink-900/70 p-8 text-center shadow-rim">
       <h1 className="text-lg font-semibold text-white">Create your account</h1>
       <p className="mt-2 text-sm text-ink-300">
-        Start free — 60 credits/month, no card required.
+        Start free - 60 credits/month, no card required.
       </p>
       <div className="mt-6">
         <GoogleSignInButton callbackUrl="/dashboard" label="Sign up with Google" />
@@ -50,7 +50,7 @@ function SignUpCard() {
 function DevNote() {
   return (
     <div className="w-full rounded-2xl border border-ink-700 bg-ink-900/70 p-8 text-center shadow-rim">
-      <h1 className="text-lg font-semibold text-white">Dev mode — no auth</h1>
+      <h1 className="text-lg font-semibold text-white">Dev mode - no auth</h1>
       <p className="mt-2 text-sm text-ink-300">
         Authentication is mocked locally. Set NEXT_PUBLIC_AUTH_ENABLED=true (and
         the Google OAuth keys) to enable real sign-up.

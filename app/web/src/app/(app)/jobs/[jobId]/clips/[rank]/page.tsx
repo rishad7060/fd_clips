@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * Inline clip editor route — NOW LIVE.
+ * Inline clip editor route - NOW LIVE.
  *
  * ClipCard.tsx (the gallery card's scissors/edit anchor, ~lines 300-310) links
  * directly to `/jobs/${clip.job_id}/clips/${clip.rank}`, so this editor is a
  * promoted, reachable feature. (An earlier comment here claimed the cards no
- * longer link to it — that was false against the current code.)
+ * longer link to it - that was false against the current code.)
  *
  * This page is a thin shell: it fetches the clip by rank, handles loading/error,
  * then hands off to <InlineClipEditor>, which owns the live preview, trim,

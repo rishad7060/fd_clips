@@ -93,7 +93,7 @@ export function ConfigPanel(p: Props) {
         />
       </div>
 
-      {/* Processing timeframe — a real draggable timeline (Opus-style) once the
+      {/* Processing timeframe - a real draggable timeline (Opus-style) once the
           source duration is known; the AI decides how many clips itself. */}
       <ProcessingTimeframe range={p.range} setRange={p.setRange} durationSec={p.durationSec} loading={p.durationLoading} />
     </Panel>
@@ -146,7 +146,7 @@ function ProcessingTimeframe({ range, setRange, durationSec, loading }: {
       ) : loading ? (
         <TimelineSkeleton />
       ) : known ? (
-        <p className="mt-2 text-xs text-ink-400">This video is short — processing the whole thing.</p>
+        <p className="mt-2 text-xs text-ink-400">This video is short - processing the whole thing.</p>
       ) : (
         <p className="mt-2 text-xs text-ink-400">Processing the whole video. Paste a link to trim a range.</p>
       )}

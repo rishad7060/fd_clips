@@ -22,7 +22,7 @@ import { Panel, SectionTitle, Label } from "@/components/ui/Card";
 /**
  * Two-layer inline clip editor (CapCut / Opus-style). Fully client-side live
  * preview against the pre-cut `final_url` video with TWO independent overlay
- * layers — a HOOK banner box and a per-word KARAOKE subtitle layer fed by the
+ * layers - a HOOK banner box and a per-word KARAOKE subtitle layer fed by the
  * real transcript. Editing is instant client state; the server re-render is
  * OPTIONAL and never blocks the live edit.
  */
@@ -143,7 +143,7 @@ export function InlineClipEditor({ clip }: { clip: Clip }) {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr,360px]">
-        {/* LEFT — live preview (sticky so it doesn't scroll away) */}
+        {/* LEFT - live preview (sticky so it doesn't scroll away) */}
         <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
           <div className="relative aspect-[9/16] overflow-hidden rounded-2xl bg-ink-950 ring-1 ring-white/10 shadow-rim">
             {hasVideo && !videoError ? (
@@ -257,7 +257,7 @@ export function InlineClipEditor({ clip }: { clip: Clip }) {
           />
         </div>
 
-        {/* RIGHT — control panel */}
+        {/* RIGHT - control panel */}
         <div className="space-y-5">
           {/* Layer switcher */}
           <LayerTabs value={activeLayer} onChange={setActiveLayer} />
@@ -321,7 +321,7 @@ export function InlineClipEditor({ clip }: { clip: Clip }) {
         </div>
       </div>
 
-      {/* FOOTER — optional re-render */}
+      {/* FOOTER - optional re-render */}
       <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-5">
         <Button variant="primary" size="lg" onClick={reRender} loading={rendering} disabled={rendering}>
           {rendering ? "Re-rendering…" : "Apply & re-render"}

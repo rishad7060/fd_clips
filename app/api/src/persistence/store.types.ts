@@ -203,7 +203,7 @@ export interface AdminOverviewStats {
 /**
  * The single persistence contract. Both the in-memory store (local dev) and
  * the Prisma/Postgres store implement this so callers never branch on mode.
- * All reads/writes are tenant-scoped by organizationId — EXCEPT the admin*
+ * All reads/writes are tenant-scoped by organizationId - EXCEPT the admin*
  * methods at the end, which are intentionally cross-tenant.
  */
 export interface DataStore {
@@ -287,7 +287,7 @@ export interface DataStore {
   adminListLedgerAll(
     p: AdminListParams & { organizationId?: string },
   ): Promise<Paged<CreditLedgerRecord>>;
-  /** Credentials login lookup — returns the full record incl. passwordHash. */
+  /** Credentials login lookup - returns the full record incl. passwordHash. */
   adminGetUserByEmail(email: string): Promise<UserRecord | null>;
   adminSetUserRole(userId: string, role: UserRole): Promise<UserRecord | null>;
   adminTouchLogin(userId: string): Promise<void>;

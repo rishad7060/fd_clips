@@ -12,11 +12,11 @@ import { AppAuthService } from './app-auth.service';
 
 /**
  * Gate for the cross-tenant admin API. Unlike AppAuthGuard, this does NOT
- * resolve or require an organization — admin endpoints read across all tenants.
+ * resolve or require an organization - admin endpoints read across all tenants.
  *
  * - MOCK_AUTH on (local dev, no AUTH_JWT_SECRET): open, a fake admin is injected.
- *   This mirrors AppAuthGuard's mock-org behavior so the whole stack — including
- *   the admin dashboard — is clickable locally with no keys (CLAUDE.md).
+ *   This mirrors AppAuthGuard's mock-org behavior so the whole stack - including
+ *   the admin dashboard - is clickable locally with no keys (CLAUDE.md).
  * - MOCK_AUTH off (real mode): requires a valid HS256 Bearer token (minted by
  *   the web Auth.js session callback) whose `role` claim is `admin`.
  */

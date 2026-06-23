@@ -15,7 +15,7 @@ export function Card({ className = "", interactive = false, ...props }: HTMLAttr
 /**
  * Frosted-glass panel surface for config sections (Opus-style): a low-opacity
  * background with a soft backdrop blur so the page shows through, and a subtle
- * dim-until-hover — its contents sit slightly muted at rest and brighten when
+ * dim-until-hover - its contents sit slightly muted at rest and brighten when
  * the cursor is over the section, so the active area "wakes up".
  */
 export function Panel({ className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
@@ -27,7 +27,7 @@ export function Panel({ className = "", ...props }: HTMLAttributes<HTMLDivElemen
   );
 }
 
-/** Section heading inside a panel/page — proper hierarchy (not body-sized). */
+/** Section heading inside a panel/page - proper hierarchy (not body-sized). */
 export function SectionTitle({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <h2 className={`text-base font-semibold tracking-tight text-white ${className}`}>{children}</h2>;
 }

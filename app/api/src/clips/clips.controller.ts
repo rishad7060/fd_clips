@@ -71,7 +71,7 @@ export class ClipsController {
   ) {}
 
   /**
-   * POST /clips/render — re-render ONE clip with a new trim and/or caption
+   * POST /clips/render - re-render ONE clip with a new trim and/or caption
    * style. Spawns pipeline/render_one.py, updates the Clip row's start/end, and
    * returns the refreshed view. Only available when the real pipeline is on
    * (USE_REAL_PIPELINE); mock mode has no files to re-cut.
@@ -145,7 +145,7 @@ export class ClipsController {
   }
 
   /**
-   * GET /clips?jobId=... — list clips for the org (optionally one job), each
+   * GET /clips?jobId=... - list clips for the org (optionally one job), each
    * with time-limited signed URLs minted after the organization_id check.
    */
   @Get()
@@ -174,14 +174,14 @@ export class ClipsController {
   }
 
   /**
-   * GET /clips/transcript?jobId=...&rank=... — per-word transcript for ONE clip,
+   * GET /clips/transcript?jobId=...&rank=... - per-word transcript for ONE clip,
    * sliced to [clip.start, clip.end] and re-based to clip-relative seconds (the
    * same scale as the pre-cut n_final.mp4's currentTime). Feeds the editor's
    * karaoke subtitle layer.
    *
    * Org scope comes from listClips (tenant-scoped by organizationId). When the
    * transcript file is absent OR the real pipeline is off, returns a synthesized
-   * mock track so offline/dev mode always has a non-empty karaoke layer — never
+   * mock track so offline/dev mode always has a non-empty karaoke layer - never
    * 500s.
    */
   @Get('transcript')

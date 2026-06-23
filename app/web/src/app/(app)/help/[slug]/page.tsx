@@ -11,16 +11,16 @@ export function generateStaticParams() {
 
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
   const article = articleBySlug(params.slug);
-  if (!article) return { title: "Help center — Clips" };
+  if (!article) return { title: "Help center - Clips" };
   return {
-    title: `${article.title} — Clips`,
+    title: `${article.title} - Clips`,
     description: article.summary,
   };
 }
 
 /**
  * Help article template. Renders one article from the typed HELP_ARTICLES data
- * (lib/help.tsx) — the `body()` render function returns styled React, so there's
+ * (lib/help.tsx) - the `body()` render function returns styled React, so there's
  * no markdown layer. Shows a breadcrumb, the body, and "next article" links.
  */
 export default function HelpArticlePage({ params }: { params: { slug: string } }) {

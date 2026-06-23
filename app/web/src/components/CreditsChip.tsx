@@ -9,7 +9,7 @@ import type { CreditBalance } from "@/lib/types";
 /**
  * Opus-style credits chip for the top bar: a lightning bolt + remaining credits,
  * plus an "Add credits" button. Fetches GET /billing/balance (real or mock).
- * Shows a shimmer while loading and a quiet "—" fallback on error so the chip
+ * Shows a shimmer while loading and a quiet "-" fallback on error so the chip
  * never vanishes (the top bar shouldn't break if billing is unreachable).
  */
 export function CreditsChip() {
@@ -39,7 +39,7 @@ export function CreditsChip() {
         {bal ? (
           <span className="font-mono tabular-nums">{bal.credit_balance}</span>
         ) : failed ? (
-          <span className="font-mono tabular-nums text-ink-400">—</span>
+          <span className="font-mono tabular-nums text-ink-400">-</span>
         ) : (
           <span className="inline-block h-3 w-4 animate-pulse rounded bg-ink-700" />
         )}

@@ -17,8 +17,8 @@ import { api } from "@/lib/api";
  * Single source of truth for the TWO-LAYER inline clip editor.
  *
  * TWO INDEPENDENT overlay layers live over the playing pre-cut <video>:
- *   1) HOOK  — the white-marker banner box (one editable line, near the top).
- *   2) SUBTITLE — per-word KARAOKE captions built from the REAL transcript
+ *   1) HOOK  - the white-marker banner box (one editable line, near the top).
+ *   2) SUBTITLE - per-word KARAOKE captions built from the REAL transcript
  *      words (api.getClipTranscript), grouped into segments, re-based to
  *      clip-relative seconds. The active word highlights as the video plays.
  * Editing either layer is pure client state (no network); the two never mix.
@@ -43,7 +43,7 @@ const MIN_GAP = 0.2; // minimum trim window, seconds
 const SEG_GAP = 0.6; // split when inter-word gap exceeds this (seconds)
 const SEG_MAX_WORDS = 7; // …or after this many words
 
-/** Persisted shape — segment text overrides only (words reload from the API). */
+/** Persisted shape - segment text overrides only (words reload from the API). */
 interface PersistShape {
   trimStart: number;
   trimEnd: number;
@@ -265,7 +265,7 @@ export function useClipEditor(clip: Clip): UseClipEditor {
   const duration = Math.max(0, trimEnd - trimStart);
   const durationLabel = formatDuration(duration);
 
-  // The re-render style drives the SUBTITLE captions only — the hook is a
+  // The re-render style drives the SUBTITLE captions only - the hook is a
   // separate layer, so the hook's font size must NOT leak in here (that would
   // make the burned-in subtitles inherit the hook's size).
   const style: ClipStyle = useMemo(
@@ -326,7 +326,7 @@ export function useClipEditor(clip: Clip): UseClipEditor {
     [videoDuration],
   );
 
-  // Templates describe the karaoke SUBTITLE layer — they tweak its highlight
+  // Templates describe the karaoke SUBTITLE layer - they tweak its highlight
   // color + position. They do NOT touch the hook box.
   const setTemplate = useCallback((id: string) => {
     setTemplateId(id);

@@ -1,7 +1,7 @@
 import { JobStage, JobStatus } from '../persistence/store.types';
 
 /**
- * JobProgressEvent — CONTRACTS.md §4. Emitted by the worker (or the mock
+ * JobProgressEvent - CONTRACTS.md §4. Emitted by the worker (or the mock
  * worker) and relayed to the web app over WebSocket on room `job:{job_id}`.
  * snake_case on the wire to match the worker contract.
  */

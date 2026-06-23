@@ -55,7 +55,7 @@ RULES:
 phase('Implement')
 
 const WORKER = SHARED + `
-YOUR TASK (API — real pipeline worker + queue toggle):
+YOUR TASK (API - real pipeline worker + queue toggle):
 1. Create ${API}/src/queue/real-pipeline.worker.ts exporting a RealPipelineWorker with the SAME shape/process()
    contract as MockWorker (constructor takes {store, bus, onFailure, ...}; async process(payload)). It must:
    - spawn 'python' with args: ['pipeline/run.py', payload.source_url, '--clips', String(payload.clip_count),
@@ -64,7 +64,7 @@ YOUR TASK (API — real pipeline worker + queue toggle):
      (map stage->stage, progress->progress, status 'running', message). On '@@RESULT@@ ' capture the summary.
    - On process exit 0: read ${ROOT}/workspace/<job-id>/clips.json, create a Clip row per candidate (rank by order,
      top clip_count) with finalKey set to a LOCAL key the storage layer can serve (see STORAGE task): use key
-     '<orgId>/<jobId>/clips/<rank>_final.mp4' (same shape as MockWorker) — the file actually lives at
+     '<orgId>/<jobId>/clips/<rank>_final.mp4' (same shape as MockWorker) - the file actually lives at
      workspace/<jobId>/clips/<rank>_final.mp4. Update job status running->completed with progress 100; emit final event.
    - On non-zero exit or error: set job failed, call onFailure to refund, emit failed event. Log stderr.
    - updateJob at the start (running, ingest, 0) like MockWorker.
@@ -75,7 +75,7 @@ TEST: nest build (tsc strict) compiles clean. You can't easily run a full job he
 the worker compiles; note that the Verify phase runs it live. Report exact build command + result.`
 
 const STORAGE = SHARED + `
-YOUR TASK (API — serve real local clip files over HTTP):
+YOUR TASK (API - serve real local clip files over HTTP):
 The produced clips live on local disk at ${ROOT}/workspace/<jobId>/clips/<rank>_final.mp4 (no R2 in local mode).
 The browser must be able to GET them.
 1. Add a static/streaming file controller, e.g. ${API}/src/files/files.controller.ts + files.module.ts, route
@@ -88,14 +88,14 @@ The browser must be able to GET them.
    from env API_PUBLIC_URL or build from API_PORT, default http://localhost:4000). Keep the existing mock-r2.local
    behaviour when localFiles is false. Keep the real-R2 branch.
 3. Expose the needed flags/env in ${API}/src/config/config.service.ts (coordinate: another agent also edits this
-   file to add useRealPipeline — only ADD your localFiles flag + API_PUBLIC_URL getter, do not remove theirs;
+   file to add useRealPipeline - only ADD your localFiles flag + API_PUBLIC_URL getter, do not remove theirs;
    use distinct additions and merge-friendly edits).
 TEST: nest build compiles clean. Start the server, curl GET /files/realtest/1_final.mp4 (a real clip from an earlier
 run exists at ${ROOT}/workspace/realtest/clips/1_final.mp4) and confirm it streams bytes (HTTP 200, video/mp4).
 Report commands + result.`
 
 const WEBENV = SHARED + `
-YOUR TASK (Web — point at the real API, verify shapes):
+YOUR TASK (Web - point at the real API, verify shapes):
 1. Create ${WEB}/.env.local with NEXT_PUBLIC_API_URL=http://localhost:4000  (so the web calls the real NestJS API,
    not the in-app mock store). Also ensure ${WEB}/.gitignore ignores .env.local (it likely already does via .env*).
 2. Review ${WEB}/src/lib/api.ts and ${WEB}/src/lib/types.ts against CONTRACTS.md and the real API responses:
@@ -120,7 +120,7 @@ phase('Verify')
 const verify = await agent(
   SHARED + `
 TASK: VERIFY the full wiring works end-to-end locally, in REAL pipeline mode. Fix only small integration breakages
-(wrong env name, import, route registration, field mapping) — do not redesign.
+(wrong env name, import, route registration, field mapping) - do not redesign.
 SETUP/RUN (from ${ROOT}):
   1. Build the API: cd ${API}; npm run build  (must be clean).
   2. Start the API in REAL mode with the Gemini/free-CPU env so submitted jobs run the real pipeline:
@@ -131,7 +131,7 @@ SETUP/RUN (from ${ROOT}):
   4. Submit a SMALL real job via the API:
      POST /jobs  {"source_type":"url","source_url":"https://www.youtube.com/watch?v=Unzc731iCUY","clip_count":2}
      (Header for mock auth if required.) This spawns python pipeline/run.py for real. Poll GET /jobs/:id until
-     status=completed or failed (allow a few minutes — CPU transcription). Then GET /clips?job_id=:id and confirm
+     status=completed or failed (allow a few minutes - CPU transcription). Then GET /clips?job_id=:id and confirm
      it returns clips with real scores and /files/... URLs, and that those URLs stream video.
      NOTE: yt-dlp here has no JS runtime; if that exact video fails to download, FALL BACK to submitting a job with
      source_url set to a LOCAL path that already exists: ${ROOT}/workspace/realtest/source.mp4  (run.py accepts a

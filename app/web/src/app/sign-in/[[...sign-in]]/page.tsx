@@ -49,7 +49,7 @@ function SignInCard() {
 function DevNote() {
   return (
     <div className="w-full rounded-2xl border border-ink-700 bg-ink-900/70 p-8 text-center shadow-rim">
-      <h1 className="text-lg font-semibold text-white">Dev mode — no auth</h1>
+      <h1 className="text-lg font-semibold text-white">Dev mode - no auth</h1>
       <p className="mt-2 text-sm text-ink-300">
         Authentication is mocked locally. Set NEXT_PUBLIC_AUTH_ENABLED=true (and
         the Google OAuth keys) to enable real sign-in.

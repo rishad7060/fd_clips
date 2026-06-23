@@ -12,7 +12,7 @@ import { ClipCardSkeleton } from "@/components/ui/Skeleton";
 
 /**
  * Opus-grade results gallery: a DENSE, scannable grid (up to 6 clips per row on
- * wide screens) with a results header — keyword/moment search, a sort menu, and
+ * wide screens) with a results header - keyword/moment search, a sort menu, and
  * "Download all". Cards are compact; the page is built to feel faster and
  * cleaner than Opus.
  */
@@ -163,7 +163,7 @@ export default function ClipGalleryPage({ params }: { params: { jobId: string } 
         <Card className="border-danger-500/40 bg-danger-500/10 p-4 text-sm text-danger-300">{error}</Card>
       )}
 
-      {/* Loading skeleton — dense grid */}
+      {/* Loading skeleton - dense grid */}
       {!data && !error && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -180,7 +180,7 @@ export default function ClipGalleryPage({ params }: { params: { jobId: string } 
         <EmptyState title="No matches" body={`No clips match "${query}". Clear the search to see all ${total}.`} />
       )}
 
-      {/* Dense clip grid — up to 6 per row */}
+      {/* Dense clip grid - up to 6 per row */}
       {visibleClips.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           {visibleClips.map((clip) => (

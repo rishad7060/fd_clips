@@ -34,7 +34,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL?.trim();
 export const USING_MOCK_API = !API_URL;
 
 /**
- * Monthly credit grant per plan tier — mirrors PLANS in app/api/src/billing/
+ * Monthly credit grant per plan tier - mirrors PLANS in app/api/src/billing/
  * plans.ts. The /billing/balance endpoint returns only { plan, creditBalance },
  * so the client derives monthly_credits here to render a quota/balance bar.
  * Falls back to the free grant (60) for any unknown plan id.
@@ -110,7 +110,7 @@ interface ApiSubscriptionStartView {
 
 /** Result of starting a Polar recurring subscription (snake_case wire shape). */
 export interface SubscriptionStart {
-  /** Polar hosted-checkout URL to redirect to (mock: a local stub — don't redirect). */
+  /** Polar hosted-checkout URL to redirect to (mock: a local stub - don't redirect). */
   url: string;
   subscription_id: string;
   /** True when no real Polar redirect happened (offline/keyless: already granted). */
@@ -182,7 +182,7 @@ function toClip(v: ApiClipView): Clip {
  * API access-token getter, installed at runtime by <AuthTokenBridge/> (only
  * mounted when Auth.js is enabled). In mock/dev mode it stays null, so http()
  * sends no Authorization header and nothing changes. We keep it as a
- * module-level seam so the api object — imported by client components — can
+ * module-level seam so the api object - imported by client components - can
  * attach the Bearer token without each caller knowing about the auth provider.
  */
 let getToken: (() => Promise<string | null>) | null = null;
@@ -237,7 +237,7 @@ export const api = {
 
   async createJob(input: CreateJobInput): Promise<Job> {
     if (USING_MOCK_API) return delay(mockStore.createJob(input));
-    // The API boundary is camelCase (CreateJobDto) with whitelist validation —
+    // The API boundary is camelCase (CreateJobDto) with whitelist validation -
     // map the snake_case wire input to it, and only send fields it accepts.
     const body: Record<string, unknown> = {
       sourceType: input.source_type,
@@ -269,8 +269,8 @@ export const api = {
   },
 
   /**
-   * Lightweight preview metadata for a pasted URL (POST /preview) — title,
-   * thumbnail, resolution badge — fetched WITHOUT downloading the video. The
+   * Lightweight preview metadata for a pasted URL (POST /preview) - title,
+   * thumbnail, resolution badge - fetched WITHOUT downloading the video. The
    * real API view is camelCase; we map it to the snake_case VideoPreview. Mock
    * mode serves a deterministic stub offline. The endpoint never 500s, so a
    * thrown error here is only a network/transport failure; callers should treat
@@ -331,7 +331,7 @@ export const api = {
    * Per-clip transcript words (clip-relative seconds) for the karaoke subtitle
    * layer. Mock mode synthesizes/derives words offline; real mode hits
    * GET /clips/transcript and maps camelCase -> snake_case. Callers should wrap
-   * in try/catch — a failure should degrade to an empty word list so the hook
+   * in try/catch - a failure should degrade to an empty word list so the hook
    * layer still works.
    */
   async getClipTranscript(jobId: string, rank: number): Promise<ClipTranscript> {
@@ -399,7 +399,7 @@ export const api = {
    * Start a Polar recurring SUBSCRIPTION for a paid tier (POST /billing/subscribe).
    * Returns the hosted-checkout URL the buyer is redirected to (+ subscription id).
    * In mock mode the URL is a local stub, mock=true, and the plan is already granted
-   * locally — the caller refreshes the balance instead of redirecting.
+   * locally - the caller refreshes the balance instead of redirecting.
    */
   async createSubscription(tier: "starter" | "pro"): Promise<SubscriptionStart> {
     if (USING_MOCK_API) {
@@ -431,14 +431,14 @@ export const api = {
 
   /**
    * Upload a local video file. The real API exposes POST /uploads (multipart,
-   * field "file") and returns { sourceKey } — a workspace-relative path the
+   * field "file") and returns { sourceKey } - a workspace-relative path the
    * pipeline ingests as a local file. We normalize to { source_key }; the
    * caller then createJob({ source_type: "upload", source_key }). Mock mode
    * registers a deterministic upload id so a later createJob makes a demo job.
    */
   async uploadFile(file: File): Promise<{ source_key: string }> {
     if (USING_MOCK_API) return delay(mockStore.uploadFile(file), 400);
-    // Multipart form — DON'T set Content-Type (the browser adds the boundary).
+    // Multipart form - DON'T set Content-Type (the browser adds the boundary).
     const form = new FormData();
     form.append("file", file);
     const res = await fetch(`${API_URL}/uploads`, {

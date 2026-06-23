@@ -1,7 +1,7 @@
 /**
  * Offline fixtures for the admin dashboard. Used by adminApi.ts when
  * NEXT_PUBLIC_API_URL is empty, so the whole admin UI renders and is clickable
- * without the NestJS API. Deterministic — mutations are applied in-memory for
+ * without the NestJS API. Deterministic - mutations are applied in-memory for
  * the session so dialogs/row-actions feel real.
  */
 import type {

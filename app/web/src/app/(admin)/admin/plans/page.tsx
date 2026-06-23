@@ -40,7 +40,7 @@ export default function AdminPlansPage() {
       <div>
         <h2 className="text-xl font-semibold text-foreground">Plans</h2>
         <p className="text-sm text-muted-foreground">
-          Subscription tiers and capabilities — edits apply live across billing and credit grants.
+          Subscription tiers and capabilities - edits apply live across billing and credit grants.
         </p>
       </div>
 

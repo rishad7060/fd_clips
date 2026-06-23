@@ -80,7 +80,7 @@ export class BillingController {
   /**
    * Polar.sh webhook. Public (no Clerk guard). In real mode the Standard
    * Webhooks signature is verified (POLAR_WEBHOOK_SECRET) before any grant; in
-   * mock mode the unsigned JSON is trusted. Requires the raw body — main.ts
+   * mock mode the unsigned JSON is trusted. Requires the raw body - main.ts
    * captures it as req.rawBody.
    */
   @Post('billing/webhook')

@@ -51,7 +51,7 @@ def _resolve_mock_mode(
 
     `auto` => real (not mocked) as soon as ANY real capability is configured:
     a scoring key (Gemini or OpenAI), or an explicit non-mock backend choice.
-    Otherwise mock — the keyless local-dev default. `true`/`false` are explicit.
+    Otherwise mock - the keyless local-dev default. `true`/`false` are explicit.
     """
     raw = (raw or "auto").strip().lower()
     if raw in ("true", "1", "yes", "on"):
@@ -82,7 +82,7 @@ class Settings(BaseModel):
     repo_root: Path = Field(..., description="Repository root directory")
     workspace_root: Path = Field(..., description="Root dir holding per-job artifact folders")
 
-    # ── Scoring (LLM brain — OpenAI or Gemini) ──────────────────────────
+    # ── Scoring (LLM brain - OpenAI or Gemini) ──────────────────────────
     openai_api_key: str = Field("", description="OpenAI key; empty => no OpenAI scoring")
     scoring_model: str = Field("gpt-4o-mini", description="OpenAI model for clip scoring")
     gemini_api_key: str = Field("", description="Google AI Studio (Gemini) key; free tier")
@@ -94,7 +94,7 @@ class Settings(BaseModel):
     )
 
     # ── Transcription ───────────────────────────────────────────────────
-    # MVP (v2): Groq's free Whisper API — no GPU, fast. Falls back to
+    # MVP (v2): Groq's free Whisper API - no GPU, fast. Falls back to
     # faster-whisper (CPU) or WhisperX (GPU) when configured.
     groq_api_key: str = Field("", description="Groq API key (free tier); the MVP transcription path")
     groq_model: str = Field(
@@ -109,7 +109,7 @@ class Settings(BaseModel):
         "GROQ_API_KEY is set (MVP default); else whisperx on a CUDA box; else faster-whisper.",
     )
     faster_whisper_model: str = Field(
-        "small", description="faster-whisper model (tiny|base|small|medium) — CPU, free"
+        "small", description="faster-whisper model (tiny|base|small|medium) - CPU, free"
     )
 
     # ── Tooling ──────────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ class Settings(BaseModel):
     r2_bucket: str = Field("focaldive-clips", description="R2 bucket name")
     r2_endpoint: str = Field("", description="R2 S3-compatible endpoint URL")
 
-    # ── Email delivery (Resend — MVP clip delivery) ─────────────────────
+    # ── Email delivery (Resend - MVP clip delivery) ─────────────────────
     resend_api_key: str = Field("", description="Resend API key (free 3k/mo); empty => log instead of send")
     email_from: str = Field(
         "FocalDive Clips <clips@focaldive.com>", description="From address for delivery emails"
@@ -170,7 +170,7 @@ class Settings(BaseModel):
 
         Explicit TRANSCRIBE_BACKEND wins (a 'groq' choice falls back to mock when
         no key is set). 'auto' prefers Groq's free API (the MVP default) when a key
-        is present — no GPU, fast — then whisperx on a CUDA box, else faster-whisper
+        is present - no GPU, fast - then whisperx on a CUDA box, else faster-whisper
         (CPU, slow). mock_mode forces 'mock'.
         """
         if self.mock_mode:
@@ -180,7 +180,7 @@ class Settings(BaseModel):
             return "groq" if self.groq_api_key else "mock"
         if choice in ("whisperx", "faster-whisper", "mock"):
             return choice
-        # auto: Groq API (free, no GPU) first — this is the MVP path.
+        # auto: Groq API (free, no GPU) first - this is the MVP path.
         if self.groq_api_key:
             return "groq"
         return "whisperx" if self.whisperx_device == "cuda" else "faster-whisper"
@@ -259,7 +259,7 @@ def workspace(job_id: str) -> Path:
 
 if __name__ == "__main__":
     s = get_settings()
-    print("FocalDive Clips — resolved configuration")
+    print("FocalDive Clips - resolved configuration")
     print("=" * 48)
     print(f"  MOCK_MODE (raw)   : {s.raw_mock_mode}")
     print(f"  MOCK_MODE (resolved): {s.mock_mode}")

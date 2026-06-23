@@ -17,7 +17,7 @@ export interface AppClaims {
 /**
  * Verifies the app's own API access tokens. These are HS256 JWTs minted by the
  * web app's Auth.js session callback and signed with AUTH_JWT_SECRET (a shared
- * symmetric secret between web and API — both are services we own). In
+ * symmetric secret between web and API - both are services we own). In
  * MOCK_AUTH mode this service is never used (the guard injects a fake org).
  *
  * jsonwebtoken is imported lazily so a missing dep never breaks the mock boot.

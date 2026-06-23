@@ -465,7 +465,7 @@ def test_negative_evidence_no_pingpong() -> None:
 
     A talks (measurable) for ~2s, then B talks but B is in profile so its lips
     are never measured (openness -1). Speech is continuous. The crop should
-    switch A->B ONCE (negative evidence) and then HOLD on B — never bounce back
+    switch A->B ONCE (negative evidence) and then HOLD on B - never bounce back
     to A every min-hold just because B is unmeasurable.
     """
     # A measurable + moving only in the first 2s; B never measurable (op=-1).
@@ -581,7 +581,7 @@ def test_preview_thumbnail_youtube_uses_guaranteed_hqdefault() -> None:
     info = {
         "id": "EdZWPB1fIJc",
         "webpage_url": "https://www.youtube.com/watch?v=EdZWPB1fIJc",
-        # yt-dlp lists maxresdefault even when it 404s — must NOT be picked.
+        # yt-dlp lists maxresdefault even when it 404s - must NOT be picked.
         "thumbnails": [
             {"url": "https://i.ytimg.com/vi/EdZWPB1fIJc/maxresdefault.jpg", "width": 3840, "height": 2160},
             {"url": "https://i.ytimg.com/vi_webp/EdZWPB1fIJc/maxresdefault.webp", "width": 3840, "height": 2160},
@@ -642,7 +642,7 @@ def test_bottom_alignment_lifts_above_scrubber() -> None:
     s = captions._resolve_style({"template": "hormozi", "alignment": "bottom"})
     assert s["alignment"] == 2
     assert s["margin_v"] >= captions.BOTTOM_SAFE_MARGIN_V, "bottom must clear controls"
-    # Center/top keep their own (smaller) margins — they're measured differently.
+    # Center/top keep their own (smaller) margins - they're measured differently.
     assert captions._resolve_style({"template": "hormozi", "alignment": "center"})["margin_v"] < 100
     assert captions._resolve_style({"template": "hormozi", "alignment": "top"})["margin_v"] < 100
 

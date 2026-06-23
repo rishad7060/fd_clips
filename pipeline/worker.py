@@ -1,4 +1,4 @@
-"""FocalDive Clips — Python queue worker (v2 MVP, Prompt 5).
+"""FocalDive Clips - Python queue worker (v2 MVP, Prompt 5).
 
 This is the *Python-side* worker that turns one job into delivered clips:
 
@@ -21,7 +21,7 @@ It is deliberately runnable **offline today** with zero paid infrastructure:
 So ``MOCK_MODE=true python pipeline/worker.py`` runs a whole job end-to-end with
 no keys, no network, no Redis.
 
-PHASE 2 — PRODUCTION ENTRYPOINT (BullMQ / Redis consumer)
+PHASE 2 - PRODUCTION ENTRYPOINT (BullMQ / Redis consumer)
 ---------------------------------------------------------
 At MVP we do NOT require Redis to run. The NestJS API already enqueues BullMQ
 jobs onto Redis (``settings.redis_url``); in production this module attaches as a
@@ -74,7 +74,7 @@ SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days
 
 # Tenant scope is required for R2 key namespacing (CONTRACTS.md §5). The MVP job
 # payload {job_id,email,url} doesn't carry one, so we fall back to this single
-# tenant. PHASE 2: the BullMQ payload includes organization_id — pass it through.
+# tenant. PHASE 2: the BullMQ payload includes organization_id - pass it through.
 DEFAULT_ORG_ID = "org_mvp"
 
 
@@ -94,8 +94,8 @@ def upload_clips_to_r2(
     """Upload each clip's ``*_final.mp4`` to R2 and attach a signed URL.
 
     Returns a copy of ``rows`` with two added keys per row:
-        ``link``      — a signed download URL (R2) or a local ``/files`` ref.
-        ``delivered`` — True when an upload/ref was produced.
+        ``link``      - a signed download URL (R2) or a local ``/files`` ref.
+        ``delivered`` - True when an upload/ref was produced.
 
     When R2 is not configured we DON'T upload: clips stay in the workspace and we
     emit a ``/files``-style reference so the worker is fully testable offline.
@@ -105,7 +105,7 @@ def upload_clips_to_r2(
     out: list[dict[str, Any]] = []
 
     if not settings.r2_configured:
-        # ── Local fallback (no R2 creds) — testable today ──────────────────
+        # ── Local fallback (no R2 creds) - testable today ──────────────────
         logger.info(
             "R2 not configured (r2_configured=False); leaving clips in workspace "
             "and emitting /files references."
@@ -125,7 +125,7 @@ def upload_clips_to_r2(
     import boto3  # type: ignore
     from botocore.config import Config as _BotoConfig  # type: ignore
 
-    # PHASE 2 — R2 7-DAY AUTO-DELETE LIFECYCLE (production storage, fd_clips_v2.md
+    # PHASE 2 - R2 7-DAY AUTO-DELETE LIFECYCLE (production storage, fd_clips_v2.md
     # Part 2: "Cloudflare R2 free 10 GB, zero egress + 7-day auto-delete of
     # clips"). We do NOT manage retention here per-upload. Instead configure a
     # bucket lifecycle rule ONCE (Cloudflare dashboard or S3 PutBucketLifecycle)
@@ -237,7 +237,7 @@ def send_clip_email(
     Returns a small result dict: ``{"sent": bool, "to", "subject", "provider"}``.
 
     When ``RESEND_API_KEY`` is set we send a clean HTML email via Resend. When it
-    is NOT set we LOG the full email content instead of sending — so the whole
+    is NOT set we LOG the full email content instead of sending - so the whole
     worker is testable offline with no email provider. COMMENTED so the prod path
     is obvious.
     """
@@ -247,7 +247,7 @@ def send_clip_email(
 
     if not settings.resend_api_key:
         # ── Offline fallback: log instead of send ─────────────────────────
-        logger.info("RESEND_API_KEY not set — logging email instead of sending.")
+        logger.info("RESEND_API_KEY not set - logging email instead of sending.")
         link_lines = "\n".join(
             f"    #{r['rank']} (score {r.get('score')}): {r.get('link')}" for r in rows
         )
@@ -278,13 +278,13 @@ def send_clip_email(
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# The job handler — what the BullMQ consumer (PHASE 2) calls per job.
+# The job handler - what the BullMQ consumer (PHASE 2) calls per job.
 # ──────────────────────────────────────────────────────────────────────────
 def process_job(job: dict[str, Any]) -> dict[str, Any]:
     """Run one job end-to-end: pipeline -> R2 upload -> email.
 
     ``job`` is the MVP payload ``{"job_id", "email", "url"}`` (extra keys
-    ``organization_id`` and ``clip_count`` are honored if present — see the
+    ``organization_id`` and ``clip_count`` are honored if present - see the
     BullMQ payload in CONTRACTS.md §1).
 
     Returns a result dict::
@@ -348,7 +348,7 @@ def process_job(job: dict[str, Any]) -> dict[str, Any]:
 
 def _main() -> None:
     parser = argparse.ArgumentParser(
-        description="FocalDive Clips worker — run one job end-to-end "
+        description="FocalDive Clips worker - run one job end-to-end "
         "(pipeline -> R2 upload -> email). Offline-friendly: with no keys it "
         "leaves clips in the workspace and logs the email."
     )

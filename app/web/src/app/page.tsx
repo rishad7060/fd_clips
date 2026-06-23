@@ -3,16 +3,16 @@ import { Logo } from "@/components/Logo";
 import { posterDataUri } from "@/lib/mock/posters";
 
 /* ────────────────────────────────────────────────────────────────────────────
- * Landing page — layout adapted from the "Aeline" reference (centered nav,
+ * Landing page - layout adapted from the "Aeline" reference (centered nav,
  * two-line display headline with a highlighted second line, dual CTAs, a
  * floating fan of product cards over a brand glow, a rating strip, a logo
  * cloud, an "About" headline with inline icon badges, and a mixed-tone bento
- * stats grid) — re-skinned into the FocalDive Clips dark/brand design system
+ * stats grid) - re-skinned into the FocalDive Clips dark/brand design system
  * (near-black ink surfaces, #905BF4 brand accent, hairline borders). Copy stays
  * truthful: YouTube in → ranked, captioned, vertical clips emailed in ~30 min.
  * ──────────────────────────────────────────────────────────────────────────── */
 
-// Demo clips for the hero fan + captions strip — rendered as real 9:16 SVGs.
+// Demo clips for the hero fan + captions strip - rendered as real 9:16 SVGs.
 const DEMO_CLIPS = [
   { rank: 1, hook: "This one habit changed everything", score: 96 },
   { rank: 2, hook: "Nobody talks about this part", score: 93 },
@@ -23,7 +23,7 @@ const DEMO_CLIPS = [
 
 const PLATFORMS = ["YouTube", "TikTok", "Reels", "Shorts", "Podcasts", "LinkedIn"];
 
-// Mixed-tone bento stats — the reference's four-card grid, our numbers.
+// Mixed-tone bento stats - the reference's four-card grid, our numbers.
 const NAV_LINKS = [
   ["Features", "#features"],
   ["How it works", "#how"],
@@ -31,18 +31,18 @@ const NAV_LINKS = [
   ["FAQ", "#faq"],
 ] as const;
 
-// The two flagship capabilities — our real pipeline.
+// The two flagship capabilities - our real pipeline.
 const CAPABILITIES = [
   {
     eyebrow: "Virality scoring",
     title: "Finds the moments worth posting",
-    body: "A scoring model reads the entire transcript and ranks every moment 0–100 on hook strength, emotional peak, quotability and payoff — so you post the winners, not the filler.",
+    body: "A scoring model reads the entire transcript and ranks every moment 0–100 on hook strength, emotional peak, quotability and payoff - so you post the winners, not the filler.",
     icon: "M13 2 3 14h7l-1 8 10-12h-7z",
   },
   {
     eyebrow: "Smart reframe",
     title: "Reframes 16:9 into clean verticals",
-    body: "Face-aware cropping turns wide footage into 1080×1920 verticals that keep the speaker centred — tuned for talking-head, podcast and interview videos.",
+    body: "Face-aware cropping turns wide footage into 1080×1920 verticals that keep the speaker centred - tuned for talking-head, podcast and interview videos.",
     icon: "M9 3v18M15 3v18M3 9h18M3 15h18",
   },
 ];
@@ -58,7 +58,7 @@ const STEPS = [
   {
     label: "Auto editing",
     title: "We do the work",
-    body: "Transcribe, score, cut, reframe and burn in captions — automatically, on GPU.",
+    body: "Transcribe, score, cut, reframe and burn in captions - automatically, on GPU.",
     icon: "M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1",
   },
   {
@@ -76,11 +76,11 @@ const FAQ = [
   },
   {
     q: "What types of videos can I upload?",
-    a: "Public YouTube links work best — podcasts, interviews, webinars, talks and streams. Long, talking-head and single-speaker videos give the cleanest vertical reframes.",
+    a: "Public YouTube links work best - podcasts, interviews, webinars, talks and streams. Long, talking-head and single-speaker videos give the cleanest vertical reframes.",
   },
   {
     q: "Which languages are supported?",
-    a: "Transcription handles dozens of spoken languages, and captions render right-to-left for Arabic, Urdu, and more, plus scripts like Tamil — with proper word-by-word karaoke timing.",
+    a: "Transcription handles dozens of spoken languages, and captions render right-to-left for Arabic, Urdu, and more, plus scripts like Tamil - with proper word-by-word karaoke timing.",
   },
   {
     q: "Can I add captions?",
@@ -88,7 +88,7 @@ const FAQ = [
   },
   {
     q: "Is Clips free to use?",
-    a: "Yes — your first 2 videos are free, no credit card required. After that you top up with credits for more renders.",
+    a: "Yes - your first 2 videos are free, no credit card required. After that you top up with credits for more renders.",
   },
 ];
 
@@ -97,23 +97,23 @@ export default function LandingPage() {
 
   return (
     <main className="min-h-screen bg-ink-950 text-white">
-      {/* ── Nav (logo left · links centred · pill CTA right) ─────────────── */}
-      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-ink-950/80 backdrop-blur-xl">
-        <div className="mx-auto grid max-w-6xl grid-cols-2 items-center px-6 py-3.5 md:grid-cols-3">
-          <div className="flex justify-start">
+      {/* ── Nav (floating pill · logo left · links centred · CTA right) ──── */}
+      <header className="sticky top-4 z-50 px-4">
+        <div className="mx-auto grid max-w-5xl grid-cols-2 items-center gap-3 rounded-full border border-white/10 bg-ink-900/70 px-2 py-2 shadow-rim backdrop-blur-xl md:grid-cols-3">
+          <div className="flex justify-start pl-1.5">
             <Logo />
           </div>
-          <nav className="hidden items-center justify-center gap-8 text-sm text-ink-300 md:flex">
+          <nav className="hidden items-center justify-center gap-7 text-sm text-ink-300 md:flex">
             {NAV_LINKS.map(([label, href]) => (
               <a key={label} href={href} className="transition hover:text-white">
                 {label}
               </a>
             ))}
           </nav>
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex items-center justify-end gap-2">
             <Link
               href="/dashboard"
-              className="hidden text-sm text-ink-300 transition hover:text-white sm:block"
+              className="hidden rounded-full px-3 py-2 text-sm text-ink-300 transition hover:text-white sm:block"
             >
               Sign in
             </Link>
@@ -121,7 +121,7 @@ export default function LandingPage() {
               href="/new"
               className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink-950 transition duration-200 ease-premium hover:bg-white/90 active:scale-95"
             >
-              Create clips — free
+              Create clips - free
             </Link>
           </div>
         </div>
@@ -149,10 +149,10 @@ export default function LandingPage() {
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base text-ink-300 sm:text-lg">
             Clips turns any podcast, interview or long video into ranked, captioned,
-            vertical shorts — and emails your best moments in about 30 minutes.
+            vertical shorts - and emails your best moments in about 30 minutes.
           </p>
 
-          {/* Dual CTAs — ghost "Watch demo" + brand "Get started" w/ arrow circle */}
+          {/* Dual CTAs - ghost "Watch demo" + brand "Get started" w/ arrow circle */}
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <a
               href="#how"
@@ -164,7 +164,7 @@ export default function LandingPage() {
               href="/new"
               className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-brand-400 to-brand px-6 py-3 text-sm font-semibold text-white shadow-glow transition duration-200 ease-premium hover:from-brand to-brand-600 active:scale-95"
             >
-              Get started — free
+              Get started - free
               <span className="grid h-5 w-5 place-items-center rounded-full bg-white/20 transition group-hover:translate-x-0.5">
                 <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
@@ -177,7 +177,7 @@ export default function LandingPage() {
           </p>
         </div>
 
-        {/* Floating fan of clip posters — the signature hero element */}
+        {/* Floating fan of clip posters - the signature hero element */}
         <div className="relative mx-auto max-w-4xl px-6 pb-6 pt-8">
           <div className="flex items-end justify-center [perspective:1400px]">
             {DEMO_CLIPS.map((c, i) => {
@@ -198,7 +198,7 @@ export default function LandingPage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={posterDataUri(c.rank, c.hook, c.score)}
-                    alt={`Clip ${c.rank}: ${c.hook} — virality ${c.score}`}
+                    alt={`Clip ${c.rank}: ${c.hook} - virality ${c.score}`}
                     className="aspect-[9/16] w-full object-cover"
                   />
                 </figure>
@@ -250,7 +250,7 @@ export default function LandingPage() {
             <IconBadge>
               <path d="M13 2 3 14h7l-1 8 10-12h-7z" />
             </IconBadge>{" "}
-            scroll-stopping shorts — with{" "}
+            scroll-stopping shorts - with{" "}
             <IconBadge>
               <path d="M3 7h13l-3-3M21 17H8l3 3" strokeLinecap="round" strokeLinejoin="round" />
             </IconBadge>{" "}
@@ -258,7 +258,7 @@ export default function LandingPage() {
           </h2>
         </div>
 
-        {/* Bento grid — mixed tones, like the reference's four-card row */}
+        {/* Bento grid - mixed tones, like the reference's four-card row */}
         <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand image card */}
           <article className="group relative overflow-hidden rounded-2xl border border-white/10 bg-ink-850 shadow-rim transition duration-200 ease-premium hover:-translate-y-0.5 hover:border-white/15 sm:row-span-2">
@@ -276,7 +276,7 @@ export default function LandingPage() {
                 10<span className="text-brand-300"> clips</span>
               </p>
               <p className="mt-2 text-sm text-ink-300">
-                Ranked, captioned and vertical — from a single upload.
+                Ranked, captioned and vertical - from a single upload.
               </p>
             </div>
           </article>
@@ -302,13 +302,13 @@ export default function LandingPage() {
                 ))}
               </div>
               <p className="flex-1 text-sm leading-relaxed text-ink-300">
-                “Paste a link and walk away — it transcribes, scores, cuts, reframes
+                “Paste a link and walk away - it transcribes, scores, cuts, reframes
                 and captions for you. Genuinely hands-off.”
               </p>
             </div>
           </article>
 
-          {/* Accent high-score card (yellow + icon — compliant) */}
+          {/* Accent high-score card (yellow + icon - compliant) */}
           <article className="relative overflow-hidden rounded-2xl border border-highscore/30 bg-highscore p-6 text-ink-950 shadow-rim transition duration-200 ease-premium hover:-translate-y-0.5">
             <div className="flex items-center gap-1.5">
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden>
@@ -347,7 +347,7 @@ export default function LandingPage() {
             AI that understands every moment of your video
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-base text-ink-300">
-            Built for speed and accuracy — reads the whole transcript, finds what
+            Built for speed and accuracy - reads the whole transcript, finds what
             sticks, and frames it around whoever is speaking.
           </p>
         </div>
@@ -387,7 +387,7 @@ export default function LandingPage() {
               Workflow automation
             </p>
             <h2 className="mx-auto mt-4 max-w-2xl text-3xl font-semibold tracking-tight sm:text-5xl">
-              From upload to inbox — on autopilot
+              From upload to inbox - on autopilot
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-base text-ink-300">
               No timeline to scrub, no software to learn. Paste a link and your
@@ -443,7 +443,7 @@ export default function LandingPage() {
               </h2>
               <p className="mt-4 max-w-md text-base text-ink-300">
                 Karaoke-style captions are burned into every clip with perfect
-                timing — and they render right-to-left for Arabic, Urdu, Tamil and
+                timing - and they render right-to-left for Arabic, Urdu, Tamil and
                 more. Restyle colour, highlight and position in the editor.
               </p>
               <Link
@@ -549,7 +549,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Oversized brand wordmark — the actual Clips lockup */}
+          {/* Oversized brand wordmark - the actual Clips lockup */}
           <div className="mt-16">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -561,10 +561,10 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Bottom bar — brand-tinted band */}
+        {/* Bottom bar - brand-tinted band */}
         <div className="mt-6 border-t border-white/[0.06] bg-brand/10">
           <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 py-5 text-sm text-ink-200 sm:flex-row">
-            <span>© {year} Clips — demo build.</span>
+            <span>© {year} Clips - demo build.</span>
             <span className="inline-flex items-center gap-1.5">
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <circle cx="12" cy="12" r="9" />

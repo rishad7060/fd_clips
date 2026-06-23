@@ -29,7 +29,7 @@ PROJECT: FocalDive Clips. Repo root: ${ROOT}. READ ${ROOT}/CLAUDE.md and ${ROOT}
 We are adding a FREE CPU PATH so a real YouTube video becomes real short clips with NO GPU and NO paid API
 (Gemini free tier scores; faster-whisper transcribes on CPU; FFmpeg cuts + burns captions with libx264).
 
-CONFIG API (already implemented in ${ROOT}/pipeline/config.py — DO NOT modify config.py):
+CONFIG API (already implemented in ${ROOT}/pipeline/config.py - DO NOT modify config.py):
 - settings.resolved_scoring_provider() -> 'gemini' | 'openai' | 'mock'
 - settings.resolved_transcribe_backend() -> 'whisperx' | 'faster-whisper' | 'mock'
 - settings.gemini_api_key, settings.gemini_model (default 'gemini-2.0-flash')
@@ -38,7 +38,7 @@ CONFIG API (already implemented in ${ROOT}/pipeline/config.py — DO NOT modify 
 - settings.mock_mode, settings.workspace(job_id), settings.repo_root
 
 IMPORTANT BEHAVIOUR RULES:
-- Existing mock branches MUST keep working unchanged (mock_mode=True path is sacred — 15 pytests rely on it).
+- Existing mock branches MUST keep working unchanged (mock_mode=True path is sacred - 15 pytests rely on it).
 - New real branches dispatch on the resolved_* helpers, NOT on a raw boolean. So a module may be in
   'mock' for scoring but 'faster-whisper' for transcription independently.
 - All deps are lazy-imported inside the real branch only (faster_whisper, google.genai, yt_dlp) so mock stays import-free.
@@ -47,9 +47,9 @@ IMPORTANT BEHAVIOUR RULES:
   Parse resp.text as JSON. Return the SAME shape as the OpenAI branch ({job_id, model, candidates[...]}).
 - faster-whisper: from faster_whisper import WhisperModel; model = WhisperModel(name, device='cpu', compute_type='int8');
   segments, info = model.transcribe(audio_path, word_timestamps=True). Map to CONTRACTS §2 shape
-  (segments[].words[].{word,start,end}; speaker='SPEAKER_00' — no diarization on the free path, that's fine).
+  (segments[].words[].{word,start,end}; speaker='SPEAKER_00' - no diarization on the free path, that's fine).
 - FFmpeg on THIS machine is at: ${FFMPEG}  (ffprobe at ${FFPROBE}). It is NOT on the bash PATH in this session,
-  so when you run/test, pass the full path or set FFMPEG_PATH/FFPROBE_PATH env. Use libx264 (NO nvenc — no GPU).
+  so when you run/test, pass the full path or set FFMPEG_PATH/FFPROBE_PATH env. Use libx264 (NO nvenc - no GPU).
 - Type hints; keep each module's __main__ entry working.
 - Do NOT touch files outside your assigned module(s). Do NOT modify config.py.
 `
@@ -100,7 +100,7 @@ Change them so that when NOT mock_mode AND ffmpeg is runnable (settings.ffmpeg_p
   the .ass onto {n}_vertical.mp4 with -vf subtitles=...:fontsdir libx264 -> {n}_final.mp4 (NOT nvenc).
 Helper: add a small shared check that resolves the ffmpeg binary (settings.ffmpeg_path, fall back to shutil.which).
 When ffmpeg is genuinely absent, keep the current placeholder+log behaviour so mock/CI still passes.
-FFmpeg here: ${FFMPEG}  — not on bash PATH, so to TEST set the env first:
+FFmpeg here: ${FFMPEG}  - not on bash PATH, so to TEST set the env first:
   FFMPEG_PATH="${FFMPEG}" FFPROBE_PATH="${FFPROBE}" python pipeline/captions.py --selftest
 TEST: run each module's __main__/selftest; confirm .ass still generates; confirm graceful no-ffmpeg fallback by
 also running once without FFMPEG_PATH. Don't break the 15 pytests.`
@@ -116,7 +116,7 @@ log(`Implement: ${done.map(d => `${d.module}=${d.tests_passed ? 'PASS' : 'FAIL'}
 phase('Verify')
 const verify = await agent(
   SHARED + `
-TASK: Prove the free CPU path works END-TO-END on a REAL short video — WITHOUT any API key (so use a real
+TASK: Prove the free CPU path works END-TO-END on a REAL short video - WITHOUT any API key (so use a real
 faster-whisper transcription + real ffmpeg cuts, but scoring stays on the deterministic mock since no GEMINI key
 is set yet). This isolates the video tooling, which is what needs proving; the user will add their free Gemini key
 after and that swaps only the scoring step.
@@ -124,8 +124,8 @@ STEPS (run from ${ROOT}, set ffmpeg env):
   set FFMPEG_PATH="${FFMPEG}", FFPROBE_PATH="${FFPROBE}", TRANSCRIBE_BACKEND=faster-whisper, SCORING_PROVIDER=mock, MOCK_MODE=false
   1. Download a SHORT real video (<= ~60s) with yt-dlp to workspace/realtest/source.mp4. Use a known short clip;
      if download fails (network), FALL BACK to synthesizing a ~30s test mp4 with ffmpeg (testsrc + sine) and a
-     spoken-word sample is not required — faster-whisper on silence will still produce timing/structure; note this.
-  2. Run: python pipeline/transcribe.py --job-id realtest  (faster-whisper, CPU) — confirm a real transcript.json
+     spoken-word sample is not required - faster-whisper on silence will still produce timing/structure; note this.
+  2. Run: python pipeline/transcribe.py --job-id realtest  (faster-whisper, CPU) - confirm a real transcript.json
      with word timings is produced (report language, #segments, first words).
   3. Run the rest: python pipeline/run.py workspace/realtest/source.mp4 --job-id realtest --clips 3
      (or run extract/reframe/captions directly) and confirm REAL output files exist with non-zero size:

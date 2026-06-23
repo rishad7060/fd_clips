@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 
 // Inter (display + body) with tight tracking, plus a mono for scores/durations/
 // timestamps (tabular figures). Geist would be the ideal display face but isn't
-// in next/font on Next 14 — Inter, well-configured, is the premium fallback.
+// in next/font on Next 14 - Inter, well-configured, is the premium fallback.
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-geist",       // alias so the tailwind `sans` var resolves
@@ -16,7 +16,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-geist-mono" 
 const interBody = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Clips — AI shorts from any long video",
+  title: "Clips - AI shorts from any long video",
   description:
     "Turn any podcast, interview, or long video into ranked, captioned, vertical clips. Built like Opus Clip.",
 };

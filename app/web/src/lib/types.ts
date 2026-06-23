@@ -153,7 +153,7 @@ export interface HookLayer {
   show: boolean;
   /** Text color (default white). */
   color: string;
-  /** Box / background color (default black — the "white marker" look). */
+  /** Box / background color (default black - the "white marker" look). */
   boxColor: string;
   position: "top" | "center" | "bottom";
   /** Font size px in the preview; 0 = template default. */
@@ -227,7 +227,7 @@ export interface ProcessRange {
  * show a thumbnail + title + a resolution badge (`quality_label`, e.g. "4K").
  * snake_case on the web side; the API client maps the camelCase /preview view.
  * `note` is an optional soft message when only a stub could be produced (mock
- * mode, private/unsupported URL) — the UI may surface it but must not treat it
+ * mode, private/unsupported URL) - the UI may surface it but must not treat it
  * as an error.
  */
 export interface VideoPreview {
@@ -283,7 +283,7 @@ export interface RenderClipInput {
   /**
    * Edited subtitle WORDS (clip-relative seconds) from the inline editor. When
    * present, the renderer burns these instead of re-deriving from the transcript
-   * — so text edits appear in the downloadable file.
+   * - so text edits appear in the downloadable file.
    */
   captions?: TranscriptWord[];
 }

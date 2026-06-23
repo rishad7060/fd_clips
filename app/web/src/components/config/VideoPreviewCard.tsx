@@ -9,12 +9,12 @@ import { Skeleton } from "@/components/ui/Skeleton";
  * Opus-style video preview, shown ~instantly after a URL is pasted.
  *
  * THE OPUS TRICK: a YouTube thumbnail is at a fully predictable CDN URL you can
- * build from the 11-char video id on the CLIENT — no backend round-trip. So we
+ * build from the 11-char video id on the CLIENT - no backend round-trip. So we
  * render `i.ytimg.com/vi/<id>/maxresdefault.jpg` immediately; if it 404s (not all
  * videos have a maxres thumb) we fall back to `hqdefault.jpg` (always exists).
  *
  * The slow yt-dlp call (`api.getPreview`) runs in the BACKGROUND only to enrich
- * the resolution badge ("4K"/"1080p") + exact title — it never blocks the image.
+ * the resolution badge ("4K"/"1080p") + exact title - it never blocks the image.
  */
 
 // Extract the 11-char video id from any YouTube URL form (watch / youtu.be /
@@ -38,7 +38,7 @@ export function VideoPreviewCard({ url }: { url: string }) {
   const [preview, setPreview] = useState<VideoPreview | null>(null);
 
   // The src whose image has actually painted. We key on the src string (not a
-  // boolean) so it auto-resets when the src changes — no race between a reset
+  // boolean) so it auto-resets when the src changes - no race between a reset
   // effect and the load callback (which previously left a CACHED image stuck at
   // opacity 0 because onLoad never fired for an already-complete image).
   const [loadedSrc, setLoadedSrc] = useState("");
@@ -61,7 +61,7 @@ export function VideoPreviewCard({ url }: { url: string }) {
   }, [url]);
 
   // Backend thumbnail (from /preview): a real http(s) URL in the live API, or a
-  // data: URI poster in mock mode — accept BOTH (the old http-only check left
+  // data: URI poster in mock mode - accept BOTH (the old http-only check left
   // mock with no fallback, so a blocked ytimg image showed a blank box).
   const backendThumb =
     preview?.thumbnail_url &&
@@ -83,7 +83,7 @@ export function VideoPreviewCard({ url }: { url: string }) {
   const imgLoaded = loadedSrc !== "" && loadedSrc === src;
 
   // Quality badge: the backend's real label (suppressed when it's a stub/error,
-  // signalled by `note`), else infer from the YouTube tier — but ONLY once the
+  // signalled by `note`), else infer from the YouTube tier - but ONLY once the
   // image has actually painted, so we never float an "HD" badge over a blank box.
   const badge =
     (preview && !preview.note ? preview.quality_label : "") ||
@@ -109,7 +109,7 @@ export function VideoPreviewCard({ url }: { url: string }) {
               referrerPolicy="no-referrer"
               className={`h-full w-full object-cover transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
               // Ref callback handles the CACHED case: if the browser already had
-              // the image, `complete` is true at mount and onLoad never fires —
+              // the image, `complete` is true at mount and onLoad never fires -
               // so mark it loaded (and run the same maxres-placeholder check) here.
               ref={(img) => {
                 if (img && img.complete && img.naturalWidth > 0) {
@@ -122,7 +122,7 @@ export function VideoPreviewCard({ url }: { url: string }) {
               }}
               onLoad={(e) => {
                 // YouTube serves a 120x90 gray placeholder (HTTP 404) for a
-                // missing maxres — detect by natural width and downgrade.
+                // missing maxres - detect by natural width and downgrade.
                 const img = e.currentTarget;
                 if (thumbTier === "maxres" && ytId && img.naturalWidth > 0 && img.naturalWidth <= 121) {
                   setThumbTier("hq");
@@ -137,7 +137,7 @@ export function VideoPreviewCard({ url }: { url: string }) {
             />
           ) : (
             // All image sources failed/blocked (e.g. ytimg blocked by an
-            // ad-blocker/region) — show a clean branded poster, not a black box.
+            // ad-blocker/region) - show a clean branded poster, not a black box.
             <div className="grid h-full w-full place-items-center bg-gradient-to-br from-ink-800 to-ink-900 text-ink-300">
               <span className="grid h-9 w-9 place-items-center rounded-full bg-white/10 ring-1 ring-white/15">
                 <svg viewBox="0 0 24 24" className="ml-0.5 h-4 w-4" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>

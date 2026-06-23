@@ -9,7 +9,7 @@ const MIN_WINDOW_SEC = 10;
 /**
  * Opus-style processing-timeframe slider: a single track with TWO draggable
  * handles selecting the [start, end] window of the source to process, labelled
- * in m:ss. The selected window is always >= MIN_WINDOW_SEC (10s) — below that
+ * in m:ss. The selected window is always >= MIN_WINDOW_SEC (10s) - below that
  * there's nothing to clip. Needs the real video duration (from the preview).
  */
 export function TimelineRange({

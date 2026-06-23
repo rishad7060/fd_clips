@@ -69,7 +69,7 @@ function SignInForm() {
       {error ? <p className="text-sm text-danger-300">{error}</p> : null}
       {!AUTH_ENABLED ? (
         <p className="text-xs text-muted-foreground">
-          Auth is disabled (dev mode) — any input continues to the dashboard.
+          Auth is disabled (dev mode) - any input continues to the dashboard.
         </p>
       ) : null}
       <Button type="submit" className="w-full" disabled={busy}>

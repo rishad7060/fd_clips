@@ -17,7 +17,7 @@ import { posterDataUri } from "./posters";
  * In-memory mock backend that simulates the worker advancing a job through the
  * CONTRACTS §1 stages. Lives module-level so it persists for the lifetime of a
  * browser session (this module is imported only on the client by the mock API
- * client). Deterministic and offline — no network, no backend required.
+ * client). Deterministic and offline - no network, no backend required.
  */
 
 const ORG_ID = "org_demo_focaldive";
@@ -67,7 +67,7 @@ interface MockJobRecord {
 
 const records = new Map<string, MockJobRecord>();
 
-/** Monthly grant per paid tier — mirrors PLANS in app/api/src/billing/plans.ts. */
+/** Monthly grant per paid tier - mirrors PLANS in app/api/src/billing/plans.ts. */
 const MOCK_PLAN_CREDITS: Record<"starter" | "pro", number> = {
   starter: 150,
   pro: 300,
@@ -103,7 +103,7 @@ function titleFromUrl(url: string): string {
     const host = u.hostname.replace(/^www\./, "");
     const seg = u.pathname.split("/").filter(Boolean).pop() ?? "";
     const slug = seg.replace(/[-_]+/g, " ").replace(/\.[a-z0-9]+$/i, "").trim();
-    return slug ? `${slug} — ${host}` : host || "Pasted URL";
+    return slug ? `${slug} - ${host}` : host || "Pasted URL";
   } catch {
     return "Pasted URL";
   }
@@ -128,7 +128,7 @@ function seed(): void {
   if (records.size > 0) return;
   const seededIds = ["demo-job-seed01", "demo-job-seed02"];
   const titles = [
-    "Why Most Startups Fail — Founder Podcast Ep. 42",
+    "Why Most Startups Fail - Founder Podcast Ep. 42",
     "The Build-Trap: A Product Strategy Rant",
   ];
   seededIds.forEach((id, idx) => {
@@ -250,7 +250,7 @@ export const mockStore = {
   /**
    * Mock file upload: returns a deterministic source_key derived from the file
    * name + size so a subsequent createJob({ source_type: "upload", source_key })
-   * makes a demo job. No real bytes are stored — the offline demo just needs a
+   * makes a demo job. No real bytes are stored - the offline demo just needs a
    * stable key and a friendly filename to label the job.
    */
   uploadFile(file: File): { source_key: string } {

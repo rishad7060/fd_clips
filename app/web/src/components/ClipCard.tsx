@@ -6,7 +6,7 @@ import { formatDuration, scoreTextColor } from "@/lib/format";
 
 /**
  * Opus-style clip card: the video sits PAUSED on its poster with a play button,
- * and plays ONLY when the user presses play (clicking again pauses) — like Opus.
+ * and plays ONLY when the user presses play (clicking again pauses) - like Opus.
  * It does NOT autoplay on hover. On hover, like/dislike thumbs appear top-left.
  * The hook is BURNED INTO the video (white box, first 5s), so we do not draw a
  * DOM hook banner here (it would double-stack). Below the video: a big virality
@@ -14,7 +14,7 @@ import { formatDuration, scoreTextColor } from "@/lib/format";
  * (schedule / download / trim).
  *
  * Accessibility note: the player container is NOT a role="button" (it holds
- * nested interactive controls — thumbs, the play overlay — which can't be
+ * nested interactive controls - thumbs, the play overlay - which can't be
  * nested inside a button). Play/pause is driven by an explicit overlay button.
  */
 export function ClipCard({ clip, recommended = false }: { clip: Clip; recommended?: boolean }) {
@@ -23,7 +23,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
   const [playing, setPlaying] = useState(false);
   const [reaction, setReaction] = useState<"up" | "down" | null>(null);
   // Player controls: mute + playback progress. The video plays only on an
-  // explicit press of the play button (Opus-style), so default UNMUTED — when
+  // explicit press of the play button (Opus-style), so default UNMUTED - when
   // someone deliberately presses play they want sound.
   const [muted, setMuted] = useState(false);
   const [progress, setProgress] = useState(0); // 0..1 of clip duration
@@ -35,7 +35,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
   const safeName =
     (clip.suggested_title?.trim().replace(/\s+/g, "_") || `clip_${clip.rank}`) + ".mp4";
 
-  // Hover only reveals the controls bar — it never plays/pauses. The video
+  // Hover only reveals the controls bar - it never plays/pauses. The video
   // plays solely on an explicit press of the play button (Opus behavior).
   const onEnter = () => setHovering(true);
   const onLeave = () => setHovering(false);
@@ -117,7 +117,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
         )}
 
         {/* NOTE: the hook is now BURNED INTO the video (Opus-style white box,
-            first 5s — see pipeline/captions.py). We deliberately do NOT also draw
+            first 5s - see pipeline/captions.py). We deliberately do NOT also draw
             a DOM banner here, or it double-stacks with the burned-in one (two
             white boxes). The burned-in hook is the single source of truth: it
             shows in the poster, on play, and on download. */}
@@ -132,7 +132,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
           {formatDuration(duration)}
         </span>
 
-        {/* Like / Dislike — top-left, appear on hover (or once a reaction is set) */}
+        {/* Like / Dislike - top-left, appear on hover (or once a reaction is set) */}
         <div
           className={`absolute left-2 z-10 flex gap-1 transition ${
             recommended ? "top-10" : "top-2"
@@ -166,7 +166,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
           </button>
         </div>
 
-        {/* Play/pause — full-area transparent button (no nested controls inside).
+        {/* Play/pause - full-area transparent button (no nested controls inside).
             At rest the play icon is always visible (the card sits paused, Opus
             style); while playing it fades and the pause icon shows on hover. */}
         {hasVideo && (
@@ -194,7 +194,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
           </button>
         )}
 
-        {/* Controls bar — scrub (forward/backward) + mute. Visible on hover or
+        {/* Controls bar - scrub (forward/backward) + mute. Visible on hover or
             while playing; sits above the play overlay (z-20). */}
         {hasVideo && (
           <div
@@ -244,7 +244,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
         )}
       </div>
 
-      {/* Score + actions row — compact for the dense grid */}
+      {/* Score + actions row - compact for the dense grid */}
       <div className="mt-2 flex items-center justify-between">
         <span
           className={`font-mono text-xl font-semibold leading-none tabular-nums ${scoreTextColor(clip.virality_score)}`}
@@ -313,7 +313,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
         </div>
       </div>
 
-      {/* Title — compact for the dense grid, but readable (2 lines) */}
+      {/* Title - compact for the dense grid, but readable (2 lines) */}
       <h3 className="mt-1 line-clamp-2 text-[13px] font-medium leading-snug text-ink-200" title={clip.suggested_title}>
         {clip.suggested_title}
       </h3>

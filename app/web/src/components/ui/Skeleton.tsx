@@ -1,4 +1,4 @@
-/** Shimmer skeleton — matches the final layout to avoid layout shift. */
+/** Shimmer skeleton - matches the final layout to avoid layout shift. */
 export function Skeleton({ className = "" }: { className?: string }) {
   return (
     <div className={`relative overflow-hidden rounded-xl bg-ink-800 ${className}`}>

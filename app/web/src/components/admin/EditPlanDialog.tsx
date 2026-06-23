@@ -129,7 +129,7 @@ export function EditPlanDialog({
             <Toggle value={editing} onChange={setEditing} onLabel="Enabled" offLabel="Disabled" />
           </div>
           <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="retention">Clip retention (days — blank = indefinite)</Label>
+            <Label htmlFor="retention">Clip retention (days - blank = indefinite)</Label>
             <Input
               id="retention"
               type="number"

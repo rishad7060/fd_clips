@@ -5,7 +5,7 @@ import { AUTH_ENABLED } from "@/lib/auth";
  * Auth middleware (Auth.js v5).
  *
  * In dev/mock mode (NEXT_PUBLIC_AUTH_ENABLED != "true") this is a passthrough so
- * every route renders without credentials — and Auth.js is never imported, so no
+ * every route renders without credentials - and Auth.js is never imported, so no
  * AUTH_SECRET is required. When auth is enabled, the Auth.js config is loaded at
  * request time and unauthenticated requests to protected routes are redirected
  * to /sign-in. Public routes (landing, /sign-in, /sign-up, /api/auth) stay open.

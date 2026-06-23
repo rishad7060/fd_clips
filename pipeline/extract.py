@@ -1,11 +1,11 @@
-"""Stage 4 — Clip extraction.
+"""Stage 4 - Clip extraction.
 
 For each scored candidate in ``workspace/{job_id}/clips.json`` cut the relevant
 range out of ``source.mp4`` into ``workspace/{job_id}/clips/{n}_raw.mp4`` (n is
 the 1-based rank, matching CONTRACTS.md §5).
 
 Real branch (MOCK_MODE=false):
-    * Stream-copy (``-c copy``) when the cut starts on (or near) a keyframe —
+    * Stream-copy (``-c copy``) when the cut starts on (or near) a keyframe -
       fast and lossless.
     * Re-encode with ``-c:v libx264 -c:a aac`` (CPU, free, NO GPU/nvenc) when
       frame-accurate cuts are needed (start not on a keyframe).

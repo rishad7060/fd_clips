@@ -6,7 +6,7 @@ import type { ClipStyle } from "./types";
  *
  * Each template carries a `preview` recipe used to render a small LIVE swatch
  * of the caption (Opus-style): the sample words shown in the tile, styled with
- * the exact base/highlight colours, weight, case, outline and (optional) box —
+ * the exact base/highlight colours, weight, case, outline and (optional) box -
  * so the picker shows what the caption will actually look like, not just a name.
  * The `id` maps 1:1 onto a pipeline TEMPLATES entry (pipeline/captions.py) so
  * the rendered clip matches the swatch.
@@ -49,7 +49,7 @@ export interface StyleTemplate {
 const TILE_BG = "bg-ink-900";
 
 export const STYLE_TEMPLATES: StyleTemplate[] = [
-  // The leading "No caption" option (Opus parity) — clips render with no burned
+  // The leading "No caption" option (Opus parity) - clips render with no burned
   // subtitles. The pipeline reads template:"none" and skips caption events.
   {
     id: "none",
@@ -153,7 +153,7 @@ export const FONT_SIZE_OPTIONS: { label: string; value: number }[] = [
   { label: "XL", value: 150 },
 ];
 
-/** The default caption preset (NOT "none") — the viral Mozi/Hormozi look. */
+/** The default caption preset (NOT "none") - the viral Mozi/Hormozi look. */
 export const DEFAULT_TEMPLATE_ID = "hormozi";
 
 export function templateById(id: string): StyleTemplate {

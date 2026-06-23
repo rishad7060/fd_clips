@@ -84,7 +84,7 @@ export default function BillingPage() {
       <h1 className="text-2xl font-semibold tracking-tight text-white">Plans &amp; credits</h1>
       <p className="mt-1 text-sm text-ink-300">
         {bal
-          ? `You're on the ${cap(bal.plan)} plan — ${bal.credit_balance} of ${bal.monthly_credits} minutes left this month.`
+          ? `You're on the ${cap(bal.plan)} plan - ${bal.credit_balance} of ${bal.monthly_credits} minutes left this month.`
           : "Loading your balance…"}
       </p>
 
@@ -178,7 +178,7 @@ export default function BillingPage() {
       )}
       <p className="mt-6 text-xs text-ink-400">
         Subscriptions are billed monthly through Polar (card &amp; more, no account required).
-        Pricing is half of Opus Clip&apos;s for the same minutes. Cancel anytime — you keep access
+        Pricing is half of Opus Clip&apos;s for the same minutes. Cancel anytime - you keep access
         until the period ends. In this demo build (no Polar token), upgrades activate locally so you
         can try the flow.
       </p>

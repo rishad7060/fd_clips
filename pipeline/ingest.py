@@ -1,4 +1,4 @@
-"""Stage 1 — Ingestion.
+"""Stage 1 - Ingestion.
 
 Accepts a YouTube/remote URL or a local file path and produces a normalized
 H.264 source at ``workspace/{job_id}/source.mp4`` plus a ``source.meta.json``
@@ -81,7 +81,7 @@ class SourceMetadata:
 def _resolve_tool(configured: str, default_name: str) -> Optional[str]:
     """Resolve an ffmpeg/ffprobe binary.
 
-    Honors the configured path from settings (FFMPEG_PATH/FFPROBE_PATH) first —
+    Honors the configured path from settings (FFMPEG_PATH/FFPROBE_PATH) first -
     a full path is used as-is if it exists, a bare name is looked up on PATH.
     Falls back to the default name on PATH. Returns None when unavailable.
     """
@@ -238,7 +238,7 @@ def _ingest_real(
         ffmpeg_dir = str(Path(ffmpeg).parent) if ffmpeg else None
         download_target = ws / "download.%(ext)s"
         ydl_opts = {
-            # Platform-agnostic (yt-dlp supports 1000+ sites — YouTube, TikTok,
+            # Platform-agnostic (yt-dlp supports 1000+ sites - YouTube, TikTok,
             # Instagram, X/Twitter, Vimeo, Facebook, direct mp4, …). Prefer SHARP
             # output: a ≤1080p video+audio merge first, then a single progressive
             # file. The final ``best`` catches sites (TikTok/IG/X) that only serve
@@ -261,8 +261,8 @@ def _ingest_real(
             ydl_opts["ffmpeg_location"] = ffmpeg_dir
         # YouTube increasingly requires cookies ("Sign in to confirm you're not a
         # bot") for downloads from clean/datacenter IPs. Two ways to supply them:
-        #   YTDLP_COOKIES=/path/cookies.txt        — an exported cookies file, or
-        #   YTDLP_COOKIES_FROM_BROWSER=chrome      — read cookies straight from an
+        #   YTDLP_COOKIES=/path/cookies.txt        - an exported cookies file, or
+        #   YTDLP_COOKIES_FROM_BROWSER=chrome      - read cookies straight from an
         #                                            installed, logged-in browser
         #                                            (chrome|edge|firefox|brave|...).
         # The browser route needs no manual export and is the easiest reliable fix.
@@ -274,7 +274,7 @@ def _ingest_real(
             # yt-dlp expects a tuple: (browser, profile?, keyring?, container?)
             ydl_opts["cookiesfrombrowser"] = (cookie_browser,)
         # "Credit saver": when a process_range is set, download ONLY that window
-        # (yt-dlp download_ranges) instead of the whole video — so a 2h podcast
+        # (yt-dlp download_ranges) instead of the whole video - so a 2h podcast
         # trimmed to a 5-min window neither downloads nor transcribes the rest.
         # force_keyframes_at_cuts gives clean cut points. Marks the download as
         # already-trimmed so the normalize step doesn't trim a second time.
@@ -287,7 +287,7 @@ def _ingest_real(
             trimmed_on_download = True
 
         # YouTube gates high-res formats behind a JS runtime (nsig/n challenge), a
-        # GVS PO token, SABR-only experiments, or DRM — depending on the player
+        # GVS PO token, SABR-only experiments, or DRM - depending on the player
         # CLIENT. Clients also differ in whether their media URLs survive the
         # actual download: YouTube increasingly returns "HTTP 403 Forbidden" at
         # DOWNLOAD time (after a clean extraction) for some clients/IPs. No single
@@ -306,7 +306,7 @@ def _ingest_real(
             client_attempts = [[]]  # single attempt, no client override
 
         # If browser cookies are available, retrying WITH them is the strongest
-        # 403/bot-check fix — so append a cookie'd pass as the final fallback.
+        # 403/bot-check fix - so append a cookie'd pass as the final fallback.
         cookie_retry = bool(
             (cookie_file and Path(cookie_file).is_file()) or cookie_browser
         )
@@ -327,12 +327,12 @@ def _ingest_real(
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     # extract_info(download=True) both downloads AND returns the
-                    # metadata dict — which carries the "most replayed" heatmap
+                    # metadata dict - which carries the "most replayed" heatmap
                     # and view_count. (ydl.download() would discard that.)
                     info = ydl.extract_info(source, download=True) or {}
                 last_err = None
                 break
-            except Exception as e:  # noqa: BLE001 — try the next client combo
+            except Exception as e:  # noqa: BLE001 - try the next client combo
                 last_err = e
                 el = str(e).lower()
                 # Only worth trying another client for 403/bot/format issues;
@@ -377,7 +377,7 @@ def _ingest_real(
                 hint = (
                     "This URL isn't a supported video link. Paste a direct link to a "
                     "single video (YouTube, TikTok, Instagram, X/Twitter, Vimeo, "
-                    "Facebook, or a direct .mp4) — not a channel, playlist, or homepage."
+                    "Facebook, or a direct .mp4) - not a channel, playlist, or homepage."
                 )
             elif _is_youtube(source) and ("javascript" in low or "nsig" in low or "player" in low):
                 hint = (
@@ -387,7 +387,7 @@ def _ingest_real(
                 )
             elif "sign in" in low or "bot" in low or "age" in low or "private" in low or "login" in low:
                 hint = (
-                    "This video needs login/cookies (private, age-gated, or bot-checked — "
+                    "This video needs login/cookies (private, age-gated, or bot-checked - "
                     "common on Instagram/TikTok/private YouTube). Set "
                     "YTDLP_COOKIES_FROM_BROWSER=chrome (or edge/firefox) in .env to reuse "
                     "your logged-in browser's cookies, or set YTDLP_COOKIES to a cookies.txt."
@@ -427,7 +427,7 @@ def _ingest_real(
         norm_target = out_path.with_name(out_path.stem + ".norm.mp4")
 
     # Re-encoding a whole (possibly hour-long) source on CPU is slow and usually
-    # unnecessary — we only cut small segments later. If the download is already
+    # unnecessary - we only cut small segments later. If the download is already
     # H.264 / yuv420p, just remux (stream-copy: near-instant). Only re-encode
     # when the codec/pixfmt actually needs it (e.g. AV1/VP9 from YouTube).
     needs_reencode = True

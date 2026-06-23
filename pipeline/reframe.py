@@ -1,9 +1,9 @@
-"""Stage 5 — Smart vertical reframe (16:9 -> 9:16, 1080x1920).
+"""Stage 5 - Smart vertical reframe (16:9 -> 9:16, 1080x1920).
 
 For each raw clip, compute a virtual-camera crop that keeps the dominant
 speaker centered, and render ``clips/{n}_vertical.mp4`` at 1080x1920.
 
-Real branch (MOCK_MODE=false) — v2 MVP:
+Real branch (MOCK_MODE=false) - v2 MVP:
     **MediaPipe face-detect smart crop (CPU, free).** We open the raw clip with
     OpenCV, sample roughly every 5th frame, run MediaPipe face detection, pick
     the dominant (largest / most-confident) face each sample, and EMA-smooth its
@@ -12,10 +12,10 @@ Real branch (MOCK_MODE=false) — v2 MVP:
     bounds) and rendered with ``crop=w:h:x:y,scale=1080:1920`` on ``-c:v
     libx264`` (CPU, no nvenc). When no face is found in any sample we fall back
     to a centered 9:16 crop; good enough for single-speaker / talking-head
-    content (the MVP scope — multi-speaker podcasts are cut, see fd_clips_v2.md
+    content (the MVP scope - multi-speaker podcasts are cut, see fd_clips_v2.md
     Part 1).
 
-    # PHASE 2 UPGRADES (documented, NOT on the free path — see fd_clips_v2.md
+    # PHASE 2 UPGRADES (documented, NOT on the free path - see fd_clips_v2.md
     # Part 5 "Users ask for podcasts/2-speakers"):
     #   * Swap the single largest-face heuristic for **LR-ASD active-speaker
     #     tracking** (clone github.com/Junhua-Liao/LR-ASD; weights per README) so
@@ -103,14 +103,14 @@ def set_aspect_ratio(aspect_ratio: Optional[str]) -> tuple[int, int]:
 FRAME_SAMPLE_STRIDE = 5     # run face detection on every Nth decoded frame
 # SPEED: BlazeFace/FaceLandmarker work on a 0..1 fraction basis, so detection on a
 # downscaled copy returns the SAME face fractions as on the full-res frame (output
-# geometry is unchanged — the crop still uses the full-res pixels). Detection cost
+# geometry is unchanged - the crop still uses the full-res pixels). Detection cost
 # scales with pixel count, so shrinking a 1920px-wide frame to 640px is ~9x fewer
 # pixels per detect. We only downscale the DETECTION input; openness crops and the
 # rendered crop window stay full-res. 0 disables (use the native frame).
 DETECT_MAX_WIDTH = 640      # px: cap the detection-input width (fractions unchanged)
 EMA_ALPHA = 0.25            # crop-center smoothing weight (0.2-0.3 = calm camera)
 # Lower confidence so distant / profile / turned-away faces (the off-camera
-# speaker on a zoomed-out two-shot) still register — they're what we widen for.
+# speaker on a zoomed-out two-shot) still register - they're what we widen for.
 FACE_MIN_CONFIDENCE = 0.3   # MediaPipe min detection confidence
 
 # ── Per-shot framing (opus.pro-style) ───────────────────────────────────────
@@ -138,7 +138,7 @@ TWO_SHOT_MARGIN = 0.10     # extra width padding around the two faces (frac of W
 PATH_EMA_ALPHA = 0.4
 # Dead-zone: hold the crop steady when the next keyframe is within this many
 # source px of the current one (kills micro-jitter on a still single speaker).
-# ~36px on a 1080-tall source ≈ 3% of the crop — below visible drift, above noise.
+# ~36px on a 1080-tall source ≈ 3% of the crop - below visible drift, above noise.
 PATH_DEADZONE_PX = 36
 # Min fraction of frames in a window that must contain >=2 faces before we treat
 # it as a genuine two-shot (debounces a single stray second detection).
@@ -182,17 +182,17 @@ LIPMOTION_STEP = 0.2             # step between sub-windows (s)
 # STABILITY: once a speaker is framed, STAY there. A short min-hold made the crop
 # feel jumpy (re-cutting every ~1.5s). Opus holds a speaker for the whole thought.
 # So: long min-hold, and a challenger must win for a sustained stretch before we
-# cut — a brief interjection / backchannel ("yeah", "right") never steals the crop.
+# cut - a brief interjection / backchannel ("yeah", "right") never steals the crop.
 MIN_HOLD_SEC = 3.0               # min time on a speaker before a switch is allowed
 HYSTERESIS_SUSTAIN_SEC = 0.9     # challenger must win continuously for this long
 SNAP_WINDOW_SEC = 0.5            # snap a switch to a word start within +/- this
 SENTENCE_GAP_SEC = 0.4           # inter-word gap above this = sentence boundary
 # Negative-evidence switch: if the on-crop speaker's lips go still while speech
-# CONTINUES (transcript voiced) for this long, the OTHER person is talking — cut
+# CONTINUES (transcript voiced) for this long, the OTHER person is talking - cut
 # to them even if they're in profile and their lips can't be measured. This is
 # what makes switching work on real podcast footage where the listener turns away.
 # Kept generous (1.6s) so a momentary pause mid-sentence doesn't trigger a guessy
-# cut — only a sustained handover (the other person clearly took over) does.
+# cut - only a sustained handover (the other person clearly took over) does.
 NEG_EVIDENCE_SEC = 1.6
 
 
@@ -426,11 +426,11 @@ def _center_crop_geometry(src_w: int, src_h: int) -> tuple[int, int, int]:
     return crop_w, crop_h, x
 
 
-# MediaPipe Face Detector (Tasks API) model — small (~224 KB), public, CPU-only.
+# MediaPipe Face Detector (Tasks API) model - small (~224 KB), public, CPU-only.
 # Cached under the repo so the one-time fetch happens once per machine. We only
 # need it on the newer "Tasks-only" mediapipe builds that drop ``mp.solutions``.
 # (Only short_range is reliably hosted; the off-centre/distant speaker is instead
-# recovered by upscaling frames before detection — see ``_sample_faces``.)
+# recovered by upscaling frames before detection - see ``_sample_faces``.)
 _FACE_MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/face_detector/"
     "blaze_face_short_range/float16/1/blaze_face_short_range.tflite"
@@ -460,9 +460,9 @@ def _face_model_path() -> Optional[Path]:
         return None
 
 
-# FaceLandmarker (Tasks API) — 478-point mesh, ~3.7 MB, public, CPU. Used ONLY
+# FaceLandmarker (Tasks API) - 478-point mesh, ~3.7 MB, public, CPU. Used ONLY
 # for active-speaker detection (lip movement) when ≥2 faces are visible. Cached
-# alongside the BlazeFace model. Not bundled — downloaded once per machine.
+# alongside the BlazeFace model. Not bundled - downloaded once per machine.
 _LANDMARKER_MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/face_landmarker/"
     "face_landmarker/float16/1/face_landmarker.task"
@@ -573,7 +573,7 @@ def _make_face_detector(mp: Any) -> Optional[tuple[Any, Any]]:
     Tier 1: the classic ``mp.solutions.face_detection`` API (no model file).
     Tier 2: the newer Tasks ``FaceDetector`` (needs a cached .tflite model).
     """
-    # ── Tier 1: classic solutions API (preferred — no model download) ──
+    # ── Tier 1: classic solutions API (preferred - no model download) ──
     solutions = getattr(mp, "solutions", None)
     if solutions is not None and hasattr(solutions, "face_detection"):
         det = solutions.face_detection.FaceDetection(
@@ -668,7 +668,7 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
     runs MediaPipe face detection and records the *dominant* face's center (x and
     y, as fractions of frame size) tagged with the frame timestamp. It also flags
     scene cuts by comparing each sampled frame to the previous one (mean absolute
-    difference over a downscaled grayscale frame) — a cheap, dependency-free
+    difference over a downscaled grayscale frame) - a cheap, dependency-free
     stand-in for PySceneDetect so the crop can re-frame per shot.
 
     Returns the list of samples (ordered by time), or ``None`` when OpenCV /
@@ -679,7 +679,7 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
     real-branch helper so the mock path stays import-free.
     """
     # PHASE 2: replace the single-largest-face heuristic with LR-ASD
-    # active-speaker tracking so the crop follows the *talker* per shot — see
+    # active-speaker tracking so the crop follows the *talker* per shot - see
     # fd_clips_v2.md Part 5.
     try:
         import cv2  # lazy: real branch only
@@ -695,7 +695,7 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
     detect_fn, close_fn = detector
 
     # Active-speaker landmarker (built once, lazily). Only used on frames with
-    # ≥2 faces — single-face frames need no talker disambiguation. If it can't
+    # ≥2 faces - single-face frames need no talker disambiguation. If it can't
     # be built (offline / no model) we simply skip ASD and keep geometry framing.
     openness_fn = None
     close_lm = None
@@ -747,7 +747,7 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
 
             # MediaPipe expects contiguous RGB.
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            # SPEED: detect on a downscaled copy — BlazeFace/FaceLandmarker return
+            # SPEED: detect on a downscaled copy - BlazeFace/FaceLandmarker return
             # 0..1 fractions, so face geometry is identical, but detection touches
             # ~9x fewer pixels. The full-res ``rgb`` is kept for openness crops
             # (which DO need real pixels) and the rendered crop window.
@@ -755,7 +755,7 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
             single_speaker = _is_single_speaker_clip(samples)
             # Tiled detection recovers the 2nd speaker that full-frame BlazeFace
             # misses on a wide two-shot (each half is detected at 2x face res).
-            # SPEED: skip tiling entirely once the clip looks single-speaker — the
+            # SPEED: skip tiling entirely once the clip looks single-speaker - the
             # 2x/3x extra detect passes only matter for 2-person two-shots.
             faces = (
                 _detect_tiled(det_rgb, detect_fn, np)
@@ -773,7 +773,7 @@ def _sample_faces(raw: Path) -> Optional[list[FaceSample]]:
             cx, cy = _dominant_face_xy(faces)
             # Measure mouth openness per face ONLY when ≥2 faces are visible (the
             # only case where we must decide WHO is talking). Crop each face box
-            # (padded) and run FaceLandmarker on it — robust on small/360p faces.
+            # (padded) and run FaceLandmarker on it - robust on small/360p faces.
             # SPEED: skip the 478-point ASD mesh once the clip reads single-speaker
             # (no talker disambiguation needed → pure geometry framing).
             measure = (
@@ -837,7 +837,7 @@ def _downscale_for_detect(rgb: Any, np: Any, cv2: Any) -> Any:
     BlazeFace/FaceLandmarker report face centers/boxes as fractions of frame size,
     so detecting on a smaller copy yields the SAME fractions at a fraction of the
     pixel cost. Returns a contiguous uint8 array. Frames already at/below the cap
-    (or DETECT_MAX_WIDTH ≤ 0) pass through unchanged. Detection-only — callers keep
+    (or DETECT_MAX_WIDTH ≤ 0) pass through unchanged. Detection-only - callers keep
     the full-res frame for openness crops and the rendered crop.
     """
     if DETECT_MAX_WIDTH <= 0:
@@ -868,7 +868,7 @@ def _is_single_speaker_clip(samples: list["FaceSample"]) -> bool:
     Looks at the first ``SINGLE_SPEAKER_PROBE_SAMPLES`` samples that contained a
     face (collected so far this clip) and returns True when ≥SINGLE_SPEAKER_MIN_FRAC
     of them have exactly one detected face. When True the caller skips tiled
-    detection and the ASD landmarker mesh for the rest of the clip — both only
+    detection and the ASD landmarker mesh for the rest of the clip - both only
     disambiguate 2-person two-shots. Returns False until enough evidence exists
     (so the multi-speaker path stays the safe default early in the clip).
     """
@@ -909,7 +909,7 @@ def _detect_tiled(
         found.append(((cx * rw + mid_r) / w, cy, area * rw / w, sc))
 
     # Merge near-duplicate detections (the SAME face found in overlapping tiles /
-    # full frame). A duplicate must be close in BOTH x and y — two different
+    # full frame). A duplicate must be close in BOTH x and y - two different
     # people seated side-by-side near the tile seam share x but differ in y (and
     # we must NOT collapse them, or we delete the second speaker). Compare each
     # candidate against ALL kept faces (not just the last), keep the larger box.
@@ -1079,7 +1079,7 @@ def _word_boundaries(
     """Flatten transcript words overlapping [start,end] into clip-local time.
 
     Returns (word_starts, voiced): ``word_starts`` is a sorted list of every
-    word-start time (clip-relative, 0 = clip start) — the candidate cut points to
+    word-start time (clip-relative, 0 = clip start) - the candidate cut points to
     snap switches onto. ``voiced`` is the merged list of (t0,t1) spoken intervals
     for voice-activity gating (hold the crop during silence).
     """
@@ -1173,7 +1173,7 @@ def _assign_speaker_timeline(
     # Step 1: per sub-window raw signal. Each entry is (t, winner, voiced) where
     # winner ∈ {"A","B",None}: the positively-detected talker (lip motion), or
     # None when silent OR ambiguous OR nobody measurable moved. ``voiced`` lets
-    # step 2 apply NEGATIVE evidence — if speech continues but the on-crop person
+    # step 2 apply NEGATIVE evidence - if speech continues but the on-crop person
     # stops moving, the *other* (often in-profile, unmeasurable) person is talking.
     raw: list[tuple[float, Optional[str], bool]] = []
     t = 0.0
@@ -1201,7 +1201,7 @@ def _assign_speaker_timeline(
     cand_since = 0.0
     silent_since: Optional[float] = None  # current cluster silent-while-voiced start
     # Cluster we last LEFT via negative evidence. We must NOT bounce straight back
-    # to it on negative evidence alone — when the real talker is the unmeasurable
+    # to it on negative evidence alone - when the real talker is the unmeasurable
     # cluster, "current is silent during speech" is true no matter which side we
     # sit on, which would ping-pong forever. Only POSITIVE lip motion clears this.
     neg_evicted: Optional[str] = None
@@ -1309,7 +1309,7 @@ def _active_speaker_x(
 
     Splits the window's faces into a LEFT cluster and a RIGHT cluster (by the
     per-window median face x), tracks each cluster's mouth openness over time, and
-    scores each by total lip MOTION (sum of |Δopenness| — a talker oscillates, a
+    scores each by total lip MOTION (sum of |Δopenness| - a talker oscillates, a
     listener is still). Returns ``(speaker_center_x, motion_ratio)`` when one side
     clearly out-talks the other (passes ASD_MIN_MOTION and ASD_DOMINANCE), else
     ``None`` (caller keeps both in a two-shot). ``motion_ratio`` is the talker's
@@ -1338,10 +1338,10 @@ def _active_speaker_x(
     m_left, m_right = motion(left), motion(right)
     hi, lo = (m_left, m_right) if m_left >= m_right else (m_right, m_left)
     if hi < ASD_MIN_MOTION:
-        return None  # neither side is moving enough — nobody clearly talking
+        return None  # neither side is moving enough - nobody clearly talking
     ratio = hi / lo if lo > 1e-6 else 999.0
     if ratio < ASD_DOMINANCE:
-        return None  # both moving similarly (cross-talk) — keep both
+        return None  # both moving similarly (cross-talk) - keep both
 
     # Center on the talking cluster's median x. left_talks selects which side of
     # split_x the talker is on (left cluster = x <= split_x).
@@ -1356,13 +1356,13 @@ def _window_target(
     """Compute a window's desired framing as (center_x, center_y, width) fractions.
 
     Looks at every face in the window (not just the dominant one). Priority order:
-      1. **Active speaker** — if two faces are present and lip-motion clearly marks
+      1. **Active speaker** - if two faces are present and lip-motion clearly marks
          one as the talker, tight-crop to THEM (Opus-style: follow who's talking,
          not the biggest/nearest face). This is the fix for "camera sits on the
          silent listener while the other person speaks".
-      2. **Two-shot** — if both faces are far apart and neither clearly dominates
+      2. **Two-shot** - if both faces are far apart and neither clearly dominates
          (cross-talk / nobody talking), WIDEN to keep both.
-      3. **Single face** — tight-frame the dominant (median) face.
+      3. **Single face** - tight-frame the dominant (median) face.
     ``None`` when the window has no faces at all.
     """
     framed = [s for s in win if s.cx >= 0.0]
@@ -1478,15 +1478,15 @@ def _build_keyframes(
 # When the speaker sits far to one side of a WIDE frame for most of the clip,
 # a tight 9:16 crop leaves them looking at empty space and drops the (often
 # undetectable) conversation partner. In that case we fit the whole frame into
-# 9:16 with a blurred background instead — nobody is cut off.
+# 9:16 with a blurred background instead - nobody is cut off.
 # A face is "off to a side" when its center is past this distance from the
 # middle (0.18 ≈ outside the central ~64%). 0.50 of frames being off-side marks
-# a clip where the subject lives near an edge — a tight crop would frame them
+# a clip where the subject lives near an edge - a tight crop would frame them
 # against empty space / drop the off-screen partner.
 WIDE_SHOT_MIN_ASPECT = 1.7   # only for genuinely wide (≈16:9+) sources
 # Blur-pad is a LAST RESORT (it letterboxes the whole frame). Like Opus, we
 # default to a TIGHT face-following crop and only blur-pad when BOTH people in a
-# real two-shot are on screen at once, too far apart for one 9:16 crop to hold —
+# real two-shot are on screen at once, too far apart for one 9:16 crop to hold -
 # i.e. genuinely simultaneous two-face frames with a large horizontal spread.
 TWO_FACE_SPREAD_PAD = 0.45   # two faces must span > this fraction of width
 TWO_FACE_FRAC_PAD = 0.55     # ...in at least this share of FRAMED samples
@@ -1497,10 +1497,10 @@ def _is_wide_two_shot(
 ) -> bool:
     """True ONLY for a genuine wide two-shot a tight crop can't hold.
 
-    A single off-centre face is NOT a two-shot — we just tight-crop to it (that's
+    A single off-centre face is NOT a two-shot - we just tight-crop to it (that's
     what Opus does). Blur-pad fires only when TWO faces are detected
     simultaneously AND span a large fraction of the (wide) frame for most of the
-    clip — the rare case where one 9:16 crop would drop a person mid-conversation.
+    clip - the rare case where one 9:16 crop would drop a person mid-conversation.
     """
     if src_h == 0 or (src_w / src_h) < WIDE_SHOT_MIN_ASPECT:
         return False
@@ -1585,7 +1585,7 @@ def _reframe_real(
     mock/CI stays green.
 
     # PHASE 2: smooth per-frame virtual camera (sendcmd) + LR-ASD active-speaker
-    # (follow the *talker*, not the biggest face) + h264_nvenc — see fd_clips_v2.
+    # (follow the *talker*, not the biggest face) + h264_nvenc - see fd_clips_v2.
     """
     import subprocess
 
@@ -1661,7 +1661,7 @@ def _reframe_real(
 
     if ab_keyframes is not None:
         # Speaker-switch path: tight base-width keyframes that hard-cut between
-        # the two speakers. No widening, no EMA — feed straight to the render.
+        # the two speakers. No widening, no EMA - feed straight to the render.
         keyframes = ab_keyframes
         # mode already set to "speaker-switch"; all widths are base_w (tight).
     else:
@@ -1704,7 +1704,7 @@ def _reframe_real(
         fixed_kfs.append(CropKeyframe(t=kf.t, x=nx, y=ny, width=fixed_w, height=fixed_h))
     # Collapse near-identical consecutive frames after re-clamping. A DEAD-ZONE
     # (PATH_DEADZONE_PX) holds the crop steady through tiny face-tracking jitter
-    # so a single, mostly-still speaker doesn't visibly drift — the camera only
+    # so a single, mostly-still speaker doesn't visibly drift - the camera only
     # moves when the face genuinely shifts. (Speaker-switch keyframes jump far
     # more than the dead-zone, so real A/B cuts are unaffected.)
     keyframes = []
@@ -1771,7 +1771,7 @@ def _keyframes_to_ffmpeg_expr(keyframes: list[CropKeyframe], axis: str) -> str:
 
     ``axis`` is ``"x"`` or ``"y"``. Each shot holds its window until the next
     shot's start time, so the crop snaps to the new framing on each scene cut
-    (no interpolation — matches the per-shot composition we computed).
+    (no interpolation - matches the per-shot composition we computed).
     """
     if not keyframes:
         return "0"

@@ -1,4 +1,4 @@
-# FocalDive Clips — API (NestJS)
+# FocalDive Clips - API (NestJS)
 
 Tenant-scoped jobs/clips/billing API. Boots fully locally with **no** Postgres,
 Redis, Clerk, or Stripe keys via MOCK_MODE (in-memory DB + queue, fake auth org,

@@ -6,7 +6,7 @@ import { PlanTier } from '../persistence/store.types';
  *
  * Pricing is set to HALF of Opus Clip's verified monthly prices for the same
  * minute allotments (Opus starter $15, pro $29). Billing runs through Polar.sh
- * as recurring monthly subscriptions — see polar.service.ts.
+ * as recurring monthly subscriptions - see polar.service.ts.
  *
  * Capability flags (watermark / editingEnabled / clipRetentionDays /
  * maxResolution) mirror Opus's free-tier limits so the API, worker, and web can
@@ -36,7 +36,7 @@ export const PLANS: Record<PlanTier, PlanDefinition> = {
     tier: 'free',
     label: 'Free',
     priceUsd: 0,
-    // Opus parity: free tier = 60 source-minutes/mo. SINGLE SOURCE OF TRUTH —
+    // Opus parity: free tier = 60 source-minutes/mo. SINGLE SOURCE OF TRUTH -
     // auth.guard.ts / auth.controller.ts import FREE_TIER_CREDITS from here.
     monthlyCredits: 60,
     watermark: true,
@@ -68,7 +68,7 @@ export const PLANS: Record<PlanTier, PlanDefinition> = {
 
 /**
  * The free-tier monthly credit grant. The auth guard seeds new orgs with this,
- * so it lives here (next to the plan) to stay the single source of truth — no
+ * so it lives here (next to the plan) to stay the single source of truth - no
  * duplicate literal in auth.guard.ts.
  */
 export const FREE_TIER_CREDITS = PLANS.free.monthlyCredits;

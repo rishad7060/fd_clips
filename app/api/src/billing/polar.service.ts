@@ -11,7 +11,7 @@ import {
 import { PlansService } from '../plans/plans.service';
 
 /**
- * Polar.sh billing — the payment provider for checkout, cancellation, and
+ * Polar.sh billing - the payment provider for checkout, cancellation, and
  * subscription webhooks. Credit/debit/true-up accounting lives in
  * billing.service.ts.
  *
@@ -104,7 +104,7 @@ export class PolarService {
     }
 
     // Only attempt the API cancel for a real subscription id (the checkout id we
-    // store before activation is not a subscription id — guard on the prefix).
+    // store before activation is not a subscription id - guard on the prefix).
     const subId = org.subscriptionId;
     const token = this.requireToken();
     try {
@@ -299,7 +299,7 @@ export class PolarService {
   private verifySignature(rawBody: Buffer, headers: Record<string, string>): boolean {
     const secret = this.config.polarWebhookSecret;
     if (!secret) {
-      this.logger.error('POLAR_WEBHOOK_SECRET not set — rejecting webhook (fail closed).');
+      this.logger.error('POLAR_WEBHOOK_SECRET not set - rejecting webhook (fail closed).');
       return false;
     }
     const h = (n: string): string => headers[n] ?? headers[n.toLowerCase()] ?? '';

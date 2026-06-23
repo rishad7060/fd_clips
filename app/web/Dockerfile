@@ -21,7 +21,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Ensure a public/ exists (this app ships none today) so the runner's COPY of
-# /app/public always has a source — keeps the build working with or without it.
+# /app/public always has a source - keeps the build working with or without it.
 RUN mkdir -p public
 
 RUN npm run build

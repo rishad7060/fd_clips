@@ -47,7 +47,7 @@ const VERIFY_SCHEMA = {
 }
 
 const SHARED = `
-PROJECT: FocalDive Clips — an Opus-Clip-style app. Repo root: ${ROOT}.
+PROJECT: FocalDive Clips - an Opus-Clip-style app. Repo root: ${ROOT}.
 READ ${ROOT}/CLAUDE.md FIRST for stack rules and layout. Read the roadmap at
 ${ROOT}/FocalDive_Clips_Complete_Roadmap.md for full intent (esp. PART 3 prompts).
 
@@ -57,25 +57,25 @@ CRITICAL CONSTRAINTS:
   MOCK_MODE and replaced with deterministic mocks so code runs & tests pass offline.
 - Interfaces must be identical between mock and real so the real impl drops in on RunPod.
 - Type hints on Python; TypeScript strict on Node. Each Python module needs a __main__ test entry.
-- Write real, working, reviewable code — not stubs that throw NotImplementedError.
+- Write real, working, reviewable code - not stubs that throw NotImplementedError.
   Mocks return realistic canned data.
 - Do NOT add features beyond the roadmap. Do NOT touch files outside your assigned directory.
 `
 
-// ── Phase 1: shared contracts (do these myself? no — one agent, fast) ──
+// ── Phase 1: shared contracts (do these myself? no - one agent, fast) ──
 phase('Contracts')
 const contract = await agent(
   SHARED + `
 TASK: Write the SHARED CONTRACTS that all three subsystems depend on, so they interoperate.
 Write these files:
-1. ${ROOT}/pipeline/config.py — loads .env via python-dotenv, exposes MOCK_MODE bool
+1. ${ROOT}/pipeline/config.py - loads .env via python-dotenv, exposes MOCK_MODE bool
    (auto => True when OPENAI_API_KEY missing), WORKSPACE dir helper, and typed settings.
-2. ${ROOT}/tests/fixtures/transcript.sample.json — a realistic canned WhisperX-style transcript
+2. ${ROOT}/tests/fixtures/transcript.sample.json - a realistic canned WhisperX-style transcript
    (~12 segments, fields: text,start,end,speaker, and words[] with word,start,end). Use a
    short podcast-style monologue/dialogue so scoring has real material.
-3. ${ROOT}/tests/fixtures/clips.sample.json — example scored-clip output (8 candidates,
+3. ${ROOT}/tests/fixtures/clips.sample.json - example scored-clip output (8 candidates,
    fields: start,end,hook_line,virality_score,reason,suggested_title).
-4. ${ROOT}/CONTRACTS.md — document the canonical JSON shapes for: job, transcript, clip
+4. ${ROOT}/CONTRACTS.md - document the canonical JSON shapes for: job, transcript, clip
    candidate, job status/progress events (used by API websocket + worker), and R2 object keys.
    These shapes are the contract between pipeline, worker, API, and web.
 Keep shapes minimal and consistent with the roadmap. Return the schema-required fields.`,
@@ -84,7 +84,7 @@ Keep shapes minimal and consistent with the roadmap. Return the schema-required 
 
 log(`Contracts: ${contract?.files_written?.length ?? 0} files. Now building 3 subsystems in parallel.`)
 
-// ── Phase 2: build each subsystem (parallel — disjoint directories) ──
+// ── Phase 2: build each subsystem (parallel - disjoint directories) ──
 const PIPELINE_TASK = SHARED + `
 SUBSYSTEM: pipeline/ (Python). Read ${ROOT}/CONTRACTS.md and ${ROOT}/tests/fixtures/*.
 Implement these modules per roadmap PART 3 prompts 1–7, each with type hints and a __main__ test entry,
@@ -149,7 +149,7 @@ log(`Build done: ${ok.map(b => `${b.subsystem}=${b.tests_passed ? 'PASS' : 'FAIL
 phase('Verify')
 const verify = await agent(
   SHARED + `
-TASK: VERIFY the scaffold works locally. Do NOT rewrite features — only confirm and fix small blockers.
+TASK: VERIFY the scaffold works locally. Do NOT rewrite features - only confirm and fix small blockers.
 1. Pipeline: run \`python pipeline/run.py --clips 5 --mock\` from ${ROOT}. Confirm it completes with a 5-row summary.
 2. API: from ${ROOT}/app/api run install+build; start the server in mock mode; hit /health. (If install is heavy/slow,
    at least confirm tsc build passes and the boot script is correct.)

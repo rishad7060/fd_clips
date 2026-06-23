@@ -1,6 +1,6 @@
 # Slim requirements for the CPU-path Docker image.
 # Heavy GPU deps (whisperx, pyannote, torch, torchvision) are intentionally
-# excluded — the free CPU path uses Groq for transcription and MediaPipe for
+# excluded - the free CPU path uses Groq for transcription and MediaPipe for
 # face detection instead. Add a separate gpu.requirements.txt for RunPod builds.
 
 # Ingest
@@ -17,7 +17,7 @@ groq>=1.4.0
 
 # CPU face detection for smart crop
 mediapipe>=0.10.0
-# headless variant — no GUI/display required in containers
+# headless variant - no GUI/display required in containers
 opencv-python-headless>=4.9.0
 
 # Scene detection (used by reframe.py)

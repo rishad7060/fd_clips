@@ -40,7 +40,7 @@ interface PreviewView {
 
 /** Deterministic stub used in mock mode / when python is unavailable. */
 // Fallback when python/yt-dlp can't read the URL. qualityLabel is BLANK on
-// purpose — claiming "1080p" for an unknown video puts a false badge on the
+// purpose - claiming "1080p" for an unknown video puts a false badge on the
 // preview. The web client shows no badge when this is empty.
 const STUB: PreviewView = {
   title: 'Preview',
@@ -58,7 +58,7 @@ function qualityLabel(height: number): string {
   if (height >= 720) return '720p';
   if (height >= 360) return '360p';
   if (height > 0) return `${height}p`;
-  return '—';
+  return '-';
 }
 
 @UseGuards(AppAuthGuard)
@@ -69,9 +69,9 @@ export class PreviewController {
   constructor(private readonly config: AppConfigService) {}
 
   /**
-   * POST /preview — fetch title/thumbnail/resolution for a URL WITHOUT
+   * POST /preview - fetch title/thumbnail/resolution for a URL WITHOUT
    * downloading. yt-dlp metadata extraction needs NO API keys, so this runs
-   * REGARDLESS of mockMode — gating it on mockMode (which is true whenever any
+   * REGARDLESS of mockMode - gating it on mockMode (which is true whenever any
    * unrelated cred like the Polar token is missing) was leaving the preview permanently
    * empty. When python/yt-dlp is genuinely unavailable or the extract fails, we
    * fall back to a deterministic stub with a `note` so the UI never breaks.
@@ -90,7 +90,7 @@ export class PreviewController {
     }
 
     if (py.error || (!py.width && !py.height && !py.title)) {
-      // Bad/private URL or empty extract — soft stub with a hint, still 200.
+      // Bad/private URL or empty extract - soft stub with a hint, still 200.
       const note = py.error
         ? 'Could not read this video (it may be private or unsupported).'
         : 'No preview available for this URL.';

@@ -7,7 +7,7 @@
 
   /* ── Shadcn design tokens (used by the admin dashboard) ──────────────────
      HSL channels mapped to the ink/brand palette in tailwind.config.ts. Defined
-     globally (not scoped) so portaled primitives — dialogs, dropdowns — inherit
+     globally (not scoped) so portaled primitives - dialogs, dropdowns - inherit
      them. The creator UI never references these semantic classes, so it is
      unaffected. App is dark-only, so there is no separate light block. */
   --background: 224 44% 5%;       /* ink-950 */
@@ -80,7 +80,7 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 
-/* Premium focus ring — visible only for keyboard nav (:focus-visible), a
+/* Premium focus ring - visible only for keyboard nav (:focus-visible), a
    lightened brand that clears 3:1 on dark surfaces. */
 :where(a, button, input, select, textarea, [role="button"], [tabindex]):focus-visible {
   outline: 2px solid #c3a8fa;
@@ -94,7 +94,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* Animated "scanning" border (Opus-style): a bright white light traces around
    a rounded box while loading. Implemented by SPINNING a conic-gradient layer
-   via `transform: rotate()` — rock-solid across browsers (no reliance on
+   via `transform: rotate()` - rock-solid across browsers (no reliance on
    animating a registered custom property, which some engines render as a
    discrete jump). The gradient layer is oversized (200%) and centered so the
    rotating square always covers the box; the parent clips it to the rounded

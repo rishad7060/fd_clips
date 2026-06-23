@@ -1,4 +1,4 @@
-"""Pipeline orchestrator — ingest -> transcribe -> score -> extract -> reframe -> captions.
+"""Pipeline orchestrator - ingest -> transcribe -> score -> extract -> reframe -> captions.
 
 Runs the full YT Shorts Clips pipeline for one source (URL or local file) and a
 requested clip count. Features:
@@ -102,7 +102,7 @@ def _parse_process_range(
 
     Accepts ``{"start": s, "end": e}`` (the web/queue shape) or a ``[s, e]``
     list/tuple. Returns None (whole video) for anything missing/malformed so a
-    bad value never breaks the run — ingest re-validates the window too.
+    bad value never breaks the run - ingest re-validates the window too.
     """
     if not raw:
         return None

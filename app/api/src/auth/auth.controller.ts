@@ -161,7 +161,7 @@ export class AuthController {
    * Credentials login for admins. Called server-to-server by the web app's
    * Auth.js `authorize` callback (Credentials provider), gated by the same
    * `x-internal-secret` as /auth/sync. In MOCK mode (no internal secret set) the
-   * header check is skipped — the bcrypt password check is still the real gate,
+   * header check is skipped - the bcrypt password check is still the real gate,
    * and the API is local-only. Never reachable from the browser.
    */
   @Post('login')

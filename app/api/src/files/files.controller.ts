@@ -87,7 +87,7 @@ export class FilesController {
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'private, max-age=300');
 
-    // Range request — stream a partial body so the player can seek.
+    // Range request - stream a partial body so the player can seek.
     if (range) {
       const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
       if (!match) {

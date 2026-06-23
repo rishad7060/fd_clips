@@ -123,7 +123,7 @@ export function captionsFor(c: ClipCandidate): { start: number; end: number; tex
 const round3 = (n: number): number => +n.toFixed(3);
 
 /**
- * Per-word clip-RELATIVE transcript for a candidate — mirrors the backend's
+ * Per-word clip-RELATIVE transcript for a candidate - mirrors the backend's
  * GET /clips/transcript shape so mock and real modes behave identically.
  *
  * Prefer SAMPLE_CAPTIONS (absolute-second lines): split each line into words,
@@ -157,7 +157,7 @@ export function wordsFor(c: ClipCandidate): TranscriptWord[] {
     if (words.length) return words;
   }
 
-  // Synthesizer — mirrors the controller's mock fallback exactly.
+  // Synthesizer - mirrors the controller's mock fallback exactly.
   const text = [c.hook_line, c.suggested_title].filter(Boolean).join(" ");
   const toks = text.split(/\s+/).filter(Boolean);
   const per = dur / Math.max(1, toks.length);

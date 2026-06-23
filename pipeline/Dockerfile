@@ -1,5 +1,5 @@
 # ============================================================
-# FocalDive Clips — Python pipeline (build context = repo root)
+# FocalDive Clips - Python pipeline (build context = repo root)
 # ============================================================
 # Standalone CPU pipeline image: ingest → transcribe (Groq) →
 # score (Gemini) → extract → reframe (MediaPipe) → captions.
@@ -27,7 +27,7 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Slim CPU-only requirements (no GPU torch/whisperx/pyannote — see the file
+# Slim CPU-only requirements (no GPU torch/whisperx/pyannote - see the file
 # header). Installed first so the layer caches until requirements change.
 COPY requirements.docker.txt ./requirements.docker.txt
 RUN pip install --no-cache-dir -r requirements.docker.txt

@@ -51,7 +51,7 @@ export class JobsService {
       throw err;
     }
 
-    // 3) Enqueue for the worker (snake_case payload — CONTRACTS.md §1).
+    // 3) Enqueue for the worker (snake_case payload - CONTRACTS.md §1).
     const payload: JobQueuePayload = {
       job_id: job.id,
       organization_id: organizationId,
@@ -103,7 +103,7 @@ export class JobsService {
     organizationId: string,
   ): Promise<Array<{ job: JobRecord; clipsProduced: number }>> {
     const jobs = await this.store.listJobs(organizationId);
-    // One clips query scoped to the org, bucketed by jobId — avoids N round-trips.
+    // One clips query scoped to the org, bucketed by jobId - avoids N round-trips.
     const allClips = await this.store.listClips(organizationId);
     const counts = new Map<string, number>();
     for (const c of allClips) {

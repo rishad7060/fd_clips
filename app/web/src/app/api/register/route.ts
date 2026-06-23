@@ -64,6 +64,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // Success — the client now calls signIn("user-credentials", …) to log in.
+  // Success - the client now calls signIn("user-credentials", …) to log in.
   return NextResponse.json({ ok: true }, { status: 201 });
 }

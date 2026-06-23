@@ -16,7 +16,7 @@ export interface EditedWord {
   end: number;
 }
 
-/** POST /clips/render body — re-render one clip with a new trim and/or style. */
+/** POST /clips/render body - re-render one clip with a new trim and/or style. */
 export class RenderClipDto {
   @IsString()
   jobId!: string;

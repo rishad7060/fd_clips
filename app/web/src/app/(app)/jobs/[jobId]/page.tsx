@@ -83,7 +83,7 @@ export default function JobProgressPage({
 
     // 1) Fetch the current job state immediately. A job can fail fast at ingest
     //    (e.g. a YouTube download blocked by bot-check) BEFORE the progress
-    //    WebSocket connects — in that case the socket never delivers the
+    //    WebSocket connects - in that case the socket never delivers the
     //    'failed' event and the page would otherwise hang on "Queued…". This
     //    one-shot fetch reflects an already-terminal job right away.
     api
@@ -94,7 +94,7 @@ export default function JobProgressPage({
         }
       })
       .catch(() => {
-        /* job not found yet / transient — the socket below will catch up */
+        /* job not found yet / transient - the socket below will catch up */
       });
 
     // 2) Subscribe to live progress for the normal running case.
@@ -107,7 +107,7 @@ export default function JobProgressPage({
     };
   }, [jobId, router]);
 
-  // Time-elapsed ticker — stops once the job reaches a terminal state.
+  // Time-elapsed ticker - stops once the job reaches a terminal state.
   const status = event?.status ?? "queued";
   const terminal = status === "completed" || status === "failed" || status === "canceled";
   useEffect(() => {
@@ -204,7 +204,7 @@ export default function JobProgressPage({
         </ol>
       </Panel>
 
-      {/* Skeleton clip previews — "your clips are being prepared" */}
+      {/* Skeleton clip previews - "your clips are being prepared" */}
       {!error && (
         <section className="space-y-3">
           <SectionTitle className="text-sm text-ink-300">
@@ -218,7 +218,7 @@ export default function JobProgressPage({
         </section>
       )}
 
-      {/* Failure states — upgrade-gate vs generic */}
+      {/* Failure states - upgrade-gate vs generic */}
       {error && (() => {
         const needsUpgrade = /upgrade|plan|too long|longer videos/i.test(error);
         return needsUpgrade ? (

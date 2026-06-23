@@ -30,7 +30,7 @@ export class StorageService {
 
     if (this.config.flags.mockStorage) {
       const exp = Math.floor(Date.now() / 1000) + expiresInSec;
-      // Deterministic fake signed URL — clearly marked as mock.
+      // Deterministic fake signed URL - clearly marked as mock.
       return `https://mock-r2.local/${this.config.r2Bucket}/${encodeURI(key)}?mock=1&X-Expires=${exp}`;
     }
     // Real mode: presign against R2 (S3 API). Implemented when R2 creds exist.

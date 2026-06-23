@@ -7,7 +7,7 @@ import {
 } from '../persistence/store.types';
 import { PlanCapabilities, PLANS } from '../billing/plans';
 
-/** Fields an admin may edit on a plan (tier is immutable — it's the PK/enum). */
+/** Fields an admin may edit on a plan (tier is immutable - it's the PK/enum). */
 export type PlanPatch = Partial<Omit<PlanRecord, 'tier'>>;
 
 /**

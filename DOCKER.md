@@ -36,8 +36,8 @@ docker compose down -v              # stop AND wipe pgdata/redis/workspace
   `python pipeline/run.py` as a child process. Clips are written to the shared
   **workspace** volume and served over `/files`.
 - On boot the api runs `prisma db push` to sync the schema to Postgres (no
-  migration history yet — switch to `migrate deploy` once you commit migrations).
-- **Auth stays mock** (`MOCK_AUTH=true`) until account creation (Clerk) is wired —
+  migration history yet - switch to `migrate deploy` once you commit migrations).
+- **Auth stays mock** (`MOCK_AUTH=true`) until account creation (Clerk) is wired -
   the API injects a fake org so every other feature works.
 - The standalone **pipeline** image is profile-gated (`--profile tools`) for manual
   one-off runs; the normal flow doesn't need it.

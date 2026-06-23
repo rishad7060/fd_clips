@@ -1,5 +1,5 @@
 # ============================================================
-# FocalDive Clips — INFRA ONLY (Postgres + Redis)
+# FocalDive Clips - INFRA ONLY (Postgres + Redis)
 # ============================================================
 # The app (NestJS API + Next.js web + Python pipeline) runs LOCALLY
 # on the host; only the stateful infra lives in Docker.
@@ -12,7 +12,7 @@
 # Then run the app locally:  powershell -ExecutionPolicy Bypass -File .\start-real.ps1
 #
 # The local app reads DATABASE_URL (and optionally REDIS_URL) from the
-# repo-root .env — see the values added there.
+# repo-root .env - see the values added there.
 # ============================================================
 
 services:

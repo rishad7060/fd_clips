@@ -11,7 +11,7 @@ import { JobView, toJobView } from './jobs.mapper';
 export class JobsController {
   constructor(private readonly jobs: JobsService) {}
 
-  /** POST /jobs — validate credits, debit, enqueue. Returns the queued job. */
+  /** POST /jobs - validate credits, debit, enqueue. Returns the queued job. */
   @Post()
   @HttpCode(201)
   async create(@CurrentOrg() auth: AuthContext, @Body() dto: CreateJobDto): Promise<JobView> {
@@ -19,14 +19,14 @@ export class JobsController {
     return toJobView(job);
   }
 
-  /** GET /jobs — list this org's jobs (most recent first), with produced-clip counts. */
+  /** GET /jobs - list this org's jobs (most recent first), with produced-clip counts. */
   @Get()
   async list(@CurrentOrg() auth: AuthContext): Promise<{ jobs: JobView[] }> {
     const rows = await this.jobs.listWithClipCounts(auth.organizationId);
     return { jobs: rows.map(({ job, clipsProduced }) => toJobView(job, clipsProduced)) };
   }
 
-  /** GET /jobs/:id — status + progress (with produced-clip count). */
+  /** GET /jobs/:id - status + progress (with produced-clip count). */
   @Get(':id')
   async get(@CurrentOrg() auth: AuthContext, @Param('id') id: string): Promise<JobView> {
     const job = await this.jobs.get(auth.organizationId, id);

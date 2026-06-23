@@ -1,4 +1,4 @@
-"""Stage 6 — Animated karaoke captions (.ass) + burn-in.
+"""Stage 6 - Animated karaoke captions (.ass) + burn-in.
 
 For each clip, slice the per-word timing from ``transcript.json`` over the clip's
 range, build an ASS subtitle file with karaoke ``\\k`` word-by-word highlight,
@@ -59,7 +59,7 @@ _EMOJI_KEYWORDS: dict[str, str] = {
 # Alignment names → libass numpad codes (X-center column: 8 top, 5 mid, 2 bottom).
 _ALIGNMENT_MAP: dict[str, int] = {"top": 8, "center": 5, "middle": 5, "bottom": 2}
 # On a 1920-tall 9:16 frame, the player scrubber/controls occupy the bottom ~10%.
-# Bottom-aligned captions must clear them — keep them in the lower third (~200px
+# Bottom-aligned captions must clear them - keep them in the lower third (~200px
 # up) like Opus, not jammed on the progress bar.
 BOTTOM_SAFE_MARGIN_V = 210
 
@@ -68,7 +68,7 @@ BOTTOM_SAFE_MARGIN_V = 210
 # on the gallery card. Toggleable per job (see HOOK_OVERLAY_DEFAULT).
 HOOK_OVERLAY_DEFAULT = True   # show the hook box unless the job style disables it
 HOOK_SECONDS = 5.0            # how long the hook box stays on (Opus = first 5s)
-HOOK_FONT_SIZE = 64           # smaller than the karaoke captions — it's a banner
+HOOK_FONT_SIZE = 64           # smaller than the karaoke captions - it's a banner
 HOOK_BOX_PAD = 12             # Outline value w/ BorderStyle 3 = box padding (px)
 HOOK_MARGIN_V = 150           # top margin so the box sits just below the top edge
 HOOK_MAX_CHARS_PER_LINE = 22  # wrap the hook so the white box doesn't run wide
@@ -78,12 +78,12 @@ HOOK_MAX_CHARS_PER_LINE = 22  # wrap the hook so the white box doesn't run wide
 # highlight_color, alignment}; _resolve_style merges that onto the chosen
 # template so users can tweak font/colour/position without code.
 TEMPLATES: dict[str, dict[str, Any]] = {
-    # Big, chunky, UPPERCASE, 1–3 words on screen — the viral short-form look.
+    # Big, chunky, UPPERCASE, 1–3 words on screen - the viral short-form look.
     "hormozi": {
         "font": "Arial",
         "font_size": 120,
         "bold": True,
-        "primary_color": "&H00FFFFFF",     # white fill — AABBGGRR
+        "primary_color": "&H00FFFFFF",     # white fill - AABBGGRR
         "highlight_color": "&H0000E6FF",    # active word: yellow #FFE600
         "outline_color": "&H00000000",      # black outline
         "outline": 8,
@@ -142,7 +142,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "all_caps": True,
         "emoji": True,
     },
-    # Beasty: MrBeast-loud — heavy ALL-CAPS, thick black stroke, bright green pop.
+    # Beasty: MrBeast-loud - heavy ALL-CAPS, thick black stroke, bright green pop.
     "beasty": {
         "font": "Arial",
         "font_size": 124,
@@ -316,9 +316,9 @@ def _resolve_style(raw: Optional[dict[str, Any]]) -> dict[str, Any]:
     elif isinstance(align, int):
         base["alignment"] = align
 
-    # Normalize alignment to a valid ASS int (5=center default). A junk value —
+    # Normalize alignment to a valid ASS int (5=center default). A junk value -
     # e.g. a hand-edited style file with alignment:"lower" copied verbatim by the
-    # full-style override loop above, or a string code map miss — must not reach
+    # full-style override loop above, or a string code map miss - must not reach
     # the int() below and crash the whole captions stage.
     try:
         base["alignment"] = int(base.get("alignment", 5))
@@ -333,7 +333,7 @@ def _resolve_style(raw: Optional[dict[str, Any]]) -> dict[str, Any]:
 
     # Position safety: ASS bottom alignment (2) measures margin_v from the very
     # bottom edge. The templates default margin_v ~40 (tuned for CENTER align),
-    # which—when the user picks "bottom"—jams captions onto the player scrubber.
+    # which-when the user picks "bottom"-jams captions onto the player scrubber.
     # Opus keeps them in the lower third, well clear of the controls. So when the
     # resolved alignment is bottom, enforce a floor that lifts them above the bar.
     # (Top align (8) measures from the top, so keep its margin as-is.)
@@ -418,7 +418,7 @@ def _ass_header(style: dict[str, Any], rtl: bool) -> str:
         # SecondaryColour is the pre-sweep karaoke colour (highlight target).
         # Bold is -1 (on) / 0 (off) in ASS. BorderStyle 1 = outline+shadow (the
         # default), 3 = an opaque/translucent BOX behind the text (Pod P / Deep
-        # Diver) — the OutlineColour then acts as the box fill.
+        # Diver) - the OutlineColour then acts as the box fill.
         f"Style: Karaoke,{style['font']},{style['font_size']},"
         f"{style['primary_color']},{style['highlight_color']},"
         f"{style['outline_color']},&H64000000,"
@@ -443,7 +443,7 @@ def _ass_header(style: dict[str, Any], rtl: bool) -> str:
 
 def _bare(word: str) -> str:
     """Lowercased word with surrounding punctuation stripped (for keyword match)."""
-    return word.strip(".,!?;:\"'—-").lower()
+    return word.strip(".,!?;:\"'--").lower()
 
 
 def _style_word(word: str, style: dict[str, Any]) -> str:
@@ -556,7 +556,7 @@ def _hook_event(hook_title: str, rtl: bool) -> Optional[str]:
             cur = f"{cur} {w}".strip()
     if cur:
         lines.append(cur)
-    # Escape each line's text FIRST, then join with the ASS hard break \N — if we
+    # Escape each line's text FIRST, then join with the ASS hard break \N - if we
     # escaped after joining, _ass_escape would mangle the \N into a literal "\\N".
     wrapped = "\\N".join(_ass_escape(ln) for ln in lines[:3])  # cap at 3 lines
     if rtl:
@@ -634,7 +634,7 @@ def build_ass(
         # Karaoke timing: ASS \k durations are CUMULATIVE from the line's Start
         # time and have NO concept of gaps. If we only emit each word's own
         # duration, any silence BETWEEN words is dropped and every later word
-        # highlights too early — the sweep races ahead of the speech. So we add
+        # highlights too early - the sweep races ahead of the speech. So we add
         # the gap before each word into the timing: a leading unhighlighted
         # spacer ({\k<gap>}) holds the highlight until the word is actually
         # spoken, keeping the colour locked to the audio.
@@ -708,7 +708,7 @@ def _words_in_range(segments: list[dict], start: float, end: float) -> list[dict
     for seg in segments:
         for w in seg.get("words", []):
             # WhisperX can emit a word with null/missing start/end (unaligned
-            # token) — skip it rather than crash the whole captions stage.
+            # token) - skip it rather than crash the whole captions stage.
             ws, we = w.get("start"), w.get("end")
             if ws is None or we is None:
                 continue

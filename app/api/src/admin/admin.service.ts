@@ -12,7 +12,7 @@ import {
   UserRole,
 } from '../persistence/store.types';
 
-/** UserRecord without the password hash — what the admin API ever returns. */
+/** UserRecord without the password hash - what the admin API ever returns. */
 export type SafeUser = Omit<UserRecord, 'passwordHash'>;
 
 /**

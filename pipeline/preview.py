@@ -2,7 +2,7 @@
 
 Given a video URL, extract just enough metadata to show a PREVIEW on the config
 screen (a thumbnail + title + resolution badge like Opus's "4K") WITHOUT
-downloading the video. Uses ``yt-dlp`` ``extract_info(url, download=False)`` —
+downloading the video. Uses ``yt-dlp`` ``extract_info(url, download=False)`` -
 fast, metadata-only.
 
 Reuses ``ingest._is_youtube`` so the **android_vr**-first ``player_client`` ladder
@@ -57,7 +57,7 @@ def _best_height(info: dict[str, Any]) -> tuple[int, int]:
 def _pick_thumbnail(info: dict[str, Any]) -> str:
     """A GUARANTEED-loadable thumbnail URL.
 
-    For YouTube, return ``i.ytimg.com/vi/<id>/hqdefault.jpg`` — the ONLY
+    For YouTube, return ``i.ytimg.com/vi/<id>/hqdefault.jpg`` - the ONLY
     thumbnail that ALWAYS exists (``maxresdefault.jpg`` 404s for any video
     without a high-res thumb, and ``vi_webp/*.webp`` often fails in a browser
     <img>). The web client independently tries maxres and downgrades to hq, so
@@ -65,7 +65,7 @@ def _pick_thumbnail(info: dict[str, Any]) -> str:
     return the largest JPG (avoiding webp), then the largest of any type.
     """
     # YouTube ONLY when the page url is YouTube AND the id looks like a real
-    # 11-char YouTube id — so a non-YouTube source whose metadata merely mentions
+    # 11-char YouTube id - so a non-YouTube source whose metadata merely mentions
     # "youtube.com" isn't misclassified into a broken ytimg URL.
     vid = info.get("id")
     webpage = info.get("webpage_url") or ""
@@ -109,7 +109,7 @@ def preview(url: str) -> dict[str, Any]:
         "skip_download": True,
         "socket_timeout": 20,
         "retries": 1,
-        # Metadata only — don't probe the full formats with extra network calls
+        # Metadata only - don't probe the full formats with extra network calls
         # we don't need; we still get the formats ladder for the height scan.
         "extract_flat": False,
     }
@@ -131,7 +131,7 @@ def preview(url: str) -> dict[str, Any]:
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False) or {}
-    except Exception as e:  # noqa: BLE001 — return clean JSON, never a traceback
+    except Exception as e:  # noqa: BLE001 - return clean JSON, never a traceback
         return {"error": str(e)}
 
     # A playlist/channel returns "entries" instead of a single video; take the
@@ -160,7 +160,7 @@ def _main() -> None:
     result: Optional[dict[str, Any]] = None
     try:
         result = preview(args.url)
-    except Exception as e:  # noqa: BLE001 — last-resort guard; still emit JSON
+    except Exception as e:  # noqa: BLE001 - last-resort guard; still emit JSON
         result = {"error": str(e)}
     # Exactly one JSON line on stdout; exit 0 so the caller always parses cleanly.
     sys.stdout.write(json.dumps(result) + "\n")
