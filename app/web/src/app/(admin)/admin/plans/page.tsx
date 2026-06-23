@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, X } from "lucide-react";
+import { Check, X, Pencil } from "lucide-react";
 import { adminApi } from "@/lib/adminApi";
 import type { AdminPlan } from "@/lib/adminTypes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/shadcn/card";
+import { Button } from "@/components/ui/shadcn/button";
 import { Skeleton } from "@/components/ui/shadcn/skeleton";
 import { fmtUsd } from "@/components/admin/format";
+import { EditPlanDialog } from "@/components/admin/EditPlanDialog";
 
 function Flag({ on, label }: { on: boolean; label: string }) {
   return (
@@ -23,16 +25,23 @@ function Flag({ on, label }: { on: boolean; label: string }) {
 
 export default function AdminPlansPage() {
   const [plans, setPlans] = useState<AdminPlan[] | null>(null);
+  const [editing, setEditing] = useState<AdminPlan | null>(null);
 
   useEffect(() => {
     adminApi.getPlans().then(setPlans);
   }, []);
 
+  function onSaved(updated: AdminPlan) {
+    setPlans((prev) => prev?.map((p) => (p.tier === updated.tier ? updated : p)) ?? prev);
+  }
+
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-semibold text-foreground">Plans</h2>
-        <p className="text-sm text-muted-foreground">Subscription tiers and capabilities.</p>
+        <p className="text-sm text-muted-foreground">
+          Subscription tiers and capabilities — edits apply live across billing and credit grants.
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -65,10 +74,22 @@ export default function AdminPlansPage() {
                       {p.maxResolution}
                     </li>
                   </ul>
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => setEditing(p)}>
+                    <Pencil className="h-4 w-4" /> Edit plan
+                  </Button>
                 </CardContent>
               </Card>
             ))}
       </div>
+
+      {editing ? (
+        <EditPlanDialog
+          plan={editing}
+          open={!!editing}
+          onOpenChange={(v) => !v && setEditing(null)}
+          onSaved={onSaved}
+        />
+      ) : null}
     </div>
   );
 }

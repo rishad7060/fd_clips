@@ -8,6 +8,7 @@ import { FilesModule } from './files/files.module';
 import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 import { PersistenceModule } from './persistence/persistence.module';
+import { PlansModule } from './plans/plans.module';
 import { PreviewModule } from './preview/preview.module';
 import { ProgressModule } from './progress/progress.module';
 import { QueueModule } from './queue/queue.module';
@@ -18,6 +19,7 @@ import { UploadsModule } from './uploads/uploads.module';
   imports: [
     ConfigModule,
     PersistenceModule,
+    PlansModule,
     AuthModule,
     StorageModule,
     ProgressModule,

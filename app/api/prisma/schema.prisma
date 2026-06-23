@@ -169,6 +169,23 @@ model Clip {
   @@map("clips")
 }
 
+// Editable plan catalog. Seeded from billing/plans.ts defaults on first boot;
+// the admin dashboard edits these rows (price, monthly credits, capabilities)
+// and the billing/auth layers read the live values via PlansService.
+model Plan {
+  tier              PlanTier @id
+  label             String
+  priceUsd          Float    @map("price_usd")
+  monthlyCredits    Int      @map("monthly_credits")
+  watermark         Boolean
+  editingEnabled    Boolean  @map("editing_enabled")
+  clipRetentionDays Int?     @map("clip_retention_days")
+  maxResolution     String   @default("1080p") @map("max_resolution")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("plans")
+}
+
 // Credit ledger — append-only record of grants/debits/refunds.
 // Organization.creditBalance is the materialized running total.
 model CreditLedger {

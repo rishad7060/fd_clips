@@ -1,7 +1,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AppConfigService } from '../config/config.service';
 import { JOB_QUEUE, JobQueue } from '../queue/queue.types';
-import { PLANS } from '../billing/plans';
+import { PlansService, PlanPatch } from '../plans/plans.service';
 import {
   AdminListParams,
   DataStore,
@@ -26,6 +26,7 @@ export class AdminService {
     @Inject(DATA_STORE) private readonly store: DataStore,
     private readonly config: AppConfigService,
     @Inject(JOB_QUEUE) private readonly queue: JobQueue,
+    private readonly plansService: PlansService,
   ) {}
 
   private safeUser(u: UserRecord): SafeUser {
@@ -110,7 +111,11 @@ export class AdminService {
   }
 
   plans() {
-    return Object.values(PLANS);
+    return this.plansService.getAll();
+  }
+
+  updatePlan(tier: PlanTier, patch: PlanPatch) {
+    return this.plansService.update(tier, patch);
   }
 
   system() {

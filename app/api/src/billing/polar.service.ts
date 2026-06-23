@@ -8,7 +8,7 @@ import {
   PlanTier,
   SubscriptionStatus,
 } from '../persistence/store.types';
-import { PLANS } from './plans';
+import { PlansService } from '../plans/plans.service';
 
 /**
  * Polar.sh billing — the payment provider for checkout, cancellation, and
@@ -40,6 +40,7 @@ export class PolarService {
   constructor(
     private readonly config: AppConfigService,
     @Inject(DATA_STORE) private readonly store: DataStore,
+    private readonly plans: PlansService,
   ) {}
 
   // ── Public seam (checkout / cancel / webhook) ─────────────────────────────
@@ -209,7 +210,7 @@ export class PolarService {
     tier: PlanTier,
     externalEventId: string,
   ): Promise<OrganizationRecord> {
-    const plan = PLANS[tier];
+    const plan = this.plans.get(tier);
     const ledger = await this.store.listLedger(organizationId);
     const already = ledger.some((l) => l.reason === 'grant' && l.stripeEventId === externalEventId);
     if (already) {
@@ -242,7 +243,7 @@ export class PolarService {
     const meta = data?.metadata ?? data?.subscription?.metadata ?? data?.checkout?.metadata ?? {};
     const orgId: string | undefined = meta.organizationId;
     const tier = meta.tier as PlanTier | undefined;
-    if (!orgId || !tier || tier === 'free' || !PLANS[tier]) return null;
+    if (!orgId || !tier || tier === 'free' || !this.plans.get(tier)) return null;
     return { orgId, tier };
   }
 

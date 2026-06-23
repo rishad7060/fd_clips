@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -11,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AdminGuard } from '../auth/admin.guard';
+import { PlanTier } from '../persistence/store.types';
 import { AdminService } from './admin.service';
 import {
   AdjustCreditsDto,
@@ -19,8 +21,10 @@ import {
   LedgerQueryDto,
   ListQueryDto,
   OverviewQueryDto,
+  PLAN_TIER_VALUES,
   SetPlanDto,
   SetRoleDto,
+  UpdatePlanDto,
 } from './dto/admin.dto';
 
 /**
@@ -117,6 +121,14 @@ export class AdminController {
   @Get('plans')
   plans() {
     return this.admin.plans();
+  }
+
+  @Patch('plans/:tier')
+  updatePlan(@Param('tier') tier: string, @Body() dto: UpdatePlanDto) {
+    if (!PLAN_TIER_VALUES.includes(tier as PlanTier)) {
+      throw new BadRequestException(`Unknown plan tier: ${tier}`);
+    }
+    return this.admin.updatePlan(tier as PlanTier, dto);
   }
 
   @Get('system')

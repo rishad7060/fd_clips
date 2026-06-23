@@ -6,7 +6,8 @@ import {
   PlanTier,
   SubscriptionStatus,
 } from '../persistence/store.types';
-import { capabilitiesFor, PlanCapabilities } from './plans';
+import { PlanCapabilities } from './plans';
+import { PlansService } from '../plans/plans.service';
 
 /** Ledger notes used as idempotency markers for the duration true-up. */
 const TRUEUP_NOTE = 'Duration true-up (full video)';
@@ -43,7 +44,10 @@ export interface TrueUpResult {
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
 
-  constructor(@Inject(DATA_STORE) private readonly store: DataStore) {}
+  constructor(
+    @Inject(DATA_STORE) private readonly store: DataStore,
+    private readonly plans: PlansService,
+  ) {}
 
   /** Source minutes required for a job = ceil(durationSec / 60), min 1. */
   creditsForDuration(durationSec: number): number {
@@ -64,7 +68,7 @@ export class BillingService {
     return {
       plan: org.plan,
       creditBalance: org.creditBalance,
-      capabilities: capabilitiesFor(org.plan),
+      capabilities: this.plans.capabilities(org.plan),
       subscriptionStatus: org.subscriptionStatus,
     };
   }

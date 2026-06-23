@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsNumber,
@@ -91,3 +92,48 @@ export class SetRoleDto {
   @IsIn(USER_ROLES)
   role!: UserRole;
 }
+
+/** Admin edit to a plan tier. All fields optional (partial update). */
+export class UpdatePlanDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  label?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100000)
+  priceUsd?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1000000)
+  monthlyCredits?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  watermark?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  editingEnabled?: boolean;
+
+  // null = indefinite retention; omit to leave unchanged.
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(3650)
+  clipRetentionDays?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  maxResolution?: string;
+}
+
+export const PLAN_TIER_VALUES = PLAN_TIERS;

@@ -117,6 +117,9 @@ export interface AdminPlan {
   maxResolution: string;
 }
 
+/** Editable fields of a plan (tier is immutable). */
+export type PlanPatch = Partial<Omit<AdminPlan, "tier">>;
+
 export interface AdminSystemInfo {
   mockMode: boolean;
   subsystems: {

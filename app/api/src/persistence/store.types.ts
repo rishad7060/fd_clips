@@ -96,6 +96,22 @@ export interface ClipRecord {
   updatedAt: string;
 }
 
+/**
+ * Editable plan definition (catalog row). Structurally identical to billing's
+ * PlanDefinition so the two are interchangeable; lives here because it is now a
+ * persisted record the store owns.
+ */
+export interface PlanRecord {
+  tier: PlanTier;
+  label: string;
+  priceUsd: number;
+  monthlyCredits: number;
+  watermark: boolean;
+  editingEnabled: boolean;
+  clipRetentionDays: number | null;
+  maxResolution: string;
+}
+
 export interface CreditLedgerRecord {
   id: string;
   organizationId: string;
@@ -215,6 +231,10 @@ export interface DataStore {
     subscriptionId: string | null,
     status: SubscriptionStatus | null,
   ): Promise<OrganizationRecord>;
+
+  // Plans (editable catalog). Seeded from defaults by PlansService on boot.
+  listPlans(): Promise<PlanRecord[]>;
+  savePlan(plan: PlanRecord): Promise<PlanRecord>;
 
   // Credits (atomic balance + ledger entry)
   addCredits(

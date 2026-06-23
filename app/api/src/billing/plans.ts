@@ -20,8 +20,8 @@ export interface PlanCapabilities {
   editingEnabled: boolean;
   /** Days before clips expire; null = kept indefinitely (paid). */
   clipRetentionDays: number | null;
-  /** Max output resolution; all tiers ship 1080p like Opus. */
-  maxResolution: '1080p';
+  /** Max output resolution (editable; defaults to 1080p). */
+  maxResolution: string;
 }
 
 export interface PlanDefinition extends PlanCapabilities {

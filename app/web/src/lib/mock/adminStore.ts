@@ -16,6 +16,7 @@ import type {
   JobStatus,
   ListParams,
   Paged,
+  PlanPatch,
   PlanTier,
 } from "@/lib/adminTypes";
 
@@ -155,6 +156,11 @@ export const adminMock = {
     return page(db.ledger.filter((l) => (p.organizationId ? l.organizationId === p.organizationId : true)).filter((l) => match([l.note, l.reason], p.search)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), p);
   },
   plans(): AdminPlan[] { return PLANS; },
+  updatePlan(tier: PlanTier, patch: PlanPatch): AdminPlan {
+    const p = PLANS.find((x) => x.tier === tier)!;
+    Object.assign(p, patch);
+    return p;
+  },
   system(): AdminSystemInfo {
     return { mockMode: true, subsystems: { auth: "mock", database: "in-memory", queue: "in-memory", storage: "mock", billing: "mock", pipeline: "mock", localFiles: false }, ts: new Date().toISOString() };
   },

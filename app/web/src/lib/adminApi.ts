@@ -20,6 +20,7 @@ import type {
   AdminUser,
   ListParams,
   Paged,
+  PlanPatch,
   PlanTier,
   UserRole,
 } from "@/lib/adminTypes";
@@ -98,6 +99,10 @@ export const adminApi = {
   getPlans(): Promise<AdminPlan[]> {
     if (USING_MOCK_ADMIN) return delay(adminMock.plans());
     return http(`/admin/plans`);
+  },
+  updatePlan(tier: PlanTier, patch: PlanPatch): Promise<AdminPlan> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.updatePlan(tier, patch));
+    return http(`/admin/plans/${tier}`, { method: "PATCH", body: JSON.stringify(patch) });
   },
   getSystem(): Promise<AdminSystemInfo> {
     if (USING_MOCK_ADMIN) return delay(adminMock.system());

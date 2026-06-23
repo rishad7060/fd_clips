@@ -11,10 +11,10 @@ import { IsIn } from 'class-validator';
 import { AppAuthGuard } from '../auth/auth.guard';
 import { CurrentOrg } from '../auth/current-org.decorator';
 import { AuthContext, AuthedRequest } from '../auth/auth.types';
-import { PlanTier } from '../persistence/store.types';
+import { PlanRecord, PlanTier } from '../persistence/store.types';
 import { BillingService, PlanStatus } from './billing.service';
 import { PolarService } from './polar.service';
-import { PLANS } from './plans';
+import { PlansService } from '../plans/plans.service';
 
 class SubscribeDto {
   @IsIn(['starter', 'pro'])
@@ -26,12 +26,15 @@ export class BillingController {
   constructor(
     private readonly billing: BillingService,
     private readonly polar: PolarService,
+    private readonly plans: PlansService,
   ) {}
 
-  /** Public: list available plans/tiers. */
+  /** Public: list available plans/tiers (live, admin-editable values). */
   @Get('plans')
-  getPlans(): { plans: typeof PLANS } {
-    return { plans: PLANS };
+  getPlans(): { plans: Record<PlanTier, PlanRecord> } {
+    const map = {} as Record<PlanTier, PlanRecord>;
+    for (const p of this.plans.getAll()) map[p.tier] = p;
+    return { plans: map };
   }
 
   /** Current org credit balance + plan. */

@@ -16,6 +16,7 @@ import {
   OrganizationRecord,
   OrganizationWithCounts,
   Paged,
+  PlanRecord,
   PlanTier,
   SubscriptionStatus,
   UserRecord,
@@ -40,6 +41,7 @@ export class MemoryStore implements DataStore {
   private readonly jobs = new Map<string, JobRecord>();
   private readonly clips = new Map<string, ClipRecord>();
   private readonly ledger: CreditLedgerRecord[] = [];
+  private readonly plans = new Map<PlanTier, PlanRecord>();
 
   async init(): Promise<void> {
     this.logger.log('In-memory data store ready (data is ephemeral).');
@@ -353,6 +355,15 @@ export class MemoryStore implements DataStore {
     org.subscriptionStatus = status;
     org.updatedAt = now();
     return org;
+  }
+
+  async listPlans(): Promise<PlanRecord[]> {
+    return [...this.plans.values()];
+  }
+
+  async savePlan(plan: PlanRecord): Promise<PlanRecord> {
+    this.plans.set(plan.tier, { ...plan });
+    return plan;
   }
 
   async addCredits(

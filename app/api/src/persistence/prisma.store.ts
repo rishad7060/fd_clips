@@ -14,6 +14,7 @@ import {
   OrganizationRecord,
   OrganizationWithCounts,
   Paged,
+  PlanRecord,
   PlanTier,
   SubscriptionStatus,
   UserRecord,
@@ -245,6 +246,42 @@ export class PrismaStore implements DataStore {
       data: { subscriptionId, subscriptionStatus: status },
     });
     return this.mapOrg(o);
+  }
+
+  private mapPlan(p: any): PlanRecord {
+    return {
+      tier: p.tier,
+      label: p.label,
+      priceUsd: p.priceUsd,
+      monthlyCredits: p.monthlyCredits,
+      watermark: p.watermark,
+      editingEnabled: p.editingEnabled,
+      clipRetentionDays: p.clipRetentionDays ?? null,
+      maxResolution: p.maxResolution,
+    };
+  }
+
+  async listPlans(): Promise<PlanRecord[]> {
+    const rows = await this.prisma.plan.findMany();
+    return rows.map((r: any) => this.mapPlan(r));
+  }
+
+  async savePlan(plan: PlanRecord): Promise<PlanRecord> {
+    const data = {
+      label: plan.label,
+      priceUsd: plan.priceUsd,
+      monthlyCredits: plan.monthlyCredits,
+      watermark: plan.watermark,
+      editingEnabled: plan.editingEnabled,
+      clipRetentionDays: plan.clipRetentionDays,
+      maxResolution: plan.maxResolution,
+    };
+    const row = await this.prisma.plan.upsert({
+      where: { tier: plan.tier },
+      update: data,
+      create: { tier: plan.tier, ...data },
+    });
+    return this.mapPlan(row);
   }
 
   async addCredits(

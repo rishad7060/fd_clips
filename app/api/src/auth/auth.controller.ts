@@ -12,7 +12,7 @@ import { IsEmail, IsOptional, IsString } from 'class-validator';
 import * as bcrypt from 'bcryptjs';
 import { AppConfigService } from '../config/config.service';
 import { DataStore, DATA_STORE, UserRole } from '../persistence/store.types';
-import { FREE_TIER_CREDITS } from '../billing/plans';
+import { PlansService } from '../plans/plans.service';
 
 /**
  * Body of the internal provisioning call made by the web server (Auth.js
@@ -73,6 +73,7 @@ export class AuthController {
   constructor(
     private readonly config: AppConfigService,
     @Inject(DATA_STORE) private readonly store: DataStore,
+    private readonly plans: PlansService,
   ) {}
 
   @Post('sync')
@@ -94,7 +95,7 @@ export class AuthController {
         name: dto.name ?? null,
         avatarUrl: dto.avatarUrl ?? null,
       },
-      FREE_TIER_CREDITS,
+      this.plans.freeTierCredits(),
     );
     return {
       userId: user.id,
