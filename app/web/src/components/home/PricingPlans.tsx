@@ -60,7 +60,7 @@ const PLANS: Plan[] = [
     name: "Business",
     blurb: "For organizations that need tailored solutions, API, and more",
     monthly: null,
-    cta: { label: "Contact us", href: "mailto:hello@clips.app" },
+    cta: { label: "Contact us", href: "mailto:clipshq.pro@gmail.com" },
     featuresLead: "Everything in Pro, plus:",
     features: [
       "Custom credits, team seats & connections",

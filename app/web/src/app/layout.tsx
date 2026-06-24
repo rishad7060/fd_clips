@@ -4,6 +4,7 @@ import "./globals.css";
 import { AUTH_ENABLED } from "@/lib/auth";
 import { ReferralCapture } from "@/components/ReferralCapture";
 import { SmoothScroll } from "@/components/SmoothScroll";
+import { ConsentManager } from "@/components/consent/ConsentManager";
 import type { ReactNode } from "react";
 
 // Inter (display + body) with tight tracking, plus a mono for scores/durations/
@@ -57,6 +58,7 @@ export default async function RootLayout({
             <AuthTokenBridge />
             <ReferralCapture />
             <SmoothScroll>{children}</SmoothScroll>
+            <ConsentManager />
           </SessionProvider>
         </body>
       </html>
@@ -68,6 +70,7 @@ export default async function RootLayout({
       <body className={bodyClass}>
         <ReferralCapture />
         <SmoothScroll>{children}</SmoothScroll>
+        <ConsentManager />
       </body>
     </html>
   );

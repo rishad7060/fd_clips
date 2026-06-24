@@ -60,7 +60,7 @@ export default function AccessibilityPage() {
       <p>
         If you have difficulty using any part of Clips, or you notice content or
         functionality that is not fully accessible, we want to hear from you.
-        Email us at <a href="mailto:hello@clips.app">hello@clips.app</a> with
+        Email us at <a href="mailto:clipshq.pro@gmail.com">clipshq.pro@gmail.com</a> with
         &ldquo;Accessibility&rdquo; in the subject line and a description of the
         issue or a suggestion for improvement. We take this feedback seriously and
         will use it to keep improving.

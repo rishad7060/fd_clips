@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
+import { CookiePreferencesLink } from "@/components/consent/CookiePreferencesLink";
 
 const LEGAL_LINKS = [
   ["Terms of Service", "/terms"],
@@ -39,6 +40,9 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
                 {label}
               </Link>
             ))}
+            <CookiePreferencesLink className="transition hover:text-white">
+              Cookie preferences
+            </CookiePreferencesLink>
           </nav>
         </div>
       </footer>

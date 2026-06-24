@@ -1,8 +1,9 @@
-import { ClipBuilder } from "@/components/home/ClipBuilder";
+import { NewClipsView } from "@/components/home/NewClipsView";
 
 /**
- * Direct "new clips" route. Same builder as the home hero - the config reveals
- * once a source is added. (Kept so existing links to /new still work.) Accepts a
+ * Direct "new clips" route. Wraps the same builder as the home hero - the config
+ * reveals once a source is added - in a hero + supported-platforms + how-it-works
+ * frame so the pre-input state reads intentional instead of empty. Accepts a
  * `?url=` param so the landing page's "Drop a video link" bar can prefill it.
  */
 export default function NewClipsPage({
@@ -10,10 +11,5 @@ export default function NewClipsPage({
 }: {
   searchParams?: { url?: string };
 }) {
-  return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
-      <h1 className="mb-6 text-center text-2xl font-bold text-white">Create clips</h1>
-      <ClipBuilder initialUrl={searchParams?.url ?? ""} />
-    </div>
-  );
+  return <NewClipsView initialUrl={searchParams?.url ?? ""} />;
 }

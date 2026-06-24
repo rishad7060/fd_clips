@@ -99,10 +99,20 @@ export default function PrivacyPage() {
 
       <h2>Cookies</h2>
       <p>
-        We use essential cookies to run the Services (for example, to keep you
-        signed in), and optional functional and analytics cookies to remember your
-        settings and understand usage. You can control cookies through your
-        browser settings; disabling some cookies may affect functionality.
+        We group cookies into four categories:{" "}
+        <strong>strictly necessary</strong> (required to sign you in, keep the
+        Services secure, and remember your consent choice),{" "}
+        <strong>functional</strong> (remember your preferences and settings),{" "}
+        <strong>analytics</strong> (help us understand usage so we can improve
+        the product), and <strong>marketing</strong> (measure campaigns and
+        attribute referrals, such as an affiliate link you arrived from).
+      </p>
+      <p>
+        Strictly necessary cookies are always on. The optional categories are off
+        until you turn them on - you choose when you first visit, and can change
+        your choice anytime from the <strong>Cookie preferences</strong> link in
+        our footer. You can also control cookies through your browser settings;
+        disabling some may affect functionality.
       </p>
 
       <h2>Data retention</h2>
@@ -127,7 +137,7 @@ export default function PrivacyPage() {
         Depending on where you live, you may have rights to access, correct,
         delete, or port your personal data, to object to or restrict certain
         processing, and to withdraw consent. To exercise these rights, email us at{" "}
-        <a href="mailto:hello@clips.app">hello@clips.app</a>. We will respond
+        <a href="mailto:clipshq.pro@gmail.com">clipshq.pro@gmail.com</a>. We will respond
         within the timeframe required by applicable law and may need to verify
         your identity first.
       </p>
@@ -156,7 +166,7 @@ export default function PrivacyPage() {
       <h2>Contact</h2>
       <p>
         Questions about your privacy? Email us at{" "}
-        <a href="mailto:hello@clips.app">hello@clips.app</a>.
+        <a href="mailto:clipshq.pro@gmail.com">clipshq.pro@gmail.com</a>.
       </p>
     </article>
   );

@@ -25,7 +25,7 @@ export default function TermsPage() {
         products and features (together, the &ldquo;Services&rdquo;). By creating
         an account or otherwise using the Services, you agree to these Terms. If
         you do not agree, you may not use the Services. Questions? Email us at{" "}
-        <a href="mailto:hello@clips.app">hello@clips.app</a>.
+        <a href="mailto:clipshq.pro@gmail.com">clipshq.pro@gmail.com</a>.
       </p>
 
       <h2>Who may use the Services</h2>
@@ -43,7 +43,7 @@ export default function TermsPage() {
         to provide accurate, current information, to keep your credentials
         secure, and not to share your account. You are responsible for all
         activity that occurs under your account. Notify us promptly at{" "}
-        <a href="mailto:hello@clips.app">hello@clips.app</a> if you suspect any
+        <a href="mailto:clipshq.pro@gmail.com">clipshq.pro@gmail.com</a> if you suspect any
         unauthorised use.
       </p>
 
@@ -150,7 +150,7 @@ export default function TermsPage() {
       <h2>Contact</h2>
       <p>
         For any questions about these Terms, contact us at{" "}
-        <a href="mailto:hello@clips.app">hello@clips.app</a>.
+        <a href="mailto:clipshq.pro@gmail.com">clipshq.pro@gmail.com</a>.
       </p>
     </article>
   );

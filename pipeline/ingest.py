@@ -103,6 +103,52 @@ def _ffmpeg_bin() -> Optional[str]:
     return _resolve_tool(get_settings().ffmpeg_path, "ffmpeg")
 
 
+_js_runtime_checked = False
+
+
+def _ensure_js_runtime() -> Optional[str]:
+    """Make sure a JS runtime (Deno) is on PATH for yt-dlp's YouTube extraction.
+
+    Modern YouTube gates its format URLs behind an ``n``/``nsig`` JS challenge
+    that yt-dlp can only solve with an external JavaScript runtime (its EJS
+    solver uses **Deno**, not Node). Without one, extraction "succeeds" but the
+    real formats are silently dropped - the job then dies with "Requested format
+    is not available" / HTTP 403.
+
+    A worker that spawned this process may have captured PATH *before* Deno was
+    installed, and a freshly-winget-installed Deno lives in a non-PATH packages
+    dir. So we look for ``deno`` on PATH first, then probe the common Windows
+    install locations and prepend the winner's directory to ``os.environ`` -
+    making it visible to the in-process yt-dlp regardless of how we were
+    launched. Idempotent; the filesystem probe runs at most once per process.
+    """
+    global _js_runtime_checked
+    found = shutil.which("deno")
+    if found:
+        return found
+    if _js_runtime_checked:
+        return None
+    _js_runtime_checked = True
+
+    candidates: list[Path] = []
+    local = os.environ.get("LOCALAPPDATA", "")
+    userprofile = os.environ.get("USERPROFILE", "")
+    if local:
+        base = Path(local) / "Microsoft" / "WinGet"
+        candidates.append(base / "Links" / "deno.exe")
+        pkgs = base / "Packages"
+        if pkgs.is_dir():
+            candidates.extend(pkgs.glob("DenoLand.Deno_*/deno.exe"))
+    if userprofile:
+        candidates.append(Path(userprofile) / ".deno" / "bin" / "deno.exe")
+
+    for cand in candidates:
+        if cand.is_file():
+            os.environ["PATH"] = f"{cand.parent}{os.pathsep}{os.environ.get('PATH', '')}"
+            return str(cand)
+    return None
+
+
 def _ffprobe_available() -> bool:
     return _ffprobe_bin() is not None
 
@@ -252,6 +298,11 @@ def _ingest_real(
             ),
             "outtmpl": str(download_target),
             "merge_output_format": "mp4",
+            # A link like ...?v=ID&list=RD<ID> is a single video that ALSO carries
+            # an auto-generated "Mix"/Radio playlist. Without this, yt-dlp walks the
+            # whole mix - dragging in unrelated, often DRM-protected videos that
+            # fail the job. Always fetch just the one video the user pasted.
+            "noplaylist": True,
             "quiet": True,
             "noprogress": True,
             "socket_timeout": 30,
@@ -295,6 +346,14 @@ def _ingest_real(
         # accept the first that downloads. (Other sites ignore this key, so the
         # ladder is YouTube-only; non-YouTube gets a single default attempt.)
         if _is_youtube(source):
+            # YouTube's format URLs are gated behind a JS (nsig) challenge that
+            # yt-dlp can only solve with Deno on PATH - without it the formats
+            # vanish and the download 403s. Ensure it's reachable before we try.
+            runtime = _ensure_js_runtime()
+            if runtime is None:
+                print("  [ingest] WARNING: no JS runtime (deno) found - YouTube "
+                      "formats may be missing. Install with: winget install "
+                      "DenoLand.Deno")
             client_attempts: list[list[str]] = [
                 # tv + web_safari are the most 403-resistant at download time
                 # lately; android_vr keeps the full 1080p ladder w/o a PO token.

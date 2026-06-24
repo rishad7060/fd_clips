@@ -126,7 +126,7 @@ export function InlineClipEditor({ clip }: { clip: Clip }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6">
       {/* Header */}
       <div>
         <Link
@@ -142,10 +142,13 @@ export function InlineClipEditor({ clip }: { clip: Clip }) {
         <p className="text-sm text-ink-300">{clip.suggested_title}</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr,360px]">
-        {/* LEFT - live preview (sticky so it doesn't scroll away) */}
-        <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-          <div className="relative aspect-[9/16] overflow-hidden rounded-2xl bg-ink-950 ring-1 ring-white/10 shadow-rim">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        {/* LEFT - live preview (sticky so it doesn't scroll away). The preview
+            is capped to a phone-sized, centered column so the 9:16 box is
+            height-bounded instead of stretching to the full column width. */}
+        <div className="lg:sticky lg:top-6 lg:self-start">
+          <div className="mx-auto w-full max-w-[380px] space-y-4">
+          <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl bg-ink-950 ring-1 ring-white/10 shadow-rim">
             {hasVideo && !videoError ? (
               <video
                 ref={videoRef}
@@ -255,6 +258,7 @@ export function InlineClipEditor({ clip }: { clip: Clip }) {
             onChange={actions.setTrim}
             onSeek={player.seek}
           />
+          </div>
         </div>
 
         {/* RIGHT - control panel */}

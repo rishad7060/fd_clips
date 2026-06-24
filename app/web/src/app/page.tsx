@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { PricingPlans } from "@/components/home/PricingPlans";
 import { StickyLinkBar } from "@/components/home/StickyLinkBar";
+import { CookiePreferencesLink } from "@/components/consent/CookiePreferencesLink";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Landing page - layout adapted from the "Aeline" reference (centered nav,
@@ -534,9 +535,9 @@ export default function LandingPage() {
                 <span className="h-2 w-9 rounded-full bg-gradient-to-r from-brand-300 to-brand" />
                 Uncover the potency of <span className="font-semibold text-white">Clips</span> at
               </p>
-              <a href="mailto:hello@clips.app" className="group mt-4 block w-fit max-w-full">
+              <a href="mailto:clipshq.pro@gmail.com" className="group mt-4 block w-fit max-w-full">
                 <span className="block text-balance font-display text-4xl font-semibold tracking-tighter text-white sm:text-6xl">
-                  hello@clips.app
+                  clipshq.pro@gmail.com
                 </span>
                 <span className="mt-3 block h-px w-full bg-white/15 transition duration-300 ease-premium group-hover:bg-brand" />
               </a>
@@ -593,6 +594,7 @@ export default function LandingPage() {
               <Link href="/terms" className="transition hover:text-white">Terms</Link>
               <Link href="/privacy" className="transition hover:text-white">Privacy</Link>
               <Link href="/accessibility" className="transition hover:text-white">Accessibility</Link>
+              <CookiePreferencesLink className="transition hover:text-white">Cookie preferences</CookiePreferencesLink>
               <a href="https://instagram.com" className="transition hover:text-white">Instagram</a>
               <a href="https://linkedin.com" className="transition hover:text-white">LinkedIn</a>
             </nav>
