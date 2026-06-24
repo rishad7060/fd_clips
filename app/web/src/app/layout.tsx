@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 import { AUTH_ENABLED } from "@/lib/auth";
 import { ReferralCapture } from "@/components/ReferralCapture";
@@ -16,6 +16,13 @@ const inter = Inter({
 });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 const interBody = Inter({ subsets: ["latin"], variable: "--font-inter" });
+// Display face for landing headlines - an editorial grotesque with character.
+// Body stays on Inter; only elements that opt into `font-display` use this.
+const display = Bricolage_Grotesque({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Clips - AI shorts from any long video",
@@ -38,7 +45,7 @@ export default async function RootLayout({
 }: {
   children: ReactNode;
 }) {
-  const bodyClass = `${inter.variable} ${mono.variable} ${interBody.variable} font-sans antialiased`;
+  const bodyClass = `${inter.variable} ${mono.variable} ${interBody.variable} ${display.variable} font-sans antialiased`;
 
   if (AUTH_ENABLED) {
     const { SessionProvider } = await import("next-auth/react");

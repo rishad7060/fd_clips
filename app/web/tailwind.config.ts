@@ -95,6 +95,8 @@ const config: Config = {
       fontFamily: {
         // Geist Sans/Mono loaded in layout.tsx as CSS vars; Inter is the fallback.
         sans: ["var(--font-geist)", "var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+        // Editorial grotesque for landing display/headlines (Bricolage Grotesque).
+        display: ["var(--font-display)", "var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ["var(--font-geist-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       boxShadow: {

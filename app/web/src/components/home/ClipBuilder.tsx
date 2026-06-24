@@ -26,9 +26,16 @@ import { ScanBorder } from "@/components/ui/ScanBorder";
 // videos naturally yield fewer (3–10).
 const CLIP_COUNT_CAP = 10;
 
-export function ClipBuilder({ onSourceChange }: { onSourceChange?: (has: boolean) => void }) {
+export function ClipBuilder({
+  onSourceChange,
+  initialUrl = "",
+}: {
+  onSourceChange?: (has: boolean) => void;
+  /** Seed the URL box (e.g. from the landing page's "Drop a video link" bar). */
+  initialUrl?: string;
+}) {
   const router = useRouter();
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(initialUrl);
   const [fileName, setFileName] = useState<string | null>(null);
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);

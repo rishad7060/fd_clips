@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
+import { PricingPlans } from "@/components/home/PricingPlans";
+import { StickyLinkBar } from "@/components/home/StickyLinkBar";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Landing page - layout adapted from the "Aeline" reference (centered nav,
@@ -23,12 +25,21 @@ const DEMO_CLIPS = [
   { rank: 5, hook: "Stop doing this immediately", score: 81, img: "/podcast/podcaster-5.jpg" },
 ];
 
-const PLATFORMS = ["YouTube", "TikTok", "Reels", "Shorts", "Podcasts", "LinkedIn"];
+// Platform strip - label + brand glyph (Icons8, free license, public/brands/).
+const PLATFORMS = [
+  { label: "YouTube", icon: "/brands/youtube.png" },
+  { label: "TikTok", icon: "/brands/tiktok.png" },
+  { label: "Reels", icon: "/brands/reels.png" },
+  { label: "Shorts", icon: "/brands/shorts.png" },
+  { label: "Podcasts", icon: "/brands/podcasts.png" },
+  { label: "LinkedIn", icon: "/brands/linkedin.png" },
+];
 
 // Mixed-tone bento stats - the reference's four-card grid, our numbers.
 const NAV_LINKS = [
   ["Features", "#features"],
   ["How it works", "#how"],
+  ["Pricing", "#pricing"],
   ["About", "#about"],
   ["FAQ", "#faq"],
 ] as const;
@@ -98,16 +109,20 @@ export default function LandingPage() {
   const year = new Date().getFullYear();
 
   return (
-    <main className="min-h-screen bg-ink-950 text-white">
+    <main className="landing min-h-screen bg-ink-950 text-white">
       {/* ── Nav (floating pill · logo left · links centred · CTA right) ──── */}
       <header className="sticky top-4 z-50 px-4">
-        <div className="mx-auto grid max-w-5xl grid-cols-2 items-center gap-3 rounded-full border border-white/10 bg-ink-900/70 px-2 py-2 shadow-rim backdrop-blur-xl md:grid-cols-3">
+        <div className="mx-auto grid max-w-6xl grid-cols-2 items-center gap-2 rounded-full border border-white/10 bg-ink-900/70 px-2 py-2 shadow-rim backdrop-blur-xl md:grid-cols-3">
           <div className="flex justify-start pl-1.5">
             <Logo />
           </div>
-          <nav className="hidden items-center justify-center gap-7 text-sm text-ink-300 md:flex">
+          <nav className="hidden items-center justify-center gap-5 text-sm text-ink-300 md:flex lg:gap-7">
             {NAV_LINKS.map(([label, href]) => (
-              <a key={label} href={href} className="transition hover:text-white">
+              <a
+                key={label}
+                href={href}
+                className="whitespace-nowrap transition hover:text-white"
+              >
                 {label}
               </a>
             ))}
@@ -225,10 +240,20 @@ export default function LandingPage() {
           <p className="text-center text-xs uppercase tracking-[0.18em] text-ink-500">
             Built for creators, podcasters &amp; coaches
           </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-base font-semibold text-ink-500 sm:gap-x-16">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-9 gap-y-4 text-base font-semibold text-ink-400 sm:gap-x-14">
             {PLATFORMS.map((p) => (
-              <span key={p} className="transition hover:text-ink-300">
-                {p}
+              <span
+                key={p.label}
+                className="group inline-flex items-center gap-2 transition hover:text-white"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={p.icon}
+                  alt=""
+                  aria-hidden
+                  className="h-5 w-5 opacity-80 transition group-hover:opacity-100 sm:h-6 sm:w-6"
+                />
+                {p.label}
               </span>
             ))}
           </div>
@@ -269,7 +294,7 @@ export default function LandingPage() {
               <div className="absolute inset-0 bg-gradient-to-t from-ink-850 via-ink-850/20 to-transparent" />
             </div>
             <div className="p-6">
-              <p className="text-4xl font-semibold tracking-tighter text-white">
+              <p className="font-display text-4xl font-semibold tracking-tighter text-white">
                 10<span className="text-brand-300"> clips</span>
               </p>
               <p className="mt-2 text-sm text-ink-300">
@@ -284,7 +309,7 @@ export default function LandingPage() {
               <p className="text-xs font-medium uppercase tracking-wide text-ink-400">
                 Editing on your side
               </p>
-              <p className="mt-1 text-4xl font-semibold tracking-tighter text-white">0%</p>
+              <p className="mt-1 font-display text-4xl font-semibold tracking-tighter text-white">0%</p>
             </div>
             <div className="mt-6 flex items-center gap-3">
               <div className="flex -space-x-2">
@@ -313,7 +338,7 @@ export default function LandingPage() {
               </svg>
               <span className="text-xs font-semibold uppercase tracking-wide">Top virality</span>
             </div>
-            <p className="mt-3 text-5xl font-semibold tracking-tighter tabular-nums">96</p>
+            <p className="mt-3 font-display text-5xl font-semibold tracking-tighter tabular-nums">96</p>
             <p className="mt-2 text-sm font-medium text-ink-950/80">
               Every moment scored 0–100 so you post the winners.
             </p>
@@ -324,7 +349,7 @@ export default function LandingPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-ink-400">
               Languages
             </p>
-            <p className="mt-3 flex items-baseline gap-1 text-5xl font-semibold tracking-tighter text-white">
+            <p className="mt-3 flex items-baseline gap-1 font-display text-5xl font-semibold tracking-tighter text-white">
               40<span className="text-brand-300">+</span>
             </p>
             <p className="mt-2 text-sm text-ink-300">
@@ -467,6 +492,9 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Pricing ─────────────────────────────────────────────────────── */}
+      <PricingPlans />
+
       {/* ── FAQ ─────────────────────────────────────────────────────────── */}
       <section id="faq" className="mx-auto max-w-3xl px-6 py-16 sm:py-20">
         <h2 className="text-center text-3xl font-semibold tracking-tight sm:text-5xl">
@@ -507,7 +535,7 @@ export default function LandingPage() {
                 Uncover the potency of <span className="font-semibold text-white">Clips</span> at
               </p>
               <a href="mailto:hello@clips.app" className="group mt-4 block w-fit max-w-full">
-                <span className="block text-balance text-4xl font-semibold tracking-tighter text-white sm:text-6xl">
+                <span className="block text-balance font-display text-4xl font-semibold tracking-tighter text-white sm:text-6xl">
                   hello@clips.app
                 </span>
                 <span className="mt-3 block h-px w-full bg-white/15 transition duration-300 ease-premium group-hover:bg-brand" />
@@ -559,20 +587,21 @@ export default function LandingPage() {
 
         {/* Bottom bar - brand-tinted band */}
         <div className="mt-6 border-t border-white/[0.06] bg-brand/10">
-          <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 py-5 text-sm text-ink-200 sm:flex-row">
-            <span>© {year} Clips - demo build.</span>
-            <span className="inline-flex items-center gap-1.5">
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Remote · worldwide
-            </span>
-            <a href="https://instagram.com" className="transition hover:text-white">Instagram</a>
-            <a href="https://linkedin.com" className="transition hover:text-white">LinkedIn</a>
+          <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-5 text-sm text-ink-200 sm:flex-row">
+            <span>© {year} Clips - All rights reserved.</span>
+            <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+              <Link href="/terms" className="transition hover:text-white">Terms</Link>
+              <Link href="/privacy" className="transition hover:text-white">Privacy</Link>
+              <Link href="/accessibility" className="transition hover:text-white">Accessibility</Link>
+              <a href="https://instagram.com" className="transition hover:text-white">Instagram</a>
+              <a href="https://linkedin.com" className="transition hover:text-white">LinkedIn</a>
+            </nav>
           </div>
         </div>
       </footer>
+
+      {/* Floating "Drop a video link" bar pinned to the bottom of the page. */}
+      <StickyLinkBar />
     </main>
   );
 }

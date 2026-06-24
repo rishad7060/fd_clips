@@ -22,6 +22,59 @@ html.lenis body {
   pointer-events: none;
 }
 
+/* ── Landing typography ───────────────────────────────────────────────────
+   Headlines on the marketing page use the editorial display face (Bricolage
+   Grotesque); body copy stays on Inter. Scoped to `.landing` so the app/admin
+   UIs are untouched. Cascades into client components rendered inside it. */
+.landing :is(h1, h2, h3) {
+  font-family: var(--font-display), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── Legal pages (terms / privacy / accessibility) ────────────────────────
+   Lightweight prose styling so policy pages read cleanly without the Tailwind
+   typography plugin. */
+.legal-prose {
+  color: #b8bdcc; /* ink-300-ish body */
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+.legal-prose > * + * {
+  margin-top: 1rem;
+}
+.legal-prose h2 {
+  font-family: var(--font-display), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  margin-top: 2.5rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+.legal-prose h3 {
+  margin-top: 1.75rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #e7eaf3;
+}
+.legal-prose strong {
+  color: #fff;
+  font-weight: 600;
+}
+.legal-prose a {
+  color: #ac82f7;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.legal-prose a:hover {
+  color: #c4a6fb;
+}
+.legal-prose ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.legal-prose ul > li + li {
+  margin-top: 0.5rem;
+}
+
 :root {
   color-scheme: dark;
 
