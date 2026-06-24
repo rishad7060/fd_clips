@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
-import { posterDataUri } from "@/lib/mock/posters";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Landing page - layout adapted from the "Aeline" reference (centered nav,
@@ -12,13 +11,16 @@ import { posterDataUri } from "@/lib/mock/posters";
  * truthful: YouTube in → ranked, captioned, vertical clips emailed in ~30 min.
  * ──────────────────────────────────────────────────────────────────────────── */
 
-// Demo clips for the hero fan + captions strip - rendered as real 9:16 SVGs.
+// Demo clips for the hero fan + captions strip. Each is a real 9:16 podcast
+// portrait (single speaker at a mic) overlaid with the rank, hook and virality
+// score so the hero shows our actual output, not a placeholder.
+// Photos: Unsplash (free license) - podcast/microphone portraits, public/podcast/.
 const DEMO_CLIPS = [
-  { rank: 1, hook: "This one habit changed everything", score: 96 },
-  { rank: 2, hook: "Nobody talks about this part", score: 93 },
-  { rank: 3, hook: "The real reason you procrastinate", score: 90 },
-  { rank: 4, hook: "I wish I knew this at twenty", score: 85 },
-  { rank: 5, hook: "Stop doing this immediately", score: 81 },
+  { rank: 1, hook: "This one habit changed everything", score: 96, img: "/podcast/podcaster-1.jpg" },
+  { rank: 2, hook: "Nobody talks about this part", score: 93, img: "/podcast/podcaster-2.jpg" },
+  { rank: 3, hook: "The real reason you procrastinate", score: 90, img: "/podcast/podcaster-3.jpg" },
+  { rank: 4, hook: "I wish I knew this at twenty", score: 85, img: "/podcast/podcaster-4.jpg" },
+  { rank: 5, hook: "Stop doing this immediately", score: 81, img: "/podcast/podcaster-5.jpg" },
 ];
 
 const PLATFORMS = ["YouTube", "TikTok", "Reels", "Shorts", "Podcasts", "LinkedIn"];
@@ -178,30 +180,25 @@ export default function LandingPage() {
         </div>
 
         {/* Floating fan of clip posters - the signature hero element */}
-        <div className="relative mx-auto max-w-4xl px-6 pb-6 pt-8">
-          <div className="flex items-end justify-center [perspective:1400px]">
+        <div className="relative mx-auto max-w-6xl px-6 pb-8 pt-10">
+          <div className="flex items-end justify-center [perspective:1600px]">
             {DEMO_CLIPS.map((c, i) => {
               const offset = i - (DEMO_CLIPS.length - 1) / 2; // -2 … 2
-              const rotate = offset * 7;
-              const lift = Math.abs(offset) * 30; // ends sit lower (arc)
+              const rotate = offset * 6;
+              const lift = Math.abs(offset) * 34; // ends sit lower (arc)
               const z = DEMO_CLIPS.length - Math.abs(offset);
               return (
-                <figure
+                <div
                   key={c.rank}
-                  className="group relative w-28 shrink-0 overflow-hidden rounded-2xl bg-ink-900 shadow-lift ring-1 ring-white/10 transition duration-300 ease-premium hover:z-20 hover:!translate-y-[-8px] hover:ring-brand/50 sm:w-36"
+                  className="group relative w-40 shrink-0 overflow-hidden rounded-3xl bg-ink-900 shadow-lift ring-1 ring-white/10 transition duration-300 ease-premium hover:z-20 hover:!translate-y-[-10px] hover:ring-brand/50 sm:w-52 lg:w-60"
                   style={{
-                    marginLeft: i === 0 ? 0 : "-1.75rem",
+                    marginLeft: i === 0 ? 0 : "-2.25rem",
                     transform: `translateY(${lift}px) rotate(${rotate}deg)`,
                     zIndex: z,
                   }}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={posterDataUri(c.rank, c.hook, c.score)}
-                    alt={`Clip ${c.rank}: ${c.hook} - virality ${c.score}`}
-                    className="aspect-[9/16] w-full object-cover"
-                  />
-                </figure>
+                  <ClipPoster clip={c} />
+                </div>
               );
             })}
           </div>
@@ -265,9 +262,9 @@ export default function LandingPage() {
             <div className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={posterDataUri(1, DEMO_CLIPS[0]!.hook, DEMO_CLIPS[0]!.score)}
-                alt=""
-                className="aspect-[4/3] w-full object-cover opacity-90 sm:aspect-auto sm:h-44"
+                src={DEMO_CLIPS[0]!.img}
+                alt="Podcaster recording at a microphone"
+                className="aspect-[4/3] w-full object-cover object-top opacity-90 sm:aspect-auto sm:h-44"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-ink-850 via-ink-850/20 to-transparent" />
             </div>
@@ -295,7 +292,7 @@ export default function LandingPage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     key={c.rank}
-                    src={posterDataUri(c.rank, "", 0)}
+                    src={c.img}
                     alt=""
                     className="h-8 w-8 rounded-full object-cover ring-2 ring-ink-850"
                   />
@@ -458,13 +455,12 @@ export default function LandingPage() {
             </div>
             <div className="flex justify-center gap-4">
               {DEMO_CLIPS.slice(0, 2).map((c) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <div
                   key={c.rank}
-                  src={posterDataUri(c.rank, c.hook, c.score)}
-                  alt=""
-                  className="w-36 rounded-2xl ring-1 ring-white/10 sm:w-40"
-                />
+                  className="w-36 overflow-hidden rounded-2xl ring-1 ring-white/10 sm:w-40"
+                >
+                  <ClipPoster clip={c} />
+                </div>
               ))}
             </div>
           </div>
@@ -578,6 +574,45 @@ export default function LandingPage() {
         </div>
       </footer>
     </main>
+  );
+}
+
+/**
+ * A 9:16 "clip" card: a real podcast portrait (single speaker at a mic) with the
+ * product overlays burned on - rank pill, virality score and the karaoke hook
+ * caption - so the hero shows what Clips actually produces.
+ */
+function ClipPoster({
+  clip,
+}: {
+  clip: { rank: number; hook: string; score: number; img: string };
+}) {
+  return (
+    <div className="relative aspect-[9/16] w-full overflow-hidden">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={clip.img}
+        alt={`Clip ${clip.rank}: ${clip.hook} - virality ${clip.score}`}
+        className="h-full w-full object-cover"
+      />
+      {/* Bottom scrim so captions stay legible over any frame. */}
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/15 to-transparent"
+      />
+      {/* Rank pill (top-left) */}
+      <span className="absolute left-2.5 top-2.5 grid h-6 w-6 place-items-center rounded-full bg-brand text-[11px] font-bold text-white shadow ring-1 ring-white/20 sm:h-7 sm:w-7 sm:text-xs">
+        {clip.rank}
+      </span>
+      {/* Virality score (top-right) */}
+      <span className="absolute right-2.5 top-2.5 rounded-full bg-ink-950/65 px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-highscore ring-1 ring-white/15 backdrop-blur sm:text-xs">
+        {clip.score}
+      </span>
+      {/* Karaoke-style hook caption (bottom) */}
+      <p className="absolute inset-x-0 bottom-0 p-3 text-left text-xs font-semibold leading-snug text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)] sm:text-sm">
+        {clip.hook}
+      </p>
+    </div>
   );
 }
 

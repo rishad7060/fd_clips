@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AUTH_ENABLED } from "@/lib/auth";
 import { ReferralCapture } from "@/components/ReferralCapture";
+import { SmoothScroll } from "@/components/SmoothScroll";
 import type { ReactNode } from "react";
 
 // Inter (display + body) with tight tracking, plus a mono for scores/durations/
@@ -48,7 +49,7 @@ export default async function RootLayout({
           <SessionProvider>
             <AuthTokenBridge />
             <ReferralCapture />
-            {children}
+            <SmoothScroll>{children}</SmoothScroll>
           </SessionProvider>
         </body>
       </html>
@@ -59,7 +60,7 @@ export default async function RootLayout({
     <html lang="en">
       <body className={bodyClass}>
         <ReferralCapture />
-        {children}
+        <SmoothScroll>{children}</SmoothScroll>
       </body>
     </html>
   );
