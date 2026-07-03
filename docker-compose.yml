@@ -34,9 +34,10 @@ services:
       timeout: 5s
       retries: 10
     ports:
-      # Host 5433 → container 5432 (a local Postgres already owns host 5432).
+      # Host 5434 → container 5432. Bound to localhost only (nginx/tools reach it
+      # locally; never public). 5433 is taken by another stack on this host.
       # Container-to-container traffic uses the service name + 5432, unaffected.
-      - "5433:5432"
+      - "127.0.0.1:5434:5432"
 
   redis:
     image: redis:7-alpine
@@ -50,7 +51,9 @@ services:
       timeout: 3s
       retries: 10
     ports:
-      - "6379:6379"
+      # Host 6380 → container 6379, localhost only. 6379 is taken by another
+      # stack on this host. The API reaches redis via the service name internally.
+      - "127.0.0.1:6380:6379"
 
   api:
     build:
@@ -116,7 +119,9 @@ services:
       retries: 10
       start_period: 40s
     ports:
-      - "4000:4000"
+      # Host 4006 → container 4000, localhost only (nginx proxies to it).
+      # 4000/4005 are taken by another stack on this host.
+      - "127.0.0.1:4006:4000"
 
   web:
     build:
@@ -136,7 +141,8 @@ services:
       # Runtime fallback (the build arg already inlined the public value).
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
     ports:
-      - "3000:3000"
+      # Host 3000 → container 3000, localhost only (nginx proxies to it).
+      - "127.0.0.1:3000:3000"
 
   # One-off pipeline runner (manual use only). Not part of the normal flow.
   #   docker compose --profile tools run --rm pipeline \
