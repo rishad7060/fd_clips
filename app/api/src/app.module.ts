@@ -15,7 +15,9 @@ import { PreviewModule } from './preview/preview.module';
 import { ProgressModule } from './progress/progress.module';
 import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
+import { TranscriptModule } from './transcript/transcript.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { WaitlistModule } from './waitlist/waitlist.module';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { UploadsModule } from './uploads/uploads.module';
     AdminModule,
     AffiliatesModule,
     PlatformModule,
+    WaitlistModule,
+    TranscriptModule,
   ],
 })
 export class AppModule {}

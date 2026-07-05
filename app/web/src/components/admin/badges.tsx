@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/shadcn/badge";
-import type { JobStatus, PlanTier, UserRole } from "@/lib/adminTypes";
+import type { JobStatus, PlanTier, UserRole, WaitlistStatus } from "@/lib/adminTypes";
 
 const STATUS_VARIANT: Record<JobStatus, "default" | "secondary" | "success" | "warning" | "destructive" | "outline"> = {
   queued: "secondary",
@@ -25,4 +25,14 @@ export function PlanBadge({ plan }: { plan: PlanTier }) {
 
 export function RoleBadge({ role }: { role: UserRole }) {
   return <Badge variant={role === "admin" ? "default" : "outline"}>{role}</Badge>;
+}
+
+const WAITLIST_VARIANT: Record<WaitlistStatus, "secondary" | "warning" | "success"> = {
+  pending: "secondary",
+  invited: "warning",
+  converted: "success",
+};
+
+export function WaitlistStatusBadge({ status }: { status: WaitlistStatus }) {
+  return <Badge variant={WAITLIST_VARIANT[status]}>{status}</Badge>;
 }

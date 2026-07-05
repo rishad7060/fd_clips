@@ -272,7 +272,30 @@ model PlatformSetting {
   newJobsEnabled     Boolean  @default(true) @map("new_jobs_enabled")
   signupsEnabled     Boolean  @default(true) @map("signups_enabled")
   announcement       String   @default("") @map("announcement")
+  // Pre-launch "waitlist mode": when on, the public landing page swaps the
+  // creator hero for an email-capture form (see /platform/status + the web
+  // WaitlistGate). Defaults off so the normal app shows.
+  waitlistMode       Boolean  @default(false) @map("waitlist_mode")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
   @@map("platform_settings")
+}
+
+// A public pre-launch waitlist signup. Not tenant-scoped (no organization) - a
+// visitor leaves their email before any account exists, like Plan /
+// PlatformSetting. Admin lists/exports/deletes these from the dashboard.
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  // Optional name if the form collects one; free-text source tag (e.g. which
+  // page/campaign captured them) for later attribution.
+  name      String?
+  source    String?
+  // 'pending' (default) | 'invited' | 'converted'
+  status    String   @default("pending")
+  createdAt DateTime @default(now()) @map("created_at")
+  invitedAt DateTime? @map("invited_at")
+
+  @@index([status])
+  @@map("waitlist_entries")
 }

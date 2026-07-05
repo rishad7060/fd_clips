@@ -202,4 +202,20 @@ export class SetPlatformSettingsDto {
   @IsString()
   @MaxLength(280)
   announcement?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  waitlistMode?: boolean;
+}
+
+// ── Waitlist ───────────────────────────────────────────────────────────────────
+
+const WAITLIST_STATUSES = ['pending', 'invited', 'converted'] as const;
+
+/** Search over waitlist email/name (inherits page/pageSize). */
+export class WaitlistQueryDto extends ListQueryDto {}
+
+export class SetWaitlistStatusDto {
+  @IsIn(WAITLIST_STATUSES)
+  status!: (typeof WAITLIST_STATUSES)[number];
 }

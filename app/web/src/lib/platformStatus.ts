@@ -20,6 +20,7 @@ export async function getPlatformStatus(): Promise<PlatformStatus> {
       maintenanceMessage: s.maintenanceMessage,
       announcement: s.announcement,
       signupsEnabled: s.signupsEnabled,
+      waitlistMode: s.waitlistMode,
       updatedAt: s.updatedAt,
     };
   }

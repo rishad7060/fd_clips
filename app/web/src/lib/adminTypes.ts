@@ -186,6 +186,7 @@ export interface PlatformSettings {
   newJobsEnabled: boolean;
   signupsEnabled: boolean;
   announcement: string;
+  waitlistMode: boolean;
   updatedAt: string;
 }
 
@@ -198,5 +199,19 @@ export interface PlatformStatus {
   maintenanceMessage: string;
   announcement: string;
   signupsEnabled: boolean;
+  waitlistMode: boolean;
   updatedAt: string;
+}
+
+export type WaitlistStatus = "pending" | "invited" | "converted";
+
+/** A public pre-launch waitlist signup (cross-tenant; no organization). */
+export interface AdminWaitlistEntry {
+  id: string;
+  email: string;
+  name: string | null;
+  source: string | null;
+  status: WaitlistStatus;
+  createdAt: string;
+  invitedAt: string | null;
 }

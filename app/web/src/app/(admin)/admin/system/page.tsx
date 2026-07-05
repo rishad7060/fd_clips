@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Loader2, Megaphone, Pause, UserPlus } from "lucide-react";
+import { AlertTriangle, Loader2, Megaphone, Pause, Rocket, UserPlus } from "lucide-react";
 import { adminApi } from "@/lib/adminApi";
 import type { AdminSystemInfo, PlatformSettings } from "@/lib/adminTypes";
 import { cn } from "@/lib/cn";
@@ -120,7 +120,8 @@ function PlatformControls() {
     draft.maintenanceMessage !== saved.maintenanceMessage ||
     draft.newJobsEnabled !== saved.newJobsEnabled ||
     draft.signupsEnabled !== saved.signupsEnabled ||
-    draft.announcement !== saved.announcement;
+    draft.announcement !== saved.announcement ||
+    draft.waitlistMode !== saved.waitlistMode;
 
   const set = <K extends keyof PlatformSettings>(key: K, value: PlatformSettings[K]) => {
     setConfirmation(null);
@@ -140,6 +141,7 @@ function PlatformControls() {
         newJobsEnabled: draft.newJobsEnabled,
         signupsEnabled: draft.signupsEnabled,
         announcement: draft.announcement,
+        waitlistMode: draft.waitlistMode,
       });
       setSaved(next);
       setDraft(next);
@@ -218,6 +220,18 @@ function PlatformControls() {
             <Switch
               checked={draft.signupsEnabled}
               onChange={(v) => set("signupsEnabled", v)}
+              disabled={busy}
+            />
+          </ControlRow>
+
+          <ControlRow
+            icon={<Rocket className="h-4 w-4" />}
+            title="Waitlist mode"
+            description="Pre-launch: the landing hero shows an email-capture form instead of the app CTAs. Emails collect in the Waitlist tab."
+          >
+            <Switch
+              checked={draft.waitlistMode}
+              onChange={(v) => set("waitlistMode", v)}
               disabled={busy}
             />
           </ControlRow>

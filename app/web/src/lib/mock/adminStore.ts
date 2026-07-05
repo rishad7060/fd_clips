@@ -15,6 +15,7 @@ import type {
   AdminReferral,
   AdminSystemInfo,
   AdminUser,
+  AdminWaitlistEntry,
   AffiliateSettings,
   JobStatus,
   ListParams,
@@ -23,6 +24,7 @@ import type {
   PlanTier,
   PlatformSettings,
   PlatformSettingsPatch,
+  WaitlistStatus,
 } from "@/lib/adminTypes";
 
 /** Global default commission rate fallback - mirrors AFFILIATE_COMMISSION_RATE. */
@@ -46,6 +48,7 @@ interface DB {
   ledger: AdminLedgerEntry[];
   affiliates: AdminAffiliate[];
   referrals: AdminReferral[];
+  waitlist: AdminWaitlistEntry[];
   settings: AffiliateSettings;
   platform: PlatformSettings;
 }
@@ -58,6 +61,7 @@ const DEFAULT_PLATFORM: PlatformSettings = {
   newJobsEnabled: true,
   signupsEnabled: true,
   announcement: "",
+  waitlistMode: false,
   updatedAt: new Date().toISOString(),
 };
 
@@ -135,7 +139,15 @@ function seed(): DB {
     { id: "rf_3", affiliateId: "aff_1", code: "LIAM20", referredOrgId: "org_6", referredEmail: "ivy@example.com", status: "converted", earnedCents: 225, createdAt: daysAgo(8), convertedAt: daysAgo(6) },
   );
 
-  return { orgs, users, jobs, clips, ledger, affiliates, referrals, settings: { commissionRate: DEFAULT_COMMISSION_RATE }, platform: { ...DEFAULT_PLATFORM } };
+  // A few demo waitlist signups so the admin waitlist table renders offline.
+  const waitlist: AdminWaitlistEntry[] = [
+    { id: "wl_1", email: "creator.jane@gmail.com", name: "Jane R.", source: "landing-hero", status: "pending", createdAt: daysAgo(1), invitedAt: null },
+    { id: "wl_2", email: "podcastpro@outlook.com", name: null, source: "landing-hero", status: "pending", createdAt: daysAgo(2), invitedAt: null },
+    { id: "wl_3", email: "marco@studio.io", name: "Marco", source: "landing-hero", status: "invited", createdAt: daysAgo(4), invitedAt: daysAgo(1) },
+    { id: "wl_4", email: "hello@shortsfactory.co", name: "Sam", source: "landing-hero", status: "converted", createdAt: daysAgo(6), invitedAt: daysAgo(3) },
+  ];
+
+  return { orgs, users, jobs, clips, ledger, affiliates, referrals, waitlist, settings: { commissionRate: DEFAULT_COMMISSION_RATE }, platform: { ...DEFAULT_PLATFORM } };
 }
 
 const db: DB = seed();
@@ -286,5 +298,31 @@ export const adminMock = {
   setPlatformSettings(patch: PlatformSettingsPatch): PlatformSettings {
     db.platform = { ...db.platform, ...patch, updatedAt: new Date().toISOString() };
     return { ...db.platform };
+  },
+  listWaitlist(p: ListParams): Paged<AdminWaitlistEntry> {
+    const rows = db.waitlist
+      .filter((w) => match([w.email, w.name], p.search))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return page(rows, p);
+  },
+  setWaitlistStatus(id: string, status: WaitlistStatus): AdminWaitlistEntry {
+    const w = db.waitlist.find((x) => x.id === id)!;
+    w.status = status;
+    if (status === "invited" && !w.invitedAt) w.invitedAt = new Date().toISOString();
+    return { ...w };
+  },
+  deleteWaitlistEntry(id: string) {
+    db.waitlist = db.waitlist.filter((x) => x.id !== id);
+    return { deleted: true };
+  },
+  waitlistCsv(): string {
+    const esc = (v: string | null) => {
+      const s = v ?? "";
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = [...db.waitlist].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const header = "email,name,status,source,signed_up_at";
+    const lines = rows.map((r) => [esc(r.email), esc(r.name), esc(r.status), esc(r.source), esc(r.createdAt)].join(","));
+    return [header, ...lines].join("\r\n");
   },
 };

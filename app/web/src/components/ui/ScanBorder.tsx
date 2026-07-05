@@ -27,8 +27,11 @@ export function ScanBorder({
       <div className={`scan-border pointer-events-none absolute inset-0 ${radius}`} aria-hidden />
       {/* faint base ring so the unlit part of the outline is still visible */}
       <div className={`pointer-events-none absolute inset-0 ${radius} ring-1 ring-inset ring-white/10`} aria-hidden />
-      {/* content sits above, on its own solid surface */}
-      <div className={`relative ${radius}`}>{children}</div>
+      {/* Content sits above on its OWN OPAQUE surface - this is what masks the
+          spinning conic-gradient to just the thin p-px edge. Without an opaque
+          fill here, the rotating light bleeds through the whole interior and
+          reads as a big rotating box shape. bg-ink-950 matches the app surface. */}
+      <div className={`relative ${radius} bg-ink-950`}>{children}</div>
     </div>
   );
 }

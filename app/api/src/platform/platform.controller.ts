@@ -20,6 +20,8 @@ export class PlatformController {
       maintenanceMessage: s.maintenanceMessage,
       announcement: s.announcement,
       signupsEnabled: s.signupsEnabled,
+      // Public so the marketing page can swap the hero for the waitlist form.
+      waitlistMode: s.waitlistMode,
       updatedAt: s.updatedAt,
     };
   }

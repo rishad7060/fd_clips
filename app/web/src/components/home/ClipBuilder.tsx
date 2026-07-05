@@ -13,6 +13,7 @@ import { VideoPreviewCard } from "@/components/config/VideoPreviewCard";
 import { Button } from "@/components/ui/Button";
 import { Panel, SectionTitle } from "@/components/ui/Card";
 import { ScanBorder } from "@/components/ui/ScanBorder";
+import { StarBorder } from "@/components/ui/StarBorder";
 
 /**
  * The home clip builder: a URL/upload box that, ONCE a source is added, reveals
@@ -177,11 +178,15 @@ export function ClipBuilder({
 
   return (
     <div className="mx-auto w-full max-w-2xl text-left">
-      {/* Source box - while the pasted link's details load, a scanning light
-          traces around the WHOLE box (Opus-style), not just the input. */}
-      <ScanBorder active={reading} radius="rounded-2xl">
+      {/* Source box - while the pasted link's details load OR a file uploads, a
+          scanning light traces around the WHOLE box (Opus-style), not just the
+          input. Pairs with the StarBorder pill below for one consistent
+          "working" animation across link-reading, uploading and job creation. */}
+      <ScanBorder active={reading || uploading} radius="rounded-2xl">
         <div className="space-y-3 rounded-2xl bg-ink-900/40 p-3 shadow-rim">
-          {sourceKey ? (
+          {uploading ? (
+            <SourceChip label={fileName ?? "Uploading video…"} onRemove={() => {}} loading />
+          ) : sourceKey ? (
             <SourceChip label={fileName ?? "Uploaded video"} onRemove={() => { setSourceKey(null); setFileName(null); }} />
           ) : looksLikeUrl ? (
             <SourceChip label={url.trim()} onRemove={() => setUrl("")} loading={reading} />
@@ -217,17 +222,39 @@ export function ClipBuilder({
             </div>
           )}
 
-          <Button
-            type="button"
-            variant="primary"
-            size="lg"
-            full
-            loading={submitting}
-            onClick={getClips}
-            disabled={submitting || !hasSource || reading}
-          >
-            {submitting ? "Creating clips…" : "Get clips in 1 click"}
-          </Button>
+          {/* Any in-flight work - uploading a file, reading a pasted link, or
+              creating the job - shows the SAME StarBorder pill: a dark pill with
+              a soft "shooting star" glow sweeping along the top and bottom edges
+              (React Bits). One consistent "working" animation across the whole
+              flow, instead of a plain spinner while uploading/reading. */}
+          {submitting || uploading || reading ? (
+            <StarBorder
+              as="div"
+              className="block w-full select-none"
+              color="#c3a8fa"
+              speed="4s"
+              thickness={2}
+            >
+              <div className="flex items-center justify-center rounded-[18px] border border-white/10 bg-ink-950 px-6 py-3.5 text-base font-semibold text-white">
+                {submitting
+                  ? "Creating clips…"
+                  : uploading
+                    ? "Uploading video…"
+                    : "Reading link…"}
+              </div>
+            </StarBorder>
+          ) : (
+            <Button
+              type="button"
+              variant="primary"
+              size="lg"
+              full
+              onClick={getClips}
+              disabled={!hasSource}
+            >
+              Get clips in 1 click
+            </Button>
+          )}
         </div>
       </ScanBorder>
 
@@ -320,20 +347,28 @@ function SourceChip({ label, onRemove, loading = false }: { label: string; onRem
     <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-ink-950 px-3 py-3.5 shadow-rim">
       {loading ? <ChipSpinner /> : <LinkIcon />}
       <span className="flex-1 truncate text-sm text-ink-100">{label}</span>
-      <button type="button" onClick={onRemove} className="text-sm font-medium text-brand-400 underline-offset-2 hover:underline">
-        Remove
-      </button>
+      {/* Hide Remove while the source is still being read/uploaded - there's
+          nothing stable to remove yet, and the StarBorder pill signals "working". */}
+      {!loading && (
+        <button type="button" onClick={onRemove} className="text-sm font-medium text-brand-400 underline-offset-2 hover:underline">
+          Remove
+        </button>
+      )}
     </div>
   );
 }
 
-/** Small spinning loader shown inside the URL chip while the link is read. */
+/** Loading indicator in the URL chip: a thin StarBorder ring with a bright point
+ *  of light travelling AROUND its border - hollow centre, nothing spins inside. */
 function ChipSpinner() {
   return (
-    <svg className="h-5 w-5 shrink-0 animate-spin text-brand-400" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" />
-      <path className="opacity-90" fill="currentColor" d="M12 3a9 9 0 0 1 9 9h-2.5a6.5 6.5 0 0 0-6.5-6.5V3z" />
-    </svg>
+    <span
+      className="star-border-circle shrink-0"
+      style={{ width: 20, height: 20 }}
+      role="status"
+      aria-label="Loading"
+      aria-hidden
+    />
   );
 }
 

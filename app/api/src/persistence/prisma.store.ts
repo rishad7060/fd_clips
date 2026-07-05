@@ -25,6 +25,8 @@ import {
   SubscriptionStatus,
   UserRecord,
   UserRole,
+  WaitlistEntryRecord,
+  WaitlistStatus,
   DEFAULT_PLATFORM_SETTINGS,
 } from './store.types';
 import { PLANS } from '../billing/plans';
@@ -632,7 +634,20 @@ export class PrismaStore implements DataStore {
       newJobsEnabled: s?.newJobsEnabled ?? DEFAULT_PLATFORM_SETTINGS.newJobsEnabled,
       signupsEnabled: s?.signupsEnabled ?? DEFAULT_PLATFORM_SETTINGS.signupsEnabled,
       announcement: s?.announcement ?? DEFAULT_PLATFORM_SETTINGS.announcement,
+      waitlistMode: s?.waitlistMode ?? DEFAULT_PLATFORM_SETTINGS.waitlistMode,
       updatedAt: (s?.updatedAt ?? new Date()).toISOString?.() ?? new Date().toISOString(),
+    };
+  }
+
+  private mapWaitlist(w: any): WaitlistEntryRecord {
+    return {
+      id: w.id,
+      email: w.email,
+      name: w.name ?? null,
+      source: w.source ?? null,
+      status: (w.status ?? 'pending') as WaitlistStatus,
+      createdAt: this.toIso(w.createdAt),
+      invitedAt: w.invitedAt ? this.toIso(w.invitedAt) : null,
     };
   }
 
@@ -648,6 +663,26 @@ export class PrismaStore implements DataStore {
       create: { id: 'global', ...DEFAULT_PLATFORM_SETTINGS, ...patch },
     });
     return this.mapPlatformSettings(s);
+  }
+
+  async addWaitlistEntry(input: {
+    email: string;
+    name?: string | null;
+    source?: string | null;
+  }): Promise<{ entry: WaitlistEntryRecord; already: boolean }> {
+    const email = input.email.trim().toLowerCase();
+    const existing = await this.prisma.waitlistEntry.findUnique({ where: { email } });
+    if (existing) {
+      return { entry: this.mapWaitlist(existing), already: true };
+    }
+    const created = await this.prisma.waitlistEntry.create({
+      data: {
+        email,
+        name: input.name?.trim() || null,
+        source: input.source?.trim() || null,
+      },
+    });
+    return { entry: this.mapWaitlist(created), already: false };
   }
 
   // ── Admin (cross-tenant) ──────────────────────────────────────────────────
@@ -962,6 +997,50 @@ export class PrismaStore implements DataStore {
 
   async adminDeleteClip(clipId: string): Promise<boolean> {
     const r = await this.prisma.clip.deleteMany({ where: { id: clipId } });
+    return r.count > 0;
+  }
+
+  async adminListWaitlist(p: AdminListParams): Promise<Paged<WaitlistEntryRecord>> {
+    const { skip, take, page, pageSize } = this.pageArgs(p);
+    const where = p.search
+      ? {
+          OR: [
+            { email: { contains: p.search, mode: 'insensitive' } },
+            { name: { contains: p.search, mode: 'insensitive' } },
+          ],
+        }
+      : {};
+    const [rows, total] = await Promise.all([
+      this.prisma.waitlistEntry.findMany({ where, skip, take, orderBy: { createdAt: 'desc' } }),
+      this.prisma.waitlistEntry.count({ where }),
+    ]);
+    return { rows: rows.map((w: any) => this.mapWaitlist(w)), total, page, pageSize };
+  }
+
+  async adminListAllWaitlist(): Promise<WaitlistEntryRecord[]> {
+    const rows = await this.prisma.waitlistEntry.findMany({ orderBy: { createdAt: 'desc' } });
+    return rows.map((w: any) => this.mapWaitlist(w));
+  }
+
+  async adminSetWaitlistStatus(
+    id: string,
+    status: WaitlistStatus,
+  ): Promise<WaitlistEntryRecord | null> {
+    const existing = await this.prisma.waitlistEntry.findUnique({ where: { id } });
+    if (!existing) return null;
+    const updated = await this.prisma.waitlistEntry.update({
+      where: { id },
+      data: {
+        status,
+        invitedAt:
+          status === 'invited' && !existing.invitedAt ? new Date() : existing.invitedAt,
+      },
+    });
+    return this.mapWaitlist(updated);
+  }
+
+  async adminDeleteWaitlistEntry(id: string): Promise<boolean> {
+    const r = await this.prisma.waitlistEntry.deleteMany({ where: { id } });
     return r.count > 0;
   }
 }

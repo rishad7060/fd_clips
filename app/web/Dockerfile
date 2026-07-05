@@ -15,6 +15,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # NEXT_PUBLIC_* vars are inlined at build time, so they must arrive as build args
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Turns on the real auth UI (sign-in/up cards + route protection). Inlined at
+# build time, so it MUST be a build arg - runtime env alone has no effect.
+ARG NEXT_PUBLIC_AUTH_ENABLED
+ENV NEXT_PUBLIC_AUTH_ENABLED=$NEXT_PUBLIC_AUTH_ENABLED
+# Canonical public origin for SEO (canonical URLs, OG/Twitter, sitemap, robots,
+# llms.txt, JSON-LD). Inlined at build time, so it MUST be a build arg.
+ARG NEXT_PUBLIC_SITE_URL
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 
 # Bring in installed node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules

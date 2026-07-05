@@ -84,9 +84,11 @@ services:
       # RealPipelineWorker, which spawns pipeline/run.py and processes jobs (the
       # verified working path). Redis still runs below for future use / caching.
       # REDIS_URL: redis://redis:6379
-      # ── Mock toggles: keep auth mock until account creation is wired ──
+      # ── Mock toggles ──
       MOCK_MODE: ${MOCK_MODE:-auto}
-      MOCK_AUTH: ${MOCK_AUTH:-true}
+      # Real auth by default now (Auth.js + Google). Set MOCK_AUTH=true in .env
+      # to fall back to the injected dev org.
+      MOCK_AUTH: ${MOCK_AUTH:-false}
       # ── Pipeline AI keys (free CPU path) ──
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_MODEL: ${GROQ_MODEL:-whisper-large-v3}
@@ -107,9 +109,16 @@ services:
       # ── Email (optional) ──
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-FocalDive Clips <clips@focaldive.com>}
-      # ── Auth (Clerk) - set when account creation is enabled ──
-      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
-      CLERK_JWKS_URL: ${CLERK_JWKS_URL:-}
+      # ── Auth (self-hosted: Auth.js v5 + Google) ──
+      # AUTH_JWT_SECRET verifies the HS256 app token the web mints; when it (and
+      # MOCK_AUTH=false) are set the API enforces real auth. AUTH_INTERNAL_SECRET
+      # guards the internal /auth/sync|login|register endpoints the web calls.
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-}
+      AUTH_INTERNAL_SECRET: ${AUTH_INTERNAL_SECRET:-}
+      # System admin seeded into Postgres (admin panel login).
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@focaldive.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme-admin}
+      ADMIN_NAME: ${ADMIN_NAME:-FocalDive Admin}
     volumes:
       - workspace:/app/workspace
     healthcheck:
@@ -131,6 +140,11 @@ services:
         # NEXT_PUBLIC_* is inlined at BUILD time - must be a build arg, not just
         # runtime env. Browsers hit the API at this public URL.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+        # Turns on the real sign-in UI + route protection (also build-time).
+        NEXT_PUBLIC_AUTH_ENABLED: ${NEXT_PUBLIC_AUTH_ENABLED:-true}
+        # Canonical public origin for SEO (canonical/OG/sitemap/robots/llms.txt).
+        # Falls back to localhost for local dev; set to https://clipshq.pro in prod.
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
     restart: unless-stopped
     depends_on:
       api:
@@ -140,6 +154,21 @@ services:
       PORT: 3000
       # Runtime fallback (the build arg already inlined the public value).
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      NEXT_PUBLIC_AUTH_ENABLED: ${NEXT_PUBLIC_AUTH_ENABLED:-true}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+      # ── Auth.js (NextAuth) server-side config ──
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      # Canonical app URL Auth.js uses to build OAuth callback URLs.
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      # Server-side URL the web uses to reach the API INSIDE the compose network
+      # (service name, not localhost) for /auth/sync|login|register.
+      API_INTERNAL_URL: http://api:4000
+      # Google OAuth web client.
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
+      # Shared with the API: mints the HS256 app token + guards internal calls.
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-}
+      AUTH_INTERNAL_SECRET: ${AUTH_INTERNAL_SECRET:-}
     ports:
       # Host 3000 → container 3000, localhost only (nginx proxies to it).
       - "127.0.0.1:3000:3000"

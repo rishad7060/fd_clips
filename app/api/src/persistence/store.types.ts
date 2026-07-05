@@ -12,6 +12,8 @@ export type CreditReason = 'grant' | 'debit' | 'refund';
 export type UserRole = 'user' | 'admin';
 /** Lifecycle of a referred org: signed up via a link, then converted (paid). */
 export type ReferralStatus = 'signed_up' | 'converted';
+/** Lifecycle of a public waitlist signup. */
+export type WaitlistStatus = 'pending' | 'invited' | 'converted';
 
 /** Subscription lifecycle (mirrors the payment provider's status values). */
 export type SubscriptionStatus = 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED';
@@ -163,6 +165,21 @@ export interface AffiliateWithOwner extends AffiliateRecord {
 }
 
 /**
+ * A public pre-launch waitlist signup (no tenant). Captured from the marketing
+ * page's email form when waitlist mode is on; admins list/export/delete these.
+ */
+export interface WaitlistEntryRecord {
+  id: string;
+  email: string;
+  name: string | null;
+  /** Free-text capture source (page/campaign); null when not provided. */
+  source: string | null;
+  status: WaitlistStatus;
+  createdAt: string;
+  invitedAt: string | null;
+}
+
+/**
  * Global platform controls (a singleton row), editable from the admin dashboard.
  * These let an operator put the product into maintenance, pause new work, close
  * sign-ups, or broadcast an announcement without a redeploy.
@@ -178,6 +195,11 @@ export interface PlatformSettings {
   signupsEnabled: boolean;
   /** Global announcement banner shown across the app; empty = hidden. */
   announcement: string;
+  /**
+   * Pre-launch waitlist mode. When on, the public landing page swaps the creator
+   * hero for an email-capture form (exposed publicly via /platform/status).
+   */
+  waitlistMode: boolean;
   /** ISO timestamp of the last change. */
   updatedAt: string;
 }
@@ -193,6 +215,7 @@ export const DEFAULT_PLATFORM_SETTINGS: Omit<PlatformSettings, 'updatedAt'> = {
   newJobsEnabled: true,
   signupsEnabled: true,
   announcement: '',
+  waitlistMode: false,
 };
 
 export interface CreditLedgerRecord {
@@ -394,6 +417,18 @@ export interface DataStore {
   getPlatformSettings(): Promise<PlatformSettings>;
   setPlatformSettings(patch: PlatformSettingsPatch): Promise<PlatformSettings>;
 
+  // Waitlist (public pre-launch signups; no tenant).
+  /**
+   * Add an email to the waitlist. Idempotent on email: a repeat signup returns
+   * the existing row (already: true) instead of erroring, so the public form can
+   * always show a friendly success.
+   */
+  addWaitlistEntry(input: {
+    email: string;
+    name?: string | null;
+    source?: string | null;
+  }): Promise<{ entry: WaitlistEntryRecord; already: boolean }>;
+
   // ── Admin (cross-tenant) ──────────────────────────────────────────────────
   adminGetOverview(rangeDays: number): Promise<AdminOverviewStats>;
   adminListAffiliates(p: AdminListParams): Promise<Paged<AffiliateWithOwner>>;
@@ -421,6 +456,12 @@ export interface DataStore {
   adminDeleteOrganization(orgId: string): Promise<boolean>;
   adminDeleteJob(jobId: string): Promise<boolean>;
   adminDeleteClip(clipId: string): Promise<boolean>;
+  /** All waitlist entries (search over email/name), newest first, paginated. */
+  adminListWaitlist(p: AdminListParams): Promise<Paged<WaitlistEntryRecord>>;
+  /** Full waitlist for CSV export (no pagination), newest first. */
+  adminListAllWaitlist(): Promise<WaitlistEntryRecord[]>;
+  adminSetWaitlistStatus(id: string, status: WaitlistStatus): Promise<WaitlistEntryRecord | null>;
+  adminDeleteWaitlistEntry(id: string): Promise<boolean>;
 }
 
 export const DATA_STORE = Symbol('DATA_STORE');

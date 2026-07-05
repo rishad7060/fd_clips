@@ -11,6 +11,7 @@ import {
   PlatformSettingsPatch,
   UserRecord,
   UserRole,
+  WaitlistStatus,
 } from '../persistence/store.types';
 
 /** UserRecord without the password hash - what the admin API ever returns. */
@@ -164,6 +165,38 @@ export class AdminService {
 
   setPlatformSettings(patch: PlatformSettingsPatch) {
     return this.store.setPlatformSettings(patch);
+  }
+
+  // ── Waitlist ────────────────────────────────────────────────────────────────
+
+  listWaitlist(p: AdminListParams) {
+    return this.store.adminListWaitlist(p);
+  }
+
+  /** All waitlist rows as an RFC-4180 CSV string (email,name,status,source,signed up). */
+  async waitlistCsv(): Promise<string> {
+    const rows = await this.store.adminListAllWaitlist();
+    const esc = (v: string | null): string => {
+      const s = v ?? '';
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = 'email,name,status,source,signed_up_at';
+    const lines = rows.map((r) =>
+      [esc(r.email), esc(r.name), esc(r.status), esc(r.source), esc(r.createdAt)].join(','),
+    );
+    return [header, ...lines].join('\r\n');
+  }
+
+  async setWaitlistStatus(id: string, status: WaitlistStatus) {
+    const entry = await this.store.adminSetWaitlistStatus(id, status);
+    if (!entry) throw new NotFoundException('Waitlist entry not found');
+    return entry;
+  }
+
+  async deleteWaitlistEntry(id: string) {
+    const ok = await this.store.adminDeleteWaitlistEntry(id);
+    if (!ok) throw new NotFoundException('Waitlist entry not found');
+    return { deleted: true };
   }
 
   system() {

@@ -20,6 +20,7 @@ import type {
   AdminReferral,
   AdminSystemInfo,
   AdminUser,
+  AdminWaitlistEntry,
   AffiliateSettings,
   ListParams,
   Paged,
@@ -28,6 +29,7 @@ import type {
   PlatformSettings,
   PlatformSettingsPatch,
   UserRole,
+  WaitlistStatus,
 } from "@/lib/adminTypes";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL?.trim();
@@ -188,5 +190,25 @@ export const adminApi = {
       method: "PATCH",
       body: JSON.stringify({ commissionRate }),
     });
+  },
+  listWaitlist(p: ListParams = {}): Promise<Paged<AdminWaitlistEntry>> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.listWaitlist(p));
+    return http(`/admin/waitlist${qs(p)}`);
+  },
+  setWaitlistStatus(id: string, status: WaitlistStatus): Promise<AdminWaitlistEntry> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.setWaitlistStatus(id, status));
+    return http(`/admin/waitlist/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+  },
+  deleteWaitlistEntry(id: string): Promise<{ deleted: boolean }> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.deleteWaitlistEntry(id));
+    return http(`/admin/waitlist/${id}`, { method: "DELETE" });
+  },
+  /** CSV text of every waitlist row (for a client-side download). */
+  async exportWaitlistCsv(): Promise<string> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.waitlistCsv());
+    const auth = await adminAuthHeader();
+    const res = await fetch(`${API_URL}/admin/waitlist/export`, { headers: { ...auth } });
+    if (!res.ok) throw new Error(`Admin API ${res.status}: ${await res.text().catch(() => "")}`);
+    return res.text();
   },
 };

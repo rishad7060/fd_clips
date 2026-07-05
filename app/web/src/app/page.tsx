@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
+import { HeroCta } from "@/components/home/HeroCta";
+import { NavCta } from "@/components/home/NavCta";
 import { PricingPlans } from "@/components/home/PricingPlans";
 import { StickyLinkBar } from "@/components/home/StickyLinkBar";
 import { CookiePreferencesLink } from "@/components/consent/CookiePreferencesLink";
@@ -41,7 +43,7 @@ const NAV_LINKS = [
   ["Features", "#features"],
   ["How it works", "#how"],
   ["Pricing", "#pricing"],
-  ["About", "#about"],
+  ["Free Tools", "/tools"],
   ["FAQ", "#faq"],
 ] as const;
 
@@ -129,18 +131,7 @@ export default function LandingPage() {
             ))}
           </nav>
           <div className="flex items-center justify-end gap-2">
-            <Link
-              href="/dashboard"
-              className="hidden rounded-full px-3 py-2 text-sm text-ink-300 transition hover:text-white sm:block"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/new"
-              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink-950 transition duration-200 ease-premium hover:bg-white/90 active:scale-95"
-            >
-              Create clips - free
-            </Link>
+            <NavCta />
           </div>
         </div>
       </header>
@@ -170,29 +161,8 @@ export default function LandingPage() {
             vertical shorts - and emails your best moments in about 30 minutes.
           </p>
 
-          {/* Dual CTAs - ghost "Watch demo" + brand "Get started" w/ arrow circle */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <a
-              href="#how"
-              className="rounded-full border border-white/15 bg-ink-900/60 px-6 py-3 text-sm font-semibold text-ink-100 transition duration-200 ease-premium hover:border-white/30 hover:bg-ink-800 active:scale-95"
-            >
-              Watch demo
-            </a>
-            <Link
-              href="/new"
-              className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-brand-400 to-brand px-6 py-3 text-sm font-semibold text-white shadow-glow transition duration-200 ease-premium hover:from-brand to-brand-600 active:scale-95"
-            >
-              Get started - free
-              <span className="grid h-5 w-5 place-items-center rounded-full bg-white/20 transition group-hover:translate-x-0.5">
-                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-            </Link>
-          </div>
-          <p className="mt-3 text-xs text-ink-500">
-            2 free videos · no credit card · clips by email in ~30 min
-          </p>
+          {/* CTAs (or the waitlist email-capture when waitlist mode is on). */}
+          <HeroCta />
         </div>
 
         {/* Floating fan of clip posters - the signature hero element */}
@@ -453,6 +423,44 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Free tools band (homepage → tools internal links for SEO equity) ── */}
+      <section className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
+        <div className="rounded-2xl border border-white/[0.08] bg-ink-900/40 p-8 shadow-rim sm:p-10">
+          <div className="text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-300">Free tools</p>
+            <h2 className="mx-auto mt-3 max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">
+              Free YouTube tools - no sign-up
+            </h2>
+            <p className="mx-auto mt-3 max-w-xl text-base text-ink-300">
+              Not ready to make clips yet? Grab a{" "}
+              <Link href="/tools/youtube-to-transcript" className="text-brand-300 underline-offset-2 hover:underline">
+                YouTube transcript
+              </Link>
+              ,{" "}
+              <Link href="/tools/youtube-subtitle-downloader" className="text-brand-300 underline-offset-2 hover:underline">
+                download subtitles
+              </Link>
+              , generate{" "}
+              <Link href="/tools/youtube-hashtag-generator" className="text-brand-300 underline-offset-2 hover:underline">
+                hashtags
+              </Link>
+              , or{" "}
+              <Link href="/tools/youtube-tags-extractor" className="text-brand-300 underline-offset-2 hover:underline">
+                extract a video&apos;s tags
+              </Link>{" "}
+              - all free.
+            </p>
+            <Link
+              href="/tools"
+              className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-ink-900/60 px-5 py-2.5 text-sm font-semibold text-ink-100 transition duration-200 ease-premium hover:border-white/30 hover:bg-ink-800 active:scale-95"
+            >
+              Explore all free tools
+              <span aria-hidden>→</span>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* ── Captions highlight ──────────────────────────────────────────── */}
       <section className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
         <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-brand/15 via-ink-900 to-ink-950 p-8 shadow-rim sm:p-12">
@@ -561,6 +569,7 @@ export default function LandingPage() {
           <div className="mt-16 flex flex-col justify-between gap-10 sm:flex-row">
             <nav className="flex flex-col gap-1.5 text-2xl font-medium tracking-tight text-white sm:text-3xl">
               <Link href="/new" className="w-fit transition hover:text-brand-300">Create clips</Link>
+              <Link href="/tools" className="w-fit transition hover:text-brand-300">Free tools</Link>
               <Link href="/help/free-trial-and-plans" className="w-fit transition hover:text-brand-300">Pricing</Link>
               <Link href="/help" className="w-fit transition hover:text-brand-300">Help center</Link>
             </nav>

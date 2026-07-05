@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, Link2, Wand2, Film } from "lucide-react";
+import Link from "next/link";
+import { Sparkles, Link2, Wand2, Film, Captions } from "lucide-react";
 import { ClipBuilder } from "@/components/home/ClipBuilder";
 
 const PLATFORMS = [
@@ -88,6 +89,18 @@ export function NewClipsView({ initialUrl }: { initialUrl?: string }) {
                 </span>
               ))}
             </div>
+          </div>
+
+          {/* Free-tool cross-link: just need the text, not clips? */}
+          <div className="mt-10 flex justify-center">
+            <Link
+              href="/tools/youtube-to-transcript"
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-ink-850 px-4 py-2 text-sm text-ink-300 shadow-rim transition hover:border-white/15 hover:bg-ink-800 hover:text-white"
+            >
+              <Captions className="h-4 w-4 text-brand-300" strokeWidth={1.8} aria-hidden />
+              Just need the transcript?
+              <span className="font-semibold text-brand-300">Free YouTube&nbsp;→&nbsp;Transcript tool</span>
+            </Link>
           </div>
 
           {/* How it works */}

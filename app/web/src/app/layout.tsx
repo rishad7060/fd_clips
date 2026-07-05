@@ -25,10 +25,27 @@ const display = Bricolage_Grotesque({
   display: "swap",
 });
 
+// Absolute base for canonical + OpenGraph URLs. Without metadataBase, Next
+// resolves relative canonical/OG URLs against localhost at build time, breaking
+// them in production. Set NEXT_PUBLIC_SITE_URL to the real origin in prod.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
 export const metadata: Metadata = {
-  title: "Clips - AI shorts from any long video",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Clips - AI shorts from any long video",
+    template: "%s | Clips",
+  },
   description:
     "Turn any podcast, interview, or long video into ranked, captioned, vertical clips. Built like Opus Clip.",
+  applicationName: "Clips",
+  openGraph: {
+    type: "website",
+    siteName: "Clips",
+    url: "/",
+    images: ["/og/default.png"],
+  },
+  twitter: { card: "summary_large_image", images: ["/og/default.png"] },
 };
 
 export const viewport: Viewport = {
@@ -41,6 +58,40 @@ export const viewport: Viewport = {
  * in dev/mock auth mode so it works with no credentials. The dynamic imports
  * keep next-auth out of the render path entirely when disabled.
  */
+/**
+ * Site-wide Organization + WebSite JSON-LD. Helps search engines recognize the
+ * brand entity and can earn a sitelinks search box. Rendered once in the root
+ * layout so every page carries it. Absolute URLs via NEXT_PUBLIC_SITE_URL.
+ */
+function SiteSchema() {
+  const org = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Clips",
+    url: `${SITE_URL}/`,
+    logo: `${SITE_URL}/emblem.png`,
+    description:
+      "AI that turns any long video into ranked, captioned, vertical short clips - plus free YouTube tools for creators.",
+  };
+  const website = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Clips",
+    url: `${SITE_URL}/`,
+    potentialAction: {
+      "@type": "SearchAction",
+      target: `${SITE_URL}/tools?q={search_term_string}`,
+      "query-input": "required name=search_term_string",
+    },
+  };
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(org) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(website) }} />
+    </>
+  );
+}
+
 export default async function RootLayout({
   children,
 }: {
@@ -54,6 +105,7 @@ export default async function RootLayout({
     return (
       <html lang="en">
         <body className={bodyClass}>
+          <SiteSchema />
           <SessionProvider>
             <AuthTokenBridge />
             <ReferralCapture />
@@ -68,6 +120,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className={bodyClass}>
+        <SiteSchema />
         <ReferralCapture />
         <SmoothScroll>{children}</SmoothScroll>
         <ConsentManager />

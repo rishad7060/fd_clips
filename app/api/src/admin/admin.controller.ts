@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Patch,
@@ -29,7 +30,9 @@ import {
   SetPlanDto,
   SetPlatformSettingsDto,
   SetRoleDto,
+  SetWaitlistStatusDto,
   UpdatePlanDto,
+  WaitlistQueryDto,
 } from './dto/admin.dto';
 
 /**
@@ -150,6 +153,29 @@ export class AdminController {
   @Patch('platform-settings')
   setPlatformSettings(@Body() dto: SetPlatformSettingsDto) {
     return this.admin.setPlatformSettings(dto);
+  }
+
+  // ── Waitlist ────────────────────────────────────────────────────────────────
+  @Get('waitlist')
+  listWaitlist(@Query() q: WaitlistQueryDto) {
+    return this.admin.listWaitlist(q);
+  }
+
+  @Get('waitlist/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="waitlist.csv"')
+  exportWaitlist() {
+    return this.admin.waitlistCsv();
+  }
+
+  @Patch('waitlist/:id')
+  setWaitlistStatus(@Param('id') id: string, @Body() dto: SetWaitlistStatusDto) {
+    return this.admin.setWaitlistStatus(id, dto.status);
+  }
+
+  @Delete('waitlist/:id')
+  deleteWaitlistEntry(@Param('id') id: string) {
+    return this.admin.deleteWaitlistEntry(id);
   }
 
   // ── Affiliates ──────────────────────────────────────────────────────────────

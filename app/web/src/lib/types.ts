@@ -325,3 +325,41 @@ export interface RenderClipInput {
    */
   captions?: TranscriptWord[];
 }
+
+/** One timed caption line from the free YouTube→Transcript tool (POST /transcript). */
+export interface TranscriptSegment {
+  start: number;
+  dur: number;
+  text: string;
+}
+
+/** Result of the free YouTube→Transcript tool. ok=false carries a friendly error. */
+export interface TranscriptResult {
+  ok: boolean;
+  title: string;
+  channel: string;
+  duration_sec: number;
+  video_id: string;
+  thumbnail_url: string;
+  language: string;
+  auto_generated: boolean;
+  available_languages: string[];
+  segments: TranscriptSegment[];
+  text: string;
+  error?: string;
+  error_code?: string;
+}
+
+/** Result of the free YouTube Tags Extractor tool (POST /transcript/tags). */
+export interface YoutubeTagsResult {
+  ok: boolean;
+  title: string;
+  channel: string;
+  video_id: string;
+  thumbnail_url: string;
+  tags: string[];
+  categories: string[];
+  view_count: number;
+  error?: string;
+  error_code?: string;
+}

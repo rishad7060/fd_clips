@@ -210,6 +210,107 @@ input[type="range"]::-moz-range-thumb {
   }
 }
 
+/* ── StarBorder (React Bits) ──────────────────────────────────────────────
+   A "shooting star" point of light sweeps along the top + bottom edges and
+   fades out. Keyframes live here (project convention) rather than a per-
+   component StarBorder.css. Used by components/ui/StarBorder.tsx. */
+.star-border-container {
+  display: inline-block;
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.border-gradient-bottom {
+  position: absolute;
+  width: 300%;
+  height: 50%;
+  opacity: 0.7;
+  bottom: -11px;
+  right: -250%;
+  border-radius: 50%;
+  animation: star-movement-bottom linear infinite alternate;
+  z-index: 0;
+  pointer-events: none;
+}
+.border-gradient-top {
+  position: absolute;
+  opacity: 0.7;
+  width: 300%;
+  height: 50%;
+  top: -11px;
+  left: -250%;
+  border-radius: 50%;
+  animation: star-movement-top linear infinite alternate;
+  z-index: 0;
+  pointer-events: none;
+}
+.star-inner-content {
+  position: relative;
+  z-index: 1;
+}
+@keyframes star-movement-bottom {
+  0% { transform: translate(0%, 0%); opacity: 1; }
+  100% { transform: translate(-100%, 0%); opacity: 0; }
+}
+@keyframes star-movement-top {
+  0% { transform: translate(0%, 0%); opacity: 1; }
+  100% { transform: translate(100%, 0%); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .border-gradient-top,
+  .border-gradient-bottom { animation: none; opacity: 0.4; }
+}
+
+/* ── StarBorder, circular variant ─────────────────────────────────────────
+   A THIN ring whose border is a faint base line with a single bright point of
+   light travelling AROUND it - the StarBorder glow, on a small circle. The ring
+   is drawn WITHOUT mask-composite (which misrenders as a filled spinning disc in
+   some engines): a rotating conic-gradient fills the circle, then a solid inner
+   disc (::after, matching the chip's ink-950 surface) covers the centre so only
+   the ~2px edge shows the moving light. Same proven approach as .scan-border.
+   Hollow centre, nothing spins inside the box. URL-chip loading indicator. */
+.star-border-circle {
+  position: relative;
+  display: inline-block;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+.star-border-circle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  /* A bright white comet head with a long faint brand-purple tail, orbiting. */
+  background: conic-gradient(
+    from 0deg,
+    rgba(195, 168, 250, 0.1) 0deg,
+    rgba(195, 168, 250, 0.1) 230deg,
+    rgba(195, 168, 250, 0.55) 312deg,
+    #d8c8fc 344deg,
+    #ffffff 356deg,
+    rgba(195, 168, 250, 0.1) 360deg
+  );
+  animation: star-border-spin 1.6s linear infinite;
+}
+.star-border-circle::after {
+  /* Solid inner disc that masks all but the thin outer ring. Its colour matches
+     the chip surface (ink-950) so the centre reads as hollow. */
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 9999px;
+  background: #070a12;
+}
+@keyframes star-border-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .star-border-circle::before {
+    animation: none;
+    background: rgba(195, 168, 250, 0.4);
+  }
+}
+
 /* Respect reduced-motion: swap movement for a plain fade, keep feedback. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

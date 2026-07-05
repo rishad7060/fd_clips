@@ -26,6 +26,8 @@ import {
   SubscriptionStatus,
   UserRecord,
   UserRole,
+  WaitlistEntryRecord,
+  WaitlistStatus,
   DEFAULT_PLATFORM_SETTINGS,
 } from './store.types';
 import { PLANS } from '../billing/plans';
@@ -53,6 +55,8 @@ export class MemoryStore implements DataStore {
   private readonly affiliatesByCode = new Map<string, string>();
   private readonly referrals = new Map<string, ReferralRecord>();
   private readonly referralsByOrg = new Map<string, string>();
+  private readonly waitlist = new Map<string, WaitlistEntryRecord>();
+  private readonly waitlistByEmail = new Map<string, string>();
   private affiliateSettings: { commissionRate: number | null } = { commissionRate: null };
   private platformSettings: PlatformSettings = { ...DEFAULT_PLATFORM_SETTINGS, updatedAt: now() };
 
@@ -747,6 +751,30 @@ export class MemoryStore implements DataStore {
     return { ...this.platformSettings };
   }
 
+  async addWaitlistEntry(input: {
+    email: string;
+    name?: string | null;
+    source?: string | null;
+  }): Promise<{ entry: WaitlistEntryRecord; already: boolean }> {
+    const email = input.email.trim().toLowerCase();
+    const existingId = this.waitlistByEmail.get(email);
+    if (existingId) {
+      return { entry: { ...this.waitlist.get(existingId)! }, already: true };
+    }
+    const entry: WaitlistEntryRecord = {
+      id: id(),
+      email,
+      name: input.name?.trim() || null,
+      source: input.source?.trim() || null,
+      status: 'pending',
+      createdAt: now(),
+      invitedAt: null,
+    };
+    this.waitlist.set(entry.id, entry);
+    this.waitlistByEmail.set(email, entry.id);
+    return { entry: { ...entry }, already: false };
+  }
+
   // ── Admin (cross-tenant) ──────────────────────────────────────────────────
 
   private paginate<T>(rows: T[], p: AdminListParams): Paged<T> {
@@ -1018,5 +1046,36 @@ export class MemoryStore implements DataStore {
 
   async adminDeleteClip(clipId: string): Promise<boolean> {
     return this.clips.delete(clipId);
+  }
+
+  private waitlistSorted(): WaitlistEntryRecord[] {
+    return [...this.waitlist.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async adminListWaitlist(p: AdminListParams): Promise<Paged<WaitlistEntryRecord>> {
+    const rows = this.waitlistSorted().filter((w) => this.matches([w.email, w.name], p.search));
+    return this.paginate(rows, p);
+  }
+
+  async adminListAllWaitlist(): Promise<WaitlistEntryRecord[]> {
+    return this.waitlistSorted().map((w) => ({ ...w }));
+  }
+
+  async adminSetWaitlistStatus(
+    id: string,
+    status: WaitlistStatus,
+  ): Promise<WaitlistEntryRecord | null> {
+    const entry = this.waitlist.get(id);
+    if (!entry) return null;
+    entry.status = status;
+    entry.invitedAt = status === 'invited' && !entry.invitedAt ? now() : entry.invitedAt;
+    return { ...entry };
+  }
+
+  async adminDeleteWaitlistEntry(id: string): Promise<boolean> {
+    const entry = this.waitlist.get(id);
+    if (!entry) return false;
+    this.waitlistByEmail.delete(entry.email);
+    return this.waitlist.delete(id);
   }
 }
