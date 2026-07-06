@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Terms of Service - Clips",
   description: "The terms that govern your use of Clips.",
+  alternates: { canonical: "/terms" },
 };
 
 const UPDATED = "June 24, 2026";

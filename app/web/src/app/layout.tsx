@@ -39,6 +39,32 @@ export const metadata: Metadata = {
   description:
     "Turn any podcast, interview, or long video into ranked, captioned, vertical clips. Built like Opus Clip.",
   applicationName: "Clips",
+  // Self-canonical for the homepage. Per-page metadata overrides this with its
+  // own canonical; pages that don't set one inherit "/" resolved against
+  // metadataBase, so every indexable page has a canonical.
+  alternates: { canonical: "/" },
+  // Explicit, permissive robots directives + the rich-preview settings Google
+  // honors (large image previews, untruncated snippets, full video previews).
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  // Search-engine ownership verification (optional). Paste the token from
+  // Google Search Console / Bing Webmaster into these env vars to auto-emit the
+  // verification <meta> tags - no code change or redeploy of the tag needed.
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || undefined,
+    other: process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION
+      ? { "msvalidate.01": process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION }
+      : {},
+  },
   openGraph: {
     type: "website",
     siteName: "Clips",

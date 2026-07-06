@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Privacy Policy - Clips",
   description: "How Clips collects, uses, and protects your data.",
+  alternates: { canonical: "/privacy" },
 };
 
 const UPDATED = "June 24, 2026";

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Accessibility Statement - Clips",
   description: "Clips' commitment to an accessible, inclusive product.",
+  alternates: { canonical: "/accessibility" },
 };
 
 const UPDATED = "June 24, 2026";

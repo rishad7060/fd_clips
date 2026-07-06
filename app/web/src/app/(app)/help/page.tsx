@@ -6,6 +6,7 @@ import { HELP_ARTICLES, HELP_CATEGORIES, OPUS_DOCS, articlesByCategory } from "@
 export const metadata: Metadata = {
   title: "Help center - Clips",
   description: "Guides for making clips, captions, credits, billing, sources, and languages.",
+  alternates: { canonical: "/help" },
 };
 
 /**

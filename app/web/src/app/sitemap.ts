@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { TOOLS } from "@/lib/tools";
+import { HELP_ARTICLES } from "@/lib/help";
 
 /**
  * Sitemap for search engines. Lists the public, indexable pages - the marketing
@@ -24,6 +25,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       path: `/tools/${t.slug}`,
       priority: 0.9,
       changeFrequency: "weekly" as Freq,
+    })),
+    // Help center + every article (indexable content = more organic surface).
+    { path: "/help", priority: 0.6, changeFrequency: "monthly" },
+    ...HELP_ARTICLES.map((a) => ({
+      path: `/help/${a.slug}`,
+      priority: 0.5,
+      changeFrequency: "monthly" as Freq,
     })),
     { path: "/terms", priority: 0.3, changeFrequency: "yearly" },
     { path: "/privacy", priority: 0.3, changeFrequency: "yearly" },
