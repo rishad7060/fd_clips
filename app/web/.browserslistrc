@@ -1,0 +1,9 @@
+# Target modern browsers so Next/SWC does not ship legacy polyfills/transforms
+# (Array.prototype.at/flat/flatMap, Object.fromEntries/hasOwn, String trim*, etc.).
+# These are Baseline features supported everywhere current - dropping the
+# transpile saves ~11 KiB of unused JS on every page (Lighthouse "Legacy
+# JavaScript"). Adjust if you must support very old browsers.
+> 0.5%
+last 2 versions
+not dead
+not op_mini all

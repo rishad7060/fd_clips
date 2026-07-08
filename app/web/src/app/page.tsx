@@ -21,11 +21,11 @@ import { CookiePreferencesLink } from "@/components/consent/CookiePreferencesLin
 // score so the hero shows our actual output, not a placeholder.
 // Photos: Unsplash (free license) - podcast/microphone portraits, public/podcast/.
 const DEMO_CLIPS = [
-  { rank: 1, hook: "This one habit changed everything", score: 96, img: "/podcast/podcaster-1.jpg" },
-  { rank: 2, hook: "Nobody talks about this part", score: 93, img: "/podcast/podcaster-2.jpg" },
-  { rank: 3, hook: "The real reason you procrastinate", score: 90, img: "/podcast/podcaster-3.jpg" },
-  { rank: 4, hook: "I wish I knew this at twenty", score: 85, img: "/podcast/podcaster-4.jpg" },
-  { rank: 5, hook: "Stop doing this immediately", score: 81, img: "/podcast/podcaster-5.jpg" },
+  { rank: 1, hook: "This one habit changed everything", score: 96, img: "/podcast/podcaster-1.webp" },
+  { rank: 2, hook: "Nobody talks about this part", score: 93, img: "/podcast/podcaster-2.webp" },
+  { rank: 3, hook: "The real reason you procrastinate", score: 90, img: "/podcast/podcaster-3.webp" },
+  { rank: 4, hook: "I wish I knew this at twenty", score: 85, img: "/podcast/podcaster-4.webp" },
+  { rank: 5, hook: "Stop doing this immediately", score: 81, img: "/podcast/podcaster-5.webp" },
 ];
 
 // Platform strip - label + brand glyph (Icons8, free license, public/brands/).
@@ -253,6 +253,10 @@ export default function LandingPage() {
               <img
                 src={DEMO_CLIPS[0]!.img}
                 alt="Podcaster recording at a microphone"
+                width={560}
+                height={420}
+                loading="lazy"
+                decoding="async"
                 className="aspect-[4/3] w-full object-cover object-top opacity-90 sm:aspect-auto sm:h-44"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-ink-850 via-ink-850/20 to-transparent" />
@@ -283,6 +287,10 @@ export default function LandingPage() {
                     key={c.rank}
                     src={c.img}
                     alt=""
+                    width={32}
+                    height={32}
+                    loading="lazy"
+                    decoding="async"
                     className="h-8 w-8 rounded-full object-cover ring-2 ring-ink-850"
                   />
                 ))}
@@ -626,6 +634,14 @@ function ClipPoster({
       <img
         src={clip.img}
         alt={`Clip ${clip.rank}: ${clip.hook} - virality ${clip.score}`}
+        width={560}
+        height={996}
+        // Hero fan = the LCP element. Load it eagerly at high priority (never
+        // lazy) so LCP fires as early as possible; explicit dims prevent CLS.
+        loading="eager"
+        // @ts-expect-error - fetchpriority is valid HTML, React types lag.
+        fetchpriority="high"
+        decoding="async"
         className="h-full w-full object-cover"
       />
       {/* Bottom scrim so captions stay legible over any frame. */}
