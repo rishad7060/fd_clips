@@ -33,6 +33,38 @@ const VARIANTS: Record<string, { title: string; subtitle?: string; eyebrow?: str
     title: "YouTube Tags Extractor",
     subtitle: "See any video's hidden tags - free.",
   },
+  "youtube-title-generator.png": {
+    title: "YouTube Title Generator",
+    subtitle: "10-15 catchy, clickable title ideas - free.",
+  },
+  "youtube-description-generator.png": {
+    title: "YouTube Description Generator",
+    subtitle: "A formatted description with hook, CTA & hashtags - free.",
+  },
+  "youtube-hook-generator.png": {
+    title: "Video Hook Generator",
+    subtitle: "10 scroll-stopping opening hooks - free.",
+  },
+  "youtube-timestamp-generator.png": {
+    title: "YouTube Timestamp Generator",
+    subtitle: "Valid, ordered chapters for your video - free.",
+  },
+  "srt-to-vtt-converter.png": {
+    title: "SRT to VTT Converter",
+    subtitle: "Convert subtitles both ways in your browser - free.",
+  },
+  "youtube-keyword-generator.png": {
+    title: "YouTube Keyword Generator",
+    subtitle: "Dozens of related keyword & tag ideas - free.",
+  },
+  "show-notes-generator.png": {
+    title: "Podcast Show Notes Generator",
+    subtitle: "Clean, formatted show notes from your text - free.",
+  },
+  "caption-formatter.png": {
+    title: "Caption & Subtitle Formatter",
+    subtitle: "Clean up and wrap messy captions - free.",
+  },
 };
 
 export function GET(_req: Request, { params }: { params: { slug: string } }) {

@@ -1,6 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Captions, Download, Hash, Tags } from "lucide-react";
+import {
+  AlignLeft,
+  Captions,
+  Download,
+  FileCode,
+  FileText,
+  Hash,
+  ListOrdered,
+  ScrollText,
+  Tags,
+  Type,
+  Zap,
+} from "lucide-react";
 import { TOOLS } from "@/lib/tools";
 
 const TITLE = "Free YouTube Tools for Creators";
@@ -34,7 +46,20 @@ export const metadata: Metadata = {
   },
 };
 
-const ICONS = { captions: Captions, download: Download, hash: Hash, tags: Tags } as const;
+const ICONS = {
+  captions: Captions,
+  download: Download,
+  hash: Hash,
+  tags: Tags,
+  type: Type,
+  fileText: FileText,
+  zap: Zap,
+  listOrdered: ListOrdered,
+  fileCode: FileCode,
+  keywords: Tags,
+  scrollText: ScrollText,
+  alignLeft: AlignLeft,
+} as const;
 
 /** ItemList schema so the hub can surface as a rich list + feed the tool pages. */
 const SITE = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");

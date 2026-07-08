@@ -33,12 +33,12 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Clips - AI shorts from any long video",
-    template: "%s | Clips",
+    default: "ClipsHQ - AI Video Clips Delivered to Your Inbox",
+    template: "%s | ClipsHQ",
   },
   description:
-    "Turn any podcast, interview, or long video into ranked, captioned, vertical clips. Built like Opus Clip.",
-  applicationName: "Clips",
+    "Turn any podcast, interview, or long video into ranked, captioned, vertical clips.",
+  applicationName: "ClipsHQ",
   // Self-canonical for the homepage. Per-page metadata overrides this with its
   // own canonical; pages that don't set one inherit "/" resolved against
   // metadataBase, so every indexable page has a canonical.
@@ -67,7 +67,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: "website",
-    siteName: "Clips",
+    siteName: "ClipsHQ",
     url: "/",
     images: ["/og/default.png"],
   },
@@ -93,7 +93,7 @@ function SiteSchema() {
   const org = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "Clips",
+    name: "ClipsHQ",
     url: `${SITE_URL}/`,
     logo: `${SITE_URL}/emblem.png`,
     description:
@@ -102,7 +102,7 @@ function SiteSchema() {
   const website = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: "Clips",
+    name: "ClipsHQ",
     url: `${SITE_URL}/`,
     potentialAction: {
       "@type": "SearchAction",

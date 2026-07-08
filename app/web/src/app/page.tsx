@@ -87,7 +87,7 @@ const STEPS = [
 
 const FAQ = [
   {
-    q: "How does Clips work?",
+    q: "How does ClipsHQ work?",
     a: "Paste a YouTube link and we transcribe the whole video, score every moment for viral potential, cut the best ones, reframe them to vertical 9:16, and burn in animated captions. Your top clips are emailed to you in about 30 minutes.",
   },
   {
@@ -103,7 +103,7 @@ const FAQ = [
     a: "Every clip ships with word-by-word karaoke captions burned in. You can restyle colour, highlight and positioning in the editor before you export.",
   },
   {
-    q: "Is Clips free to use?",
+    q: "Is ClipsHQ free to use?",
     a: "Yes - your first 2 videos are free, no credit card required. After that you top up with credits for more renders.",
   },
 ];
@@ -145,7 +145,7 @@ export default function LandingPage() {
         />
         <div className="relative mx-auto max-w-5xl px-6 pb-4 pt-20 text-center sm:pt-28">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-300">
-            #1 AI shorts generator
+            AI clips, delivered to your inbox
           </p>
           <h1 className="mx-auto mt-5 max-w-4xl text-balance text-5xl font-semibold leading-[1.04] tracking-tighter sm:text-7xl">
             One long video,
@@ -157,7 +157,7 @@ export default function LandingPage() {
             </span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base text-ink-300 sm:text-lg">
-            Clips turns any podcast, interview or long video into ranked, captioned,
+            ClipsHQ turns any podcast, interview or long video into ranked, captioned,
             vertical shorts - and emails your best moments in about 30 minutes.
           </p>
 
@@ -190,18 +190,11 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Rating strip */}
+        {/* Beta framing strip */}
         <div className="relative mx-auto max-w-5xl px-6 pb-16 text-center">
           <p className="text-sm text-ink-300">
-            Rated <span className="font-semibold text-white">4.9/5</span> by 4,900+ creators
+            Now in beta — <span className="font-semibold text-white">built by creators, for creators</span>
           </p>
-          <div className="mt-2 flex items-center justify-center gap-1 text-highscore" aria-label="4.9 out of 5 stars">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <svg key={i} viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden>
-                <path d="M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.6L12 18.6 6.1 21.3l1.2-6.6L2.5 9.5l6.6-.9z" />
-              </svg>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -541,7 +534,7 @@ export default function LandingPage() {
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-2.5 text-sm text-ink-300">
                 <span className="h-2 w-9 rounded-full bg-gradient-to-r from-brand-300 to-brand" />
-                Uncover the potency of <span className="font-semibold text-white">Clips</span> at
+                Get in touch with <span className="font-semibold text-white">ClipsHQ</span> at
               </p>
               <a href="mailto:clipshq.pro@gmail.com" className="group mt-4 block w-fit max-w-full">
                 <span className="block text-balance font-display text-4xl font-semibold tracking-tighter text-white sm:text-6xl">
@@ -570,6 +563,8 @@ export default function LandingPage() {
             <nav className="flex flex-col gap-1.5 text-2xl font-medium tracking-tight text-white sm:text-3xl">
               <Link href="/new" className="w-fit transition hover:text-brand-300">Create clips</Link>
               <Link href="/tools" className="w-fit transition hover:text-brand-300">Free tools</Link>
+              <Link href="/compare" className="w-fit transition hover:text-brand-300">Compare</Link>
+              <Link href="/about" className="w-fit transition hover:text-brand-300">About</Link>
               <Link href="/help/free-trial-and-plans" className="w-fit transition hover:text-brand-300">Pricing</Link>
               <Link href="/help" className="w-fit transition hover:text-brand-300">Help center</Link>
             </nav>
@@ -583,12 +578,12 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Oversized brand wordmark - the actual Clips lockup */}
+          {/* Oversized brand wordmark - the actual ClipsHQ lockup */}
           <div className="mt-16">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/label-logo.svg"
-              alt="Clips"
+              alt="ClipsHQ"
               className="w-full select-none opacity-95"
               draggable={false}
             />
@@ -598,14 +593,12 @@ export default function LandingPage() {
         {/* Bottom bar - brand-tinted band */}
         <div className="mt-6 border-t border-white/[0.06] bg-brand/10">
           <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-5 text-sm text-ink-200 sm:flex-row">
-            <span>© {year} Clips - All rights reserved.</span>
+            <span>© {year} ClipsHQ - All rights reserved.</span>
             <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
               <Link href="/terms" className="transition hover:text-white">Terms</Link>
               <Link href="/privacy" className="transition hover:text-white">Privacy</Link>
               <Link href="/accessibility" className="transition hover:text-white">Accessibility</Link>
               <CookiePreferencesLink className="transition hover:text-white">Cookie preferences</CookiePreferencesLink>
-              <a href="https://instagram.com" className="transition hover:text-white">Instagram</a>
-              <a href="https://linkedin.com" className="transition hover:text-white">LinkedIn</a>
             </nav>
           </div>
         </div>

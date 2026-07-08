@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { TOOLS } from "@/lib/tools";
 import { HELP_ARTICLES } from "@/lib/help";
+import { COMPARE_PAGES } from "@/lib/compare";
 
 /**
  * Sitemap for search engines. Lists the public, indexable pages - the marketing
@@ -27,12 +28,22 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly" as Freq,
     })),
     // Help center + every article (indexable content = more organic surface).
+    // ── Comparison / alternatives pages (high-intent "vs" + "best/cheapest"
+    // SEO surfaces), driven by the shared registry. ──────────────────────────
+    { path: "/compare", priority: 0.7, changeFrequency: "weekly" },
+    ...COMPARE_PAGES.map((c) => ({
+      path: `/compare/${c.slug}`,
+      priority: 0.7,
+      changeFrequency: "weekly" as Freq,
+    })),
     { path: "/help", priority: 0.6, changeFrequency: "monthly" },
     ...HELP_ARTICLES.map((a) => ({
       path: `/help/${a.slug}`,
       priority: 0.5,
       changeFrequency: "monthly" as Freq,
     })),
+    { path: "/about", priority: 0.6, changeFrequency: "monthly" },
+    { path: "/trust", priority: 0.6, changeFrequency: "monthly" },
     { path: "/terms", priority: 0.3, changeFrequency: "yearly" },
     { path: "/privacy", priority: 0.3, changeFrequency: "yearly" },
     { path: "/accessibility", priority: 0.3, changeFrequency: "yearly" },

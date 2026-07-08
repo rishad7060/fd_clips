@@ -16,7 +16,19 @@ export interface ToolDef {
   /** One-line hub-card + meta description lead. */
   blurb: string;
   /** lucide-react icon name (resolved in the hub to keep this file dep-free). */
-  icon: "captions" | "download" | "hash" | "tags";
+  icon:
+    | "captions"
+    | "download"
+    | "hash"
+    | "tags"
+    | "type"
+    | "fileText"
+    | "zap"
+    | "listOrdered"
+    | "fileCode"
+    | "keywords"
+    | "scrollText"
+    | "alignLeft";
   /** Primary keyword this tool targets (for copy + internal anchors). */
   keyword: string;
 }
@@ -57,6 +69,78 @@ export const TOOLS: ToolDef[] = [
       "See the hidden tags and keywords any public YouTube video uses for its SEO.",
     icon: "tags",
     keyword: "youtube tags",
+  },
+  {
+    slug: "youtube-title-generator",
+    label: "Title Generator",
+    title: "YouTube Video Title Generator",
+    blurb:
+      "Turn a topic into 10-15 catchy, clickable YouTube title variations - how-to, listicle, question and curiosity-gap styles.",
+    icon: "type",
+    keyword: "youtube title generator",
+  },
+  {
+    slug: "youtube-description-generator",
+    label: "Description Generator",
+    title: "YouTube Description Generator",
+    blurb:
+      "Generate a formatted YouTube description with a hook, summary, timestamps, CTA, hashtags and links in one click.",
+    icon: "fileText",
+    keyword: "youtube description generator",
+  },
+  {
+    slug: "youtube-hook-generator",
+    label: "Hook Generator",
+    title: "Video Hook Generator",
+    blurb:
+      "Get 10 scroll-stopping opening-line hooks for your video - curiosity, bold-claim, question and stat patterns.",
+    icon: "zap",
+    keyword: "video hook generator",
+  },
+  {
+    slug: "youtube-timestamp-generator",
+    label: "Timestamp Generator",
+    title: "YouTube Timestamp & Chapter Generator",
+    blurb:
+      "Paste your chapter list and get valid, ordered YouTube timestamps that unlock clickable video chapters.",
+    icon: "listOrdered",
+    keyword: "youtube timestamp generator",
+  },
+  {
+    slug: "srt-to-vtt-converter",
+    label: "SRT to VTT Converter",
+    title: "SRT to VTT Converter",
+    blurb:
+      "Convert subtitle files between SRT and VTT formats instantly - paste or upload, then download. No API.",
+    icon: "fileCode",
+    keyword: "srt to vtt converter",
+  },
+  {
+    slug: "youtube-keyword-generator",
+    label: "Keyword Generator",
+    title: "YouTube Keyword Generator",
+    blurb:
+      "Expand any topic into dozens of related YouTube keyword and tag ideas - modifiers, long-tail and niche combos.",
+    icon: "keywords",
+    keyword: "youtube keyword generator",
+  },
+  {
+    slug: "show-notes-generator",
+    label: "Show Notes Generator",
+    title: "Podcast Show Notes Generator",
+    blurb:
+      "Paste your episode summary or transcript and format clean show notes - title, summary, key points and links.",
+    icon: "scrollText",
+    keyword: "podcast show notes generator",
+  },
+  {
+    slug: "caption-formatter",
+    label: "Caption Formatter",
+    title: "Caption & Subtitle Formatter",
+    blurb:
+      "Clean up messy captions - wrap lines to a readable length, fix sentence case and strip filler words.",
+    icon: "alignLeft",
+    keyword: "caption formatter",
   },
 ];
 

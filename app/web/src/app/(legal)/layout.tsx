@@ -4,6 +4,8 @@ import { Logo } from "@/components/Logo";
 import { CookiePreferencesLink } from "@/components/consent/CookiePreferencesLink";
 
 const LEGAL_LINKS = [
+  ["About", "/about"],
+  ["Trust & Privacy", "/trust"],
   ["Terms of Service", "/terms"],
   ["Privacy Policy", "/privacy"],
   ["Accessibility", "/accessibility"],
