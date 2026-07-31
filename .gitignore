@@ -19,9 +19,13 @@ build/
 .env.docker
 *.local
 # yt-dlp YouTube cookies (bot-check fix) - NEVER commit; grants session access.
+# Ignore everything IN secrets/ but keep the dir itself tracked (via .gitkeep)
+# so the docker-compose bind mount ./secrets:/secrets has a source on a fresh
+# server checkout. The cookies file lives here but is never committed.
 cookies.txt
-secrets/
 *cookies*.txt
+/secrets/*
+!/secrets/.gitkeep
 
 # Workspace / media artifacts
 workspace/

@@ -97,6 +97,14 @@ services:
       SCORING_PROVIDER: ${SCORING_PROVIDER:-gemini}
       TRANSCRIBE_BACKEND: ${TRANSCRIBE_BACKEND:-groq}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # ── yt-dlp YouTube auth (bot-check fix) ──
+      # A datacenter/VPS IP gets "Sign in to confirm you're not a bot". Supplying
+      # a logged-in cookies.txt makes yt-dlp look like a real user. The default
+      # path points at the ./secrets mount below; leave the file absent to run
+      # cookie-less (fine until YouTube blocks the IP). YTDLP_COOKIES_FROM_BROWSER
+      # is the alt seam (only useful if the container has a browser profile).
+      YTDLP_COOKIES: ${YTDLP_COOKIES:-/secrets/cookies.txt}
+      YTDLP_COOKIES_FROM_BROWSER: ${YTDLP_COOKIES_FROM_BROWSER:-}
       # ── Billing (Polar.sh) ──
       POLAR_ACCESS_TOKEN: ${POLAR_ACCESS_TOKEN:-}
       POLAR_BASE_URL: ${POLAR_BASE_URL:-https://sandbox-api.polar.sh}
@@ -121,6 +129,12 @@ services:
       ADMIN_NAME: ${ADMIN_NAME:-FocalDive Admin}
     volumes:
       - workspace:/app/workspace
+      # yt-dlp cookies (bot-check fix), read-only. Host ./secrets/cookies.txt →
+      # container /secrets/cookies.txt (the YTDLP_COOKIES default above). The
+      # ./secrets dir is gitignored; create it + drop cookies.txt on the server.
+      # If the dir/file is absent Docker still starts (bind of a missing source
+      # errors, so we keep the whole ./secrets dir which you create once).
+      - ./secrets:/secrets:ro
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:4000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 10s

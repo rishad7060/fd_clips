@@ -35,49 +35,49 @@ can rate-limit or flag accounts used for automation.
 > session. Never commit it (it's gitignored below), never share it.
 
 ### Step 2 — Upload it to the server (via PuTTY / pscp)
-From your local machine (PowerShell), replace host/user/path as needed:
+It must land at **`<repo>/secrets/cookies.txt`** — the same dir docker-compose
+bind-mounts as `/secrets`. Replace `<repo>` with your checkout path on the
+server (e.g. `~/clipshq/fd_clips`). From your local machine (PowerShell):
 
 ```powershell
-pscp cookies.txt user@clipshq.pro:/home/user/clipshq/secrets/cookies.txt
+pscp cookies.txt user@clipshq.pro:/home/user/clipshq/fd_clips/secrets/cookies.txt
 ```
 
 Or paste it in on the server with a heredoc if pscp isn't set up:
 ```bash
-mkdir -p ~/clipshq/secrets
-nano ~/clipshq/secrets/cookies.txt   # paste, save (Ctrl-O, Enter, Ctrl-X)
-chmod 600 ~/clipshq/secrets/cookies.txt
+cd <repo>                              # e.g. cd ~/clipshq/fd_clips
+mkdir -p secrets
+nano secrets/cookies.txt               # paste, save (Ctrl-O, Enter, Ctrl-X)
+chmod 600 secrets/cookies.txt
 ```
 
-### Step 3 — Point the containers at it
-The pipeline runs **inside the api/worker containers**, so the file must be
-mounted in and the env var must point at the in-container path.
+### Step 3 — Point the containers at it (ALREADY WIRED IN-REPO)
+You don't need to edit compose anymore — it's done:
+- `docker-compose.yml` mounts `./secrets:/secrets:ro` into the **api** service.
+- It forwards `YTDLP_COOKIES` (default `/secrets/cookies.txt`) into the container.
+- `app/api/Dockerfile` installs **Deno** so yt-dlp can solve YouTube's nsig JS
+  challenge (required for the cookie'd `web` client to actually return formats).
 
-**a) Mount the secrets dir** — in `docker-compose.yml`, add a volume to the
-services that run yt-dlp (api, and worker if present):
-
-```yaml
-  api:
-    volumes:
-      - ./secrets:/secrets:ro          # host ./secrets → /secrets (read-only)
-```
-(Repeat under `worker:` if you have a separate worker service.)
-
-**b) Set the env var** — in the server root `.env`:
-
+So on the server you only need the file at `./secrets/cookies.txt` (the repo
+already ships an empty `./secrets/` dir with a `.gitkeep`, so the bind mount has
+a source). Optionally override the path in `.env`:
 ```env
+# only if you keep cookies elsewhere; default is /secrets/cookies.txt
 YTDLP_COOKIES=/secrets/cookies.txt
 ```
 
-Make sure `docker-compose.yml` passes `YTDLP_COOKIES` into the api/worker env
-(add `YTDLP_COOKIES: ${YTDLP_COOKIES:-}` under each service's `environment:` if
-it isn't already forwarded).
-
 ### Step 4 — Restart & verify
+The pipeline runs inside the **api** service (it bundles the Python code — there
+is no separate worker service in this stack). Rebuild it so the new Dockerfile
+(with Deno) and the hardened scripts take effect:
 ```bash
-cd ~/clipshq/fd_clips
-git pull origin main                       # gets the hardened transcript.py/yt_tags.py
-docker compose up -d --build api worker     # rebuild the python-carrying services
-# Test the free tool end to end:
+cd <repo>                                  # e.g. cd ~/clipshq/fd_clips
+git pull origin main                       # hardened scripts + compose + Dockerfile
+docker compose up -d --build api           # rebuilds api (Deno + pipeline)
+# Confirm the mount + Deno landed:
+docker compose exec api ls -l /secrets/cookies.txt   # should exist
+docker compose exec api deno --version               # should print a version
+# Test the free tool end to end (a video that previously bot-blocked):
 curl -s -X POST https://api.clipshq.pro/transcript \
   -H 'content-type: application/json' \
   -d '{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"}' | head -c 400
@@ -102,10 +102,12 @@ On a headless VPS, use the `cookies.txt` route above instead.
 
 | Symptom | Cause / fix |
 |---|---|
-| `errorCode:"bot_check"` still after setup | File not mounted into the container, or `YTDLP_COOKIES` path is the **host** path not the **in-container** path (`/secrets/cookies.txt`). Check `docker compose exec api ls -l /secrets/`. |
-| Worked, then broke again days later | Cookies **expire**. Re-export a fresh `cookies.txt` and re-upload. Sessions typically last weeks, not forever. |
+| `errorCode:"bot_check"` still after setup | Cookies not seen by yt-dlp. Check `docker compose exec api ls -l /secrets/cookies.txt` — if missing, the file isn't in `<repo>/secrets/` on the host, or the container wasn't recreated (`docker compose up -d api`). |
+| `"Requested format is not available"` / captions "could not be fetched" **with cookies** | The cookie'd `web` client needs **Deno** for the nsig challenge. Verify `docker compose exec api deno --version`. If missing, rebuild: `docker compose build --no-cache api`. |
+| Worked, then broke again days later | Cookies **expire**. Re-export a fresh `cookies.txt`, drop it in `<repo>/secrets/`, `docker compose up -d api`. Sessions last weeks, not forever. |
 | "cookie file may be stale/expired" message | Same — re-export. The code detects it had cookies but YouTube still refused. |
 | Account got a warning / logged out | You used your primary account. Switch to a throwaway account for automation. |
+| `no such file or directory: ./secrets` on `up` | The `./secrets` dir is missing on the host. `mkdir -p <repo>/secrets` (a fresh `git pull` ships it via `.gitkeep`). |
 
 ## Cookie rotation (keeping it alive)
 Cookies decay. Practical options, cheapest first:

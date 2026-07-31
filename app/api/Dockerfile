@@ -54,10 +54,24 @@ RUN apt-get update && \
         libsm6 \
         libxext6 \
         libxrender1 && \
+    # unzip - needed to unpack the Deno release archive installed below.
+    unzip \
+        curl && \
     # Symlink python → python3 so existing code that calls 'python' (e.g.
     # real-pipeline.worker.ts const PYTHON_BIN = 'python') works unchanged.
     ln -s /usr/bin/python3 /usr/bin/python && \
     rm -rf /var/lib/apt/lists/*
+
+# ── Deno (JS runtime for yt-dlp) ──────────────────────────────
+# Modern YouTube gates its format + timedtext URLs behind an nsig ("n") JS
+# challenge that yt-dlp can only solve with an external JS runtime - it uses
+# DENO, not Node. Without it, the cookie'd `web` player_client (the fix for a
+# bot-checked datacenter IP) extracts but the real formats/captions are dropped
+# ("Requested format is not available"). Install the static Deno binary onto
+# PATH so ingest.py / transcript.py / yt_tags.py can solve the challenge.
+ENV DENO_INSTALL=/usr/local
+RUN curl -fsSL https://deno.land/install.sh | sh -s -- -y \
+    && /usr/local/bin/deno --version
 
 WORKDIR /app
 
