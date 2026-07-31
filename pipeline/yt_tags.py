@@ -51,32 +51,41 @@ def extract_tags(url: str) -> dict[str, Any]:
     cookie_file = (os.environ.get("YTDLP_COOKIES") or "").strip()
     cookie_browser = (os.environ.get("YTDLP_COOKIES_FROM_BROWSER") or "").strip()
     have_cookies = bool((cookie_file and Path(cookie_file).is_file()) or cookie_browser)
-    if cookie_file and Path(cookie_file).is_file():
-        base_opts["cookiefile"] = cookie_file
-    elif cookie_browser:
-        base_opts["cookiesfrombrowser"] = (cookie_browser,)
 
-    # YouTube-only client ladder (mirrors transcript.py); non-YouTube gets one pass.
+    def _apply_cookies(opts: dict[str, Any]) -> None:
+        if cookie_file and Path(cookie_file).is_file():
+            opts["cookiefile"] = cookie_file
+        elif cookie_browser:
+            opts["cookiesfrombrowser"] = (cookie_browser,)
+
+    # Mobile clients (android_vr/…) don't support cookies and need no Deno, so try
+    # them cookie-LESS first (best on a non-blocked IP); escalate to cookie'd web
+    # clients for a bot-checked IP. Mirrors transcript.py. See its comment.
     if _is_youtube(url):
-        client_attempts: list[list[str]] = [
-            ["android_vr", "android", "ios", "web"],
-            ["web_safari", "tv", "mweb"],
+        attempts: list[tuple[list[str], bool]] = [
+            (["android_vr", "android", "ios"], False),
         ]
+        if have_cookies:
+            attempts.append((["web_safari", "tv", "mweb", "web"], True))
+        else:
+            attempts.append((["mweb", "tv"], False))
     else:
-        client_attempts = [[]]
+        attempts = [([], have_cookies)]
 
     info: dict[str, Any] = {}
     last_err: Optional[Exception] = None
-    for clients in client_attempts:
+    for clients, use_cookies in attempts:
         opts = dict(base_opts)
         if clients:
             opts["extractor_args"] = {"youtube": {"player_client": clients}}
+        if use_cookies:
+            _apply_cookies(opts)
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False) or {}
             last_err = None
             break
-        except Exception as e:  # noqa: BLE001 - try the next client combo
+        except Exception as e:  # noqa: BLE001 - try the next attempt
             last_err = e
             el = str(e).lower()
             if "unsupported url" in el or "is not a valid url" in el:

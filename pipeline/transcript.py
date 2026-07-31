@@ -144,7 +144,14 @@ def _pick_track(
     """
     if not tracks:
         return None, None
-    keys = list(tracks.keys())
+    # yt-dlp exposes a video's live-chat replay under subtitles as the pseudo-lang
+    # "live_chat" (a json event stream, NOT a caption track). If we pick it we get
+    # an unparseable entry and wrongly report "no captions" while real auto-captions
+    # sit untouched. Drop it - and any other non-language pseudo-tracks - up front.
+    _NON_LANG = {"live_chat", "rechat"}
+    keys = [k for k in tracks.keys() if k.lower() not in _NON_LANG]
+    if not keys:
+        return None, None
 
     def find(pred) -> Optional[str]:
         return next((k for k in keys if pred(k)), None)
@@ -202,44 +209,51 @@ def transcript(url: str, want_lang: Optional[str] = None) -> dict[str, Any]:
         "socket_timeout": 20,
         "retries": 1,
     }
-    # Same cookie seam as ingest/preview so private/age-gated captions work - AND,
-    # increasingly, so a datacenter/VPS IP isn't bot-blocked ("Sign in to confirm
-    # you're not a bot"). Two ways to supply cookies:
+    # Cookie seam (ingest/preview parity): private/age-gated captions AND the fix
+    # for a bot-checked datacenter/VPS IP ("Sign in to confirm you're not a bot").
     #   YTDLP_COOKIES=/path/cookies.txt        - an exported cookies.txt, or
     #   YTDLP_COOKIES_FROM_BROWSER=chrome      - read from a logged-in browser.
     cookie_file = (os.environ.get("YTDLP_COOKIES") or "").strip()
     cookie_browser = (os.environ.get("YTDLP_COOKIES_FROM_BROWSER") or "").strip()
     have_cookies = bool((cookie_file and Path(cookie_file).is_file()) or cookie_browser)
-    if cookie_file and Path(cookie_file).is_file():
-        base_opts["cookiefile"] = cookie_file
-    elif cookie_browser:
-        base_opts["cookiesfrombrowser"] = (cookie_browser,)
 
-    # YouTube-only: try a LADDER of player clients. android_vr exposes caption
-    # tracks without a PO token / JS runtime; when a datacenter IP is bot-checked,
-    # different clients (web_safari/tv/mweb) sometimes still slip through. Mirrors
-    # ingest.py's 403/bot-resistant client ladder. Non-YouTube gets one default
-    # attempt (the empty client list).
+    def _apply_cookies(opts: dict[str, Any]) -> None:
+        if cookie_file and Path(cookie_file).is_file():
+            opts["cookiefile"] = cookie_file
+        elif cookie_browser:
+            opts["cookiesfrombrowser"] = (cookie_browser,)
+
+    # YouTube ladder. IMPORTANT: the mobile clients (android_vr/android/ios) do
+    # NOT support cookies - yt-dlp SKIPS them when a cookie file is set - and they
+    # need no JS runtime, so they're the best first try on a NON-blocked IP. The
+    # cookie'd web clients are the escalation for a bot-checked IP, but they need
+    # Deno on PATH (nsig challenge). So we try android_vr cookie-LESS first, then
+    # web WITH cookies. Each attempt declares (clients, use_cookies).
     if _is_youtube(url):
-        client_attempts: list[list[str]] = [
-            ["android_vr", "android", "ios", "web"],
-            ["web_safari", "tv", "mweb"],
+        attempts: list[tuple[list[str], bool]] = [
+            (["android_vr", "android", "ios"], False),  # no cookies, no Deno needed
         ]
+        if have_cookies:
+            attempts.append((["web_safari", "tv", "mweb", "web"], True))  # bot-check escalation
+        else:
+            attempts.append((["mweb", "tv"], False))
     else:
-        client_attempts = [[]]
+        attempts = [([], have_cookies)]
 
     info: dict[str, Any] = {}
     last_err: Optional[Exception] = None
-    for clients in client_attempts:
+    for clients, use_cookies in attempts:
         opts = dict(base_opts)
         if clients:
             opts["extractor_args"] = {"youtube": {"player_client": clients}}
+        if use_cookies:
+            _apply_cookies(opts)
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False) or {}
             last_err = None
             break
-        except Exception as e:  # noqa: BLE001 - try the next client combo
+        except Exception as e:  # noqa: BLE001 - try the next attempt
             last_err = e
             el = str(e).lower()
             # An unsupported/invalid URL won't improve with another client.
@@ -295,7 +309,10 @@ def transcript(url: str, want_lang: Optional[str] = None) -> dict[str, Any]:
         }
 
     # Union of every language offered (manual + auto), sorted, for a lang picker.
-    available = sorted({*manual.keys(), *auto.keys()})
+    available = sorted(
+        k for k in {*manual.keys(), *auto.keys()}
+        if k.lower() not in {"live_chat", "rechat"}
+    )
     full_text = " ".join(s["text"] for s in segments)
     vid = str(info.get("id") or "")
     thumb = (
