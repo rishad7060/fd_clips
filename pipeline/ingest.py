@@ -84,14 +84,25 @@ def _resolve_tool(configured: str, default_name: str) -> Optional[str]:
     Honors the configured path from settings (FFMPEG_PATH/FFPROBE_PATH) first -
     a full path is used as-is if it exists, a bare name is looked up on PATH.
     Falls back to the default name on PATH. Returns None when unavailable.
+
+    IMPORTANT: a configured path that DOESN'T EXIST (e.g. a stale FFMPEG_PATH
+    copied from another machine/user) must NOT break the pipeline - we warn and
+    fall through to a PATH lookup so a correct on-PATH ffmpeg still wins. This was
+    a real "fails immediately" bug: FFMPEG_PATH pointed at a different user's home.
     """
     if configured:
         p = Path(configured)
         if p.is_file():
             return str(p)
+        # Configured but missing: try it as a bare name on PATH, then warn+fall
+        # through to the default. Don't silently return a dead path.
         found = shutil.which(configured)
         if found:
             return found
+        print(
+            f"  [tools] WARNING: configured path '{configured}' does not exist; "
+            f"falling back to '{default_name}' on PATH."
+        )
     return shutil.which(default_name)
 
 
