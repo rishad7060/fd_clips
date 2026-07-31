@@ -39,29 +39,66 @@ def extract_tags(url: str) -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         return {"error": f"yt-dlp unavailable: {e}", "code": "yt_dlp_missing"}
 
-    ydl_opts: dict[str, Any] = {
+    base_opts: dict[str, Any] = {
         "quiet": True,
         "noprogress": True,
         "skip_download": True,
         "socket_timeout": 20,
         "retries": 1,
     }
-    if _is_youtube(url):
-        ydl_opts["extractor_args"] = {
-            "youtube": {"player_client": ["android_vr", "android", "ios", "web"]}
-        }
+    # Cookie seam - also the fix for a bot-checked datacenter/VPS IP ("Sign in to
+    # confirm you're not a bot"). See transcript.py / ingest.py for details.
     cookie_file = (os.environ.get("YTDLP_COOKIES") or "").strip()
     cookie_browser = (os.environ.get("YTDLP_COOKIES_FROM_BROWSER") or "").strip()
+    have_cookies = bool((cookie_file and Path(cookie_file).is_file()) or cookie_browser)
     if cookie_file and Path(cookie_file).is_file():
-        ydl_opts["cookiefile"] = cookie_file
+        base_opts["cookiefile"] = cookie_file
     elif cookie_browser:
-        ydl_opts["cookiesfrombrowser"] = (cookie_browser,)
+        base_opts["cookiesfrombrowser"] = (cookie_browser,)
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False) or {}
-    except Exception as e:  # noqa: BLE001
-        return {"error": str(e), "code": "extract_failed"}
+    # YouTube-only client ladder (mirrors transcript.py); non-YouTube gets one pass.
+    if _is_youtube(url):
+        client_attempts: list[list[str]] = [
+            ["android_vr", "android", "ios", "web"],
+            ["web_safari", "tv", "mweb"],
+        ]
+    else:
+        client_attempts = [[]]
+
+    info: dict[str, Any] = {}
+    last_err: Optional[Exception] = None
+    for clients in client_attempts:
+        opts = dict(base_opts)
+        if clients:
+            opts["extractor_args"] = {"youtube": {"player_client": clients}}
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False) or {}
+            last_err = None
+            break
+        except Exception as e:  # noqa: BLE001 - try the next client combo
+            last_err = e
+            el = str(e).lower()
+            if "unsupported url" in el or "is not a valid url" in el:
+                break
+            continue
+
+    if last_err is not None:
+        low = str(last_err).lower()
+        if (
+            "sign in" in low or "not a bot" in low or "bot" in low
+            or "login" in low or "cookies" in low or "403" in low or "forbidden" in low
+        ):
+            hint = (
+                "YouTube is bot-blocking this server's IP. Set YTDLP_COOKIES to an "
+                "exported cookies.txt (or YTDLP_COOKIES_FROM_BROWSER=chrome) so "
+                "yt-dlp looks like a signed-in user."
+                if not have_cookies
+                else "YouTube rejected the request even with cookies - the cookie "
+                "file may be stale/expired. Re-export a fresh cookies.txt."
+            )
+            return {"error": hint, "code": "bot_check"}
+        return {"error": str(last_err), "code": "extract_failed"}
 
     if not info.get("duration") and isinstance(info.get("entries"), list):
         vids = [e for e in info["entries"] if isinstance(e, dict)]

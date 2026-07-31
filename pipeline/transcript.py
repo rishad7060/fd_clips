@@ -193,7 +193,7 @@ def transcript(url: str, want_lang: Optional[str] = None) -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         return {"error": f"yt-dlp unavailable: {e}", "code": "yt_dlp_missing"}
 
-    ydl_opts: dict[str, Any] = {
+    base_opts: dict[str, Any] = {
         "quiet": True,
         "noprogress": True,
         "skip_download": True,
@@ -202,26 +202,70 @@ def transcript(url: str, want_lang: Optional[str] = None) -> dict[str, Any]:
         "socket_timeout": 20,
         "retries": 1,
     }
-    # YouTube-only: android_vr-first ladder exposes caption tracks without a PO
-    # token / JS runtime (mirrors ingest.py's 403-resistant client ladder).
-    if _is_youtube(url):
-        ydl_opts["extractor_args"] = {
-            "youtube": {"player_client": ["android_vr", "android", "ios", "web"]}
-        }
-    # Same cookie seam as ingest/preview so private/age-gated captions work when the
-    # operator configured cookies; otherwise they cleanly error below.
+    # Same cookie seam as ingest/preview so private/age-gated captions work - AND,
+    # increasingly, so a datacenter/VPS IP isn't bot-blocked ("Sign in to confirm
+    # you're not a bot"). Two ways to supply cookies:
+    #   YTDLP_COOKIES=/path/cookies.txt        - an exported cookies.txt, or
+    #   YTDLP_COOKIES_FROM_BROWSER=chrome      - read from a logged-in browser.
     cookie_file = (os.environ.get("YTDLP_COOKIES") or "").strip()
     cookie_browser = (os.environ.get("YTDLP_COOKIES_FROM_BROWSER") or "").strip()
+    have_cookies = bool((cookie_file and Path(cookie_file).is_file()) or cookie_browser)
     if cookie_file and Path(cookie_file).is_file():
-        ydl_opts["cookiefile"] = cookie_file
+        base_opts["cookiefile"] = cookie_file
     elif cookie_browser:
-        ydl_opts["cookiesfrombrowser"] = (cookie_browser,)
+        base_opts["cookiesfrombrowser"] = (cookie_browser,)
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False) or {}
-    except Exception as e:  # noqa: BLE001 - clean JSON, never a traceback
-        return {"error": str(e), "code": "extract_failed"}
+    # YouTube-only: try a LADDER of player clients. android_vr exposes caption
+    # tracks without a PO token / JS runtime; when a datacenter IP is bot-checked,
+    # different clients (web_safari/tv/mweb) sometimes still slip through. Mirrors
+    # ingest.py's 403/bot-resistant client ladder. Non-YouTube gets one default
+    # attempt (the empty client list).
+    if _is_youtube(url):
+        client_attempts: list[list[str]] = [
+            ["android_vr", "android", "ios", "web"],
+            ["web_safari", "tv", "mweb"],
+        ]
+    else:
+        client_attempts = [[]]
+
+    info: dict[str, Any] = {}
+    last_err: Optional[Exception] = None
+    for clients in client_attempts:
+        opts = dict(base_opts)
+        if clients:
+            opts["extractor_args"] = {"youtube": {"player_client": clients}}
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False) or {}
+            last_err = None
+            break
+        except Exception as e:  # noqa: BLE001 - try the next client combo
+            last_err = e
+            el = str(e).lower()
+            # An unsupported/invalid URL won't improve with another client.
+            if "unsupported url" in el or "is not a valid url" in el:
+                break
+            continue
+
+    if last_err is not None:
+        low = str(last_err).lower()
+        # A bot-check / login gate is the common VPS failure - name the cookie fix
+        # explicitly so the operator knows exactly what to set.
+        if (
+            "sign in" in low or "not a bot" in low or "bot" in low
+            or "login" in low or "cookies" in low or "403" in low or "forbidden" in low
+        ):
+            hint = (
+                "YouTube is bot-blocking this server's IP. Set YTDLP_COOKIES to an "
+                "exported cookies.txt (or YTDLP_COOKIES_FROM_BROWSER=chrome) so "
+                "yt-dlp looks like a signed-in user."
+                if not have_cookies
+                else "YouTube rejected the request even with cookies - the cookie "
+                "file may be stale/expired. Re-export a fresh cookies.txt from a "
+                "logged-in YouTube session."
+            )
+            return {"error": hint, "code": "bot_check"}
+        return {"error": str(last_err), "code": "extract_failed"}
 
     # A playlist/channel returns "entries"; take the first real video.
     if not info.get("duration") and isinstance(info.get("entries"), list):

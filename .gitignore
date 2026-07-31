@@ -18,6 +18,10 @@ build/
 .env.local
 .env.docker
 *.local
+# yt-dlp YouTube cookies (bot-check fix) - NEVER commit; grants session access.
+cookies.txt
+secrets/
+*cookies*.txt
 
 # Workspace / media artifacts
 workspace/
