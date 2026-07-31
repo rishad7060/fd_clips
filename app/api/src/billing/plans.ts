@@ -29,6 +29,15 @@ export interface PlanDefinition extends PlanCapabilities {
   label: string;
   priceUsd: number;
   monthlyCredits: number;
+  /**
+   * Optional annual pricing (Pro only). When present, the web may offer an
+   * annual billing period at this USD price for `annualCredits` minutes
+   * granted up front (12 months' worth). Absent for tiers with no annual
+   * option (free, starter - Starter is monthly-only, matching Opus).
+   */
+  annualPriceUsd?: number;
+  /** Credits granted up front for the annual period (Pro only). */
+  annualCredits?: number;
 }
 
 export const PLANS: Record<PlanTier, PlanDefinition> = {
@@ -59,6 +68,12 @@ export const PLANS: Record<PlanTier, PlanDefinition> = {
     label: 'Pro',
     priceUsd: 14.5,
     monthlyCredits: 300,
+    // Annual = 60% off (12 × 14.50 × 0.40 = 69.60/yr), granting a full year of
+    // credits (300×12=3600 min) up front on checkout. "Pack" quantities (1-10)
+    // multiply both price and credits on top of monthly OR annual - see
+    // polar.service.ts createSubscription.
+    annualPriceUsd: 69.6,
+    annualCredits: 3600,
     watermark: false,
     editingEnabled: true,
     clipRetentionDays: null,

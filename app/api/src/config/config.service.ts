@@ -107,6 +107,15 @@ export class AppConfigService {
   }
 
   /**
+   * Pre-created Polar product id (UUID) for the Pro ANNUAL subscription. Packs
+   * (quantity 1-10) are NOT separate products - they're the `quantity` field on
+   * a checkout against this same product (or polarProductPro for monthly).
+   */
+  get polarProductProAnnual(): string | undefined {
+    return this.get<string>('POLAR_PRODUCT_PRO_ANNUAL', undefined);
+  }
+
+  /**
    * Polar webhook secret (whsec_... or base64). Polar follows the Standard
    * Webhooks spec; required in real mode to verify webhook signatures.
    */

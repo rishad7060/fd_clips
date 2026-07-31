@@ -7,18 +7,35 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { IsIn, IsString } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { AppAuthGuard } from '../auth/auth.guard';
 import { CurrentOrg } from '../auth/current-org.decorator';
 import { AuthContext, AuthedRequest } from '../auth/auth.types';
 import { PlanRecord, PlanTier } from '../persistence/store.types';
 import { BillingService, PlanStatus } from './billing.service';
-import { PolarService } from './polar.service';
+import { BillingPeriod, PolarService } from './polar.service';
 import { PlansService } from '../plans/plans.service';
 
+/**
+ * period defaults to 'monthly'; quantity defaults to 1 (see polar.service.ts
+ * resolveSubscribeOptions for the ultimate validated defaults). Invalid combos
+ * (annual/quantity>1 on non-pro, i.e. starter) are rejected there with a
+ * BadRequestException - this DTO only checks shape/range, not tier-specific
+ * cross-field rules, so both layers guard the money-touching path.
+ */
 class SubscribeDto {
   @IsIn(['starter', 'pro'])
   tier!: Exclude<PlanTier, 'free'>;
+
+  @IsOptional()
+  @IsIn(['monthly', 'annual'])
+  period?: BillingPeriod;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  quantity?: number;
 }
 
 class ConfirmCheckoutDto {
@@ -69,8 +86,18 @@ export class BillingController {
   async subscribe(
     @CurrentOrg() auth: AuthContext,
     @Body() dto: SubscribeDto,
-  ): Promise<{ url: string; subscriptionId: string; mock: boolean; tier: string }> {
-    return this.polar.createSubscription(auth.organizationId, dto.tier);
+  ): Promise<{
+    url: string;
+    subscriptionId: string;
+    mock: boolean;
+    tier: string;
+    period: BillingPeriod;
+    quantity: number;
+  }> {
+    return this.polar.createSubscription(auth.organizationId, dto.tier, {
+      period: dto.period,
+      quantity: dto.quantity,
+    });
   }
 
   /**

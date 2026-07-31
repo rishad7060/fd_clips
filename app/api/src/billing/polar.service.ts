@@ -6,10 +6,26 @@ import {
   DataStore,
   DATA_STORE,
   OrganizationRecord,
+  PlanRecord,
   PlanTier,
   SubscriptionStatus,
 } from '../persistence/store.types';
 import { PlansService } from '../plans/plans.service';
+
+/** Billing period for a subscription checkout. Starter is monthly-only. */
+export type BillingPeriod = 'monthly' | 'annual';
+
+/** Options accepted by createSubscription (period/quantity default below). */
+export interface SubscribeOptions {
+  period?: BillingPeriod;
+  quantity?: number;
+}
+
+/** Normalized, validated subscribe request (defaults applied). */
+interface ResolvedSubscribeOptions {
+  period: BillingPeriod;
+  quantity: number;
+}
 
 /**
  * Polar.sh billing - the payment provider for checkout, cancellation, and
@@ -50,45 +66,70 @@ export class PolarService {
   /**
    * Start a Polar checkout for a paid tier. Returns the hosted checkout URL.
    * In mock mode, grants the plan locally and returns a stub URL (mock=true).
+   *
+   * opts.period ('monthly'|'annual', default 'monthly') and opts.quantity
+   * (1-10, default 1 - the Pro "pack" multiplier) are validated against the
+   * confirmed economics: annual and quantity>1 are Pro-only; Starter must be
+   * monthly with quantity 1.
    */
   async createSubscription(
     organizationId: string,
     tier: Exclude<PlanTier, 'free'>,
-  ): Promise<{ url: string; subscriptionId: string; mock: boolean; tier: typeof tier }> {
+    opts?: SubscribeOptions,
+  ): Promise<{
+    url: string;
+    subscriptionId: string;
+    mock: boolean;
+    tier: typeof tier;
+    period: BillingPeriod;
+    quantity: number;
+  }> {
     await this.requireOrg(organizationId);
+    const { period, quantity } = this.resolveSubscribeOptions(tier, opts);
 
     if (this.config.flags.mockBilling) {
-      const subscriptionId = `polar_mock_${tier}_${organizationId}`;
-      this.logger.warn(`MOCK Polar checkout for org=${organizationId} tier=${tier} → auto-activating.`);
-      await this.activate(organizationId, tier, subscriptionId, `polar-mock:${subscriptionId}`);
+      const subscriptionId = `polar_mock_${tier}_${period}_x${quantity}_${organizationId}`;
+      this.logger.warn(
+        `MOCK Polar checkout for org=${organizationId} tier=${tier} period=${period} qty=${quantity} → auto-activating.`,
+      );
+      await this.activate(organizationId, tier, subscriptionId, `polar-mock:${subscriptionId}`, {
+        period,
+        quantity,
+      });
       return {
-        url: `https://mock-polar.local/checkout?product=${tier}&org=${organizationId}`,
+        url: `https://mock-polar.local/checkout?product=${tier}&period=${period}&quantity=${quantity}&org=${organizationId}`,
         subscriptionId,
         mock: true,
         tier,
+        period,
+        quantity,
       };
     }
 
-    const productId = this.productIdFor(tier);
+    const productId = this.productIdFor(tier, period);
     const token = this.requireToken();
     const res = await this.polarFetch('/v1/checkouts/', token, {
       method: 'POST',
       body: JSON.stringify({
         products: [productId],
+        // Pro "packs" are a quantity multiplier on the ONE Pro product (no
+        // separate pack products) - Nx price and Nx credits on grant.
+        quantity,
         // {CHECKOUT_ID} is interpolated by Polar on redirect so the return URL
         // carries the checkout id for the post-payment confirmation fallback
         // (used when webhooks can't reach a local API - see confirmCheckout).
         success_url: this.withCheckoutId(this.config.billingReturnUrl),
         // metadata is echoed back on the checkout + order + subscription webhooks
-        // so we can resolve the org/tier to grant without a separate lookup.
-        metadata: { organizationId, tier },
+        // so we can resolve the org/tier/period/quantity to grant without a
+        // separate lookup - the webhook grant must match the purchase exactly.
+        metadata: { organizationId, tier, period, quantity: String(quantity) },
       }),
     });
     const checkout = (await res.json()) as { id: string; url: string };
     if (!checkout.id || !checkout.url) {
       throw new BadRequestException('Polar did not return a checkout URL.');
     }
-    return { url: checkout.url, subscriptionId: checkout.id, mock: false, tier };
+    return { url: checkout.url, subscriptionId: checkout.id, mock: false, tier, period, quantity };
   }
 
   /**
@@ -147,7 +188,10 @@ export class PolarService {
     const subId = checkout.subscription_id ?? checkout.subscription?.id ?? checkout.id;
     // Same idempotency key the subscription.active webhook uses, so the two
     // paths converge on a single activation grant.
-    await this.activate(parsed.orgId, parsed.tier, subId, `polar-sub:${subId}:active`);
+    await this.activate(parsed.orgId, parsed.tier, subId, `polar-sub:${subId}:active`, {
+      period: parsed.period,
+      quantity: parsed.quantity,
+    });
     return { plan: parsed.tier, updated: true };
   }
 
@@ -227,7 +271,10 @@ export class PolarService {
         if (subId) {
           await this.store.setOrganizationSubscription(parsed.orgId, subId, 'ACTIVE');
         }
-        await this.grantMonthly(parsed.orgId, parsed.tier, `polar-order:${data.id}`);
+        await this.grantMonthly(parsed.orgId, parsed.tier, `polar-order:${data.id}`, {
+          period: parsed.period,
+          quantity: parsed.quantity,
+        });
         return `Granted ${parsed.tier} credits to org ${parsed.orgId} (order ${data.id})`;
       }
 
@@ -239,7 +286,10 @@ export class PolarService {
         if (!parsed || !subId) return `${type}: missing org/tier/id; ignored`;
         const status = (data.status as string) ?? '';
         if (status === 'active') {
-          await this.activate(parsed.orgId, parsed.tier, subId, `polar-sub:${subId}:active`);
+          await this.activate(parsed.orgId, parsed.tier, subId, `polar-sub:${subId}:active`, {
+            period: parsed.period,
+            quantity: parsed.quantity,
+          });
           return `Activated ${parsed.tier} subscription for org ${parsed.orgId}`;
         }
         // Non-active updates (e.g. canceled flag set) just record the id.
@@ -265,45 +315,71 @@ export class PolarService {
 
   // ── Grant / downgrade ──────────────────────────────────────────────────────
 
-  /** Activate: store the subscription id + ACTIVE, then grant the month. */
+  /** Activate: store the subscription id + ACTIVE, then grant the period's credits. */
   private async activate(
     organizationId: string,
     tier: Exclude<PlanTier, 'free'>,
     subscriptionId: string,
     externalEventId: string,
+    opts?: SubscribeOptions,
   ): Promise<OrganizationRecord> {
     await this.store.setOrganizationSubscription(organizationId, subscriptionId, 'ACTIVE');
-    return this.grantMonthly(organizationId, tier, externalEventId);
+    return this.grantMonthly(organizationId, tier, externalEventId, opts);
   }
 
-  /** Grant a plan's monthly credits, idempotent on externalEventId. */
+  /**
+   * Grant a plan's credits, idempotent on externalEventId. `opts.period`
+   * ('monthly'|'annual', default monthly) selects monthlyCredits vs
+   * annualCredits; `opts.quantity` (default 1, the Pro pack multiplier)
+   * multiplies BOTH the credit grant and the priceUsd used for the affiliate
+   * commission, so the webhook grant always matches what was actually charged.
+   */
   private async grantMonthly(
     organizationId: string,
     tier: PlanTier,
     externalEventId: string,
+    opts?: SubscribeOptions,
   ): Promise<OrganizationRecord> {
     const plan = this.plans.get(tier);
+    const period: BillingPeriod = opts?.period === 'annual' ? 'annual' : 'monthly';
+    const quantity = opts?.quantity && opts.quantity > 0 ? Math.trunc(opts.quantity) : 1;
     const ledger = await this.store.listLedger(organizationId);
     const already = ledger.some((l) => l.reason === 'grant' && l.stripeEventId === externalEventId);
     if (already) {
       this.logger.warn(`Skipping duplicate Polar grant org=${organizationId} event=${externalEventId}.`);
       return this.requireOrg(organizationId);
     }
+    const baseCredits = period === 'annual' ? this.annualCreditsFor(plan) : plan.monthlyCredits;
+    const basePriceUsd = period === 'annual' ? this.annualPriceFor(plan) : plan.priceUsd;
+    const credits = baseCredits * quantity;
+    const chargedUsd = basePriceUsd * quantity;
+
     await this.store.setOrganizationPlan(organizationId, tier);
-    const org = await this.store.addCredits(organizationId, plan.monthlyCredits, 'grant', {
+    const org = await this.store.addCredits(organizationId, credits, 'grant', {
       stripeEventId: externalEventId,
-      note: `${plan.label} plan grant (${plan.monthlyCredits} min)`,
+      note: `${plan.label} plan grant (${period}${quantity > 1 ? ` x${quantity}` : ''}, ${credits} min)`,
     });
     // Referral commission: if this org was referred, credit the affiliate a % of
-    // this invoice. Idempotent on externalEventId (same key as the grant), so a
-    // webhook + confirm replay never double-pays. Best-effort - never block the
-    // grant on an affiliate bookkeeping error.
+    // the ACTUAL amount charged (annual price / Nx quantity, not the flat
+    // monthly price). Idempotent on externalEventId (same key as the grant), so
+    // a webhook + confirm replay never double-pays. Best-effort - never block
+    // the grant on an affiliate bookkeeping error.
     try {
-      await this.affiliates.recordConversion(organizationId, plan.priceUsd, externalEventId);
+      await this.affiliates.recordConversion(organizationId, chargedUsd, externalEventId);
     } catch (err) {
       this.logger.warn(`Affiliate commission skipped for org=${organizationId}: ${(err as Error).message}`);
     }
     return org;
+  }
+
+  /** Annual credit grant for a plan; falls back to 12x monthly if undefined (should not happen for Pro). */
+  private annualCreditsFor(plan: PlanRecord): number {
+    return plan.annualCredits ?? plan.monthlyCredits * 12;
+  }
+
+  /** Annual price for a plan; falls back to 12x monthly if undefined (should not happen for Pro). */
+  private annualPriceFor(plan: PlanRecord): number {
+    return plan.annualPriceUsd ?? plan.priceUsd * 12;
   }
 
   private async downgradeToFree(organizationId: string, status: SubscriptionStatus): Promise<void> {
@@ -318,15 +394,49 @@ export class PolarService {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  /** Pull { organizationId, tier } from a webhook resource's metadata. */
+  /**
+   * Validate + normalize a subscribe request against the confirmed economics:
+   * annual billing and quantity>1 ("packs") are Pro-only; Starter is always
+   * monthly with quantity 1. Defaults: period='monthly', quantity=1. Throws
+   * BadRequestException on any invalid combo (mirrors the SubscribeDto guard
+   * on the web boundary, but re-checked here since this is money-touching).
+   */
+  private resolveSubscribeOptions(
+    tier: Exclude<PlanTier, 'free'>,
+    opts?: SubscribeOptions,
+  ): ResolvedSubscribeOptions {
+    const period: BillingPeriod = opts?.period ?? 'monthly';
+    const quantity = opts?.quantity ?? 1;
+
+    if (period !== 'monthly' && period !== 'annual') {
+      throw new BadRequestException(`Invalid billing period: ${String(period)}.`);
+    }
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
+      throw new BadRequestException('quantity must be an integer between 1 and 10.');
+    }
+    if (tier === 'starter') {
+      if (period !== 'monthly') {
+        throw new BadRequestException('Starter does not support annual billing.');
+      }
+      if (quantity !== 1) {
+        throw new BadRequestException('Starter does not support quantity packs.');
+      }
+    }
+    return { period, quantity };
+  }
+
+  /** Pull { organizationId, tier, period, quantity } from a webhook resource's metadata. */
   private resolveOrgTier(
     data: any,
-  ): { orgId: string; tier: Exclude<PlanTier, 'free'> } | null {
+  ): { orgId: string; tier: Exclude<PlanTier, 'free'>; period: BillingPeriod; quantity: number } | null {
     const meta = data?.metadata ?? data?.subscription?.metadata ?? data?.checkout?.metadata ?? {};
     const orgId: string | undefined = meta.organizationId;
     const tier = meta.tier as PlanTier | undefined;
     if (!orgId || !tier || tier === 'free' || !this.plans.get(tier)) return null;
-    return { orgId, tier };
+    const period: BillingPeriod = meta.period === 'annual' ? 'annual' : 'monthly';
+    const rawQuantity = Number(meta.quantity ?? data?.quantity ?? 1);
+    const quantity = Number.isInteger(rawQuantity) && rawQuantity >= 1 && rawQuantity <= 10 ? rawQuantity : 1;
+    return { orgId, tier, period, quantity };
   }
 
   private mapStatus(polarStatus: string): SubscriptionStatus {
@@ -349,12 +459,27 @@ export class PolarService {
     return `${url}${sep}checkout_id={CHECKOUT_ID}`;
   }
 
-  private productIdFor(tier: Exclude<PlanTier, 'free'>): string {
-    const id = tier === 'starter' ? this.config.polarProductStarter : this.config.polarProductPro;
+  /**
+   * Resolve the Polar product id for a tier+period. Pro "packs" (quantity
+   * 1-10) reuse this SAME product id via checkout `quantity` - never a
+   * separate product. Annual Pro uses its own product id
+   * (POLAR_PRODUCT_PRO_ANNUAL); Starter is monthly-only.
+   */
+  private productIdFor(tier: Exclude<PlanTier, 'free'>, period: BillingPeriod = 'monthly'): string {
+    let id: string | undefined;
+    let envVar: string;
+    if (tier === 'starter') {
+      id = this.config.polarProductStarter;
+      envVar = 'POLAR_PRODUCT_STARTER';
+    } else if (period === 'annual') {
+      id = this.config.polarProductProAnnual;
+      envVar = 'POLAR_PRODUCT_PRO_ANNUAL';
+    } else {
+      id = this.config.polarProductPro;
+      envVar = 'POLAR_PRODUCT_PRO';
+    }
     if (!id) {
-      throw new BadRequestException(
-        `Missing Polar product id for ${tier} (set POLAR_PRODUCT_${tier.toUpperCase()}).`,
-      );
+      throw new BadRequestException(`Missing Polar product id for ${tier} ${period} (set ${envVar}).`);
     }
     return id;
   }

@@ -342,6 +342,12 @@ export class PrismaStore implements DataStore {
       editingEnabled: p.editingEnabled,
       clipRetentionDays: p.clipRetentionDays ?? null,
       maxResolution: p.maxResolution,
+      // annualPriceUsd/annualCredits are NOT persisted columns (no admin editing
+      // of annual pricing yet) - always sourced from the static PLANS defaults so
+      // /plans stays correct without a DB migration. Undefined for tiers with no
+      // annual option (free/starter).
+      annualPriceUsd: PLANS[p.tier as PlanTier]?.annualPriceUsd,
+      annualCredits: PLANS[p.tier as PlanTier]?.annualCredits,
     };
   }
 

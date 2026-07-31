@@ -51,6 +51,48 @@ const MONTHLY_CREDITS: Record<string, number> = {
 };
 const DEFAULT_MONTHLY_CREDITS = 60;
 
+/**
+ * Client-side fallback plan catalog - mirrors PLANS in app/api/src/billing/
+ * plans.ts (confirmed economics). Used when /plans hasn't returned yet or the
+ * app is offline (mock mode); once GET /plans resolves, live admin-editable
+ * values (e.g. a tweaked annualPriceUsd) take over.
+ */
+export const FALLBACK_PLANS: Record<"free" | "starter" | "pro", PlanCatalogEntry> = {
+  free: { tier: "free", label: "Free", priceUsd: 0, monthlyCredits: 60 },
+  starter: { tier: "starter", label: "Starter", priceUsd: 7.5, monthlyCredits: 150 },
+  pro: {
+    tier: "pro",
+    label: "Pro",
+    priceUsd: 14.5,
+    monthlyCredits: 300,
+    annualPriceUsd: 69.6,
+    annualCredits: 3600,
+  },
+};
+
+/** Public plan catalog entry (GET /plans), normalized to snake_case. */
+export interface PlanCatalogEntry {
+  tier: "free" | "starter" | "pro";
+  label: string;
+  priceUsd: number;
+  monthlyCredits: number;
+  annualPriceUsd?: number;
+  annualCredits?: number;
+}
+
+/** Mirrors billing.controller.ts getPlans(): { plans: Record<PlanTier, PlanRecord> }. */
+interface ApiPlanRecordView {
+  tier: "free" | "starter" | "pro";
+  label: string;
+  priceUsd: number;
+  monthlyCredits: number;
+  annualPriceUsd?: number;
+  annualCredits?: number;
+}
+interface ApiPlansView {
+  plans: Record<string, ApiPlanRecordView>;
+}
+
 // ---- Real-API DTO shapes (camelCase boundary) -----------------------------
 
 /** Mirrors jobs.mapper.ts JobView. */
@@ -111,6 +153,20 @@ interface ApiSubscriptionStartView {
   subscriptionId: string;
   mock: boolean;
   tier: string;
+}
+
+/** Billing period for a subscription (POST /billing/subscribe). */
+export type BillingPeriod = "monthly" | "annual";
+
+/**
+ * Options for starting a subscription. `period` and `quantity` only apply to
+ * "pro" (Starter is monthly-only, quantity 1 - the caller should omit them or
+ * pass the defaults). `quantity` is the Pro "pack" multiplier (1-10): it scales
+ * both credits and price server-side.
+ */
+export interface CreateSubscriptionOptions {
+  period?: BillingPeriod;
+  quantity?: number;
 }
 
 /** Result of starting a Polar recurring subscription (snake_case wire shape). */
@@ -431,6 +487,27 @@ export const api = {
   },
 
   /**
+   * Public plan catalog (GET /plans, unauthenticated) - live, admin-editable
+   * prices/credits including Pro's annualPriceUsd/annualCredits. Mock mode (and
+   * any fetch failure) falls back to FALLBACK_PLANS, which mirrors the confirmed
+   * economics, so pricing UIs render identically offline.
+   */
+  async getPlans(): Promise<Record<"free" | "starter" | "pro", PlanCatalogEntry>> {
+    if (USING_MOCK_API) return delay({ ...FALLBACK_PLANS }, 80);
+    try {
+      const v = await http<ApiPlansView>("/plans");
+      const out = { ...FALLBACK_PLANS };
+      for (const tier of ["free", "starter", "pro"] as const) {
+        const p = v.plans[tier];
+        if (p) out[tier] = p;
+      }
+      return out;
+    } catch {
+      return { ...FALLBACK_PLANS };
+    }
+  },
+
+  /**
    * Current org plan + credit balance (GET /billing/balance). The real API
    * returns { plan, creditBalance } (camelCase); we normalize to snake_case and
    * derive monthly_credits from the web-side plan→credits map. Mock mode serves
@@ -451,10 +528,19 @@ export const api = {
    * Returns the hosted-checkout URL the buyer is redirected to (+ subscription id).
    * In mock mode the URL is a local stub, mock=true, and the plan is already granted
    * locally - the caller refreshes the balance instead of redirecting.
+   *
+   * `period`/`quantity` only matter for "pro" (annual billing + the ×N pack
+   * multiplier, 1-10). Starter is monthly-only - callers should omit them (or
+   * pass the defaults) so the API always sees period:"monthly", quantity:1.
    */
-  async createSubscription(tier: "starter" | "pro"): Promise<SubscriptionStart> {
+  async createSubscription(
+    tier: "starter" | "pro",
+    opts: CreateSubscriptionOptions = {},
+  ): Promise<SubscriptionStart> {
+    const period: BillingPeriod = opts.period ?? "monthly";
+    const quantity = opts.quantity ?? 1;
     if (USING_MOCK_API) {
-      const r = mockStore.createSubscription(tier);
+      const r = mockStore.createSubscription(tier, period, quantity);
       return delay({
         url: r.url,
         subscription_id: r.subscriptionId,
@@ -464,7 +550,7 @@ export const api = {
     }
     const v = await http<ApiSubscriptionStartView>("/billing/subscribe", {
       method: "POST",
-      body: JSON.stringify({ tier }),
+      body: JSON.stringify({ tier, period, quantity }),
     });
     return { url: v.url, subscription_id: v.subscriptionId, mock: v.mock, tier: v.tier };
   },

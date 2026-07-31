@@ -111,6 +111,8 @@ services:
       POLAR_MODE: ${POLAR_MODE:-sandbox}
       POLAR_PRODUCT_STARTER: ${POLAR_PRODUCT_STARTER:-}
       POLAR_PRODUCT_PRO: ${POLAR_PRODUCT_PRO:-}
+      # Pro annual (60% off) product; "packs" reuse the Pro products via quantity.
+      POLAR_PRODUCT_PRO_ANNUAL: ${POLAR_PRODUCT_PRO_ANNUAL:-}
       POLAR_WEBHOOK_SECRET: ${POLAR_WEBHOOK_SECRET:-}
       BILLING_SUCCESS_URL: ${BILLING_SUCCESS_URL:-http://localhost:3000/billing?ok=1}
       BILLING_CANCEL_URL: ${BILLING_CANCEL_URL:-http://localhost:3000/billing?canceled=1}

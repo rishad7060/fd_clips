@@ -76,6 +76,13 @@ const MOCK_PLAN_CREDITS: Record<"starter" | "pro", number> = {
   pro: 300,
 };
 
+/** Billing period accepted by createSubscription (Starter is monthly-only). */
+type MockBillingPeriod = "monthly" | "annual";
+
+/** Pro annual grant - mirrors PLANS.pro in app/api/src/billing/plans.ts (60% off). */
+const MOCK_PRO_ANNUAL_CREDITS = 3600;
+const MOCK_PRO_ANNUAL_PRICE = 69.6;
+
 /** In-session billing state so a mock upgrade updates the balance bar.
  *  Free tier = 60 credits/mo (mirrors PLANS.free in app/api/src/billing/plans.ts). */
 let billingState: { plan: string; credit_balance: number; monthly_credits: number } = {
@@ -139,11 +146,13 @@ function affiliateLink(): string {
   return `${origin}/?ref=${MOCK_AFFILIATE_CODE}`;
 }
 
-/** Demo helper: a paid upgrade converts the oldest pending referral + earns a cut. */
-function recordMockConversion(tier: "starter" | "pro"): void {
+/** Demo helper: a paid upgrade converts the oldest pending referral + earns a cut.
+ *  `chargedUsd` is the actual amount billed (annual price and/or ×N pack applied),
+ *  not the flat monthly rate, so the affiliate commission reflects the real sale. */
+function recordMockConversion(chargedUsd: number): void {
   const pending = affiliateState.referrals.find((r) => r.status === "signed_up");
   if (!pending) return;
-  const cents = Math.round(MOCK_PLAN_PRICE[tier] * affiliateState.commissionRate * 100);
+  const cents = Math.round(chargedUsd * affiliateState.commissionRate * 100);
   pending.status = "converted";
   pending.convertedAt = new Date().toISOString();
   pending.earnedCents += cents;
@@ -281,30 +290,42 @@ export const mockStore = {
 
   /**
    * Mock Polar recurring subscription. There is no real redirect offline, so
-   * we immediately "activate": set the plan + grant the first month's credits,
-   * and return a fake subscription id (mock=true tells the caller not to
-   * redirect). Mirrors PolarService.createSubscription's mock branch.
+   * we immediately "activate": set the plan + grant the period's credits, and
+   * return a fake subscription id (mock=true tells the caller not to redirect).
+   * Mirrors PolarService.createSubscription's mock branch, including the
+   * period ('monthly'|'annual', Pro only) and the ×quantity pack multiplier
+   * (1-10, Pro only - Starter is always monthly, quantity 1).
    */
-  createSubscription(tier: "starter" | "pro"): {
+  createSubscription(
+    tier: "starter" | "pro",
+    period: MockBillingPeriod = "monthly",
+    quantity = 1,
+  ): {
     url: string;
     subscriptionId: string;
     mock: boolean;
     tier: string;
   } {
-    const subscriptionId = `polar_mock_${tier}_${Date.now().toString(36)}`;
-    if (MOCK_PLAN_CREDITS[tier]) {
+    const qty = Number.isInteger(quantity) && quantity >= 1 && quantity <= 10 ? quantity : 1;
+    const useAnnual = tier === "pro" && period === "annual";
+    const baseCredits = useAnnual ? MOCK_PRO_ANNUAL_CREDITS : MOCK_PLAN_CREDITS[tier];
+    const basePrice = useAnnual ? MOCK_PRO_ANNUAL_PRICE : MOCK_PLAN_PRICE[tier];
+    const credits = baseCredits * qty;
+    const chargedUsd = basePrice * qty;
+    const subscriptionId = `polar_mock_${tier}_${period}_x${qty}_${Date.now().toString(36)}`;
+    if (credits) {
       billingState = {
         plan: tier,
-        monthly_credits: MOCK_PLAN_CREDITS[tier],
-        credit_balance: MOCK_PLAN_CREDITS[tier],
+        monthly_credits: credits,
+        credit_balance: credits,
       };
     }
     // Demo the affiliate funnel end-to-end: a paid upgrade flips a referral to
     // converted and credits a commission (mirrors PolarService.grantMonthly →
     // AffiliatesService.recordConversion in the real API).
-    recordMockConversion(tier);
+    recordMockConversion(chargedUsd);
     return {
-      url: `https://mock-polar.local/checkout?product=${tier}`,
+      url: `https://mock-polar.local/checkout?product=${tier}&period=${period}&quantity=${qty}`,
       subscriptionId,
       mock: true,
       tier,

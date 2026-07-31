@@ -114,6 +114,10 @@ export interface PlanRecord {
   editingEnabled: boolean;
   clipRetentionDays: number | null;
   maxResolution: string;
+  /** Optional annual price (Pro only) - see billing/plans.ts PlanDefinition. */
+  annualPriceUsd?: number;
+  /** Optional annual credit grant (Pro only) - see billing/plans.ts PlanDefinition. */
+  annualCredits?: number;
 }
 
 /**
