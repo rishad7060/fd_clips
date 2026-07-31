@@ -290,7 +290,16 @@ def _ingest_real(
             # file. The final ``best`` catches sites (TikTok/IG/X) that only serve
             # ONE muxed stream so there's nothing to merge. Quality > the small
             # extra merge cost.
+            # Prefer H.264 (avc1) explicitly, best-first. H.264 lets the whole
+            # downstream chain STREAM-COPY (near-instant) instead of decoding an
+            # exotic codec: YouTube's default is now often AV1/VP9, which forces a
+            # slow CPU re-encode of every clip. Asking for avc1 up front means the
+            # source is already the codec we cut with. Fall back to any codec only
+            # if H.264 isn't offered (rare on YouTube; some other sites are muxed).
             "format": (
+                "bestvideo[height<=1080][vcodec^=avc1][ext=mp4]+bestaudio[ext=m4a]/"
+                "bestvideo[height<=720][vcodec^=avc1][ext=mp4]+bestaudio[ext=m4a]/"
+                "best[height<=1080][vcodec^=avc1]/"
                 "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/"
                 "bestvideo[height<=1080]+bestaudio/"
                 "bestvideo[height<=720]+bestaudio/"
@@ -485,44 +494,60 @@ def _ingest_real(
     if downloaded.resolve() == out_path.resolve():
         norm_target = out_path.with_name(out_path.stem + ".norm.mp4")
 
-    # Re-encoding a whole (possibly hour-long) source on CPU is slow and usually
-    # unnecessary - we only cut small segments later. If the download is already
-    # H.264 / yuv420p, just remux (stream-copy: near-instant). Only re-encode
-    # when the codec/pixfmt actually needs it (e.g. AV1/VP9 from YouTube).
-    needs_reencode = True
-    try:
-        probe = _probe_real(downloaded)
-        vstream = next(s for s in probe["streams"] if s["codec_type"] == "video")
-        if vstream.get("codec_name") == "h264" and vstream.get("pix_fmt") == "yuv420p":
-            needs_reencode = False
-    except (subprocess.CalledProcessError, StopIteration, KeyError, OSError):
-        needs_reencode = True  # if we can't probe, be safe and re-encode
-
-    # "Credit saver": trim to [start,end] at normalize time when the download
-    # itself wasn't already range-limited (local files, or non-URL sources). For
-    # URLs the download_ranges download already produced just the window, so we
-    # must NOT trim again. ``-ss``/``-to`` are placed BEFORE ``-i`` for fast,
-    # keyframe-accurate input seeking; a stream-copy remux can't trim mid-GOP, so
-    # a windowed copy is forced to re-encode for frame-accurate cut points.
+    # ── FAST NORMALIZE: remux only, NEVER re-encode the whole source ──────────
+    # Re-encoding an entire (possibly hour-long) video on CPU with libx264 is the
+    # single biggest time sink and was causing ingest to time out / "Failed at
+    # 0%". We only ever cut small 30-60s clips later, and extract.py re-encodes
+    # THOSE per-clip. So here we just repackage the download into a faststart MP4
+    # via STREAM-COPY (near-instant, any codec incl. AV1/VP9). The clip codec is
+    # normalized at extract time, on the tiny clips - not the whole source.
+    #
+    # The ONLY case that needs a re-encode here is a trim window that must be
+    # frame-accurate AND wasn't already range-limited at download time - and even
+    # then we re-encode ONLY the window (small), not the whole video.
     trim_args: list[str] = []
+    window_reencode = False
     if window is not None and not trimmed_on_download:
         w_start, w_end = window
+        # -ss/-to BEFORE -i = fast keyframe input seek; re-encode gives a clean,
+        # frame-accurate cut of just this window (still far smaller than the whole
+        # source). Use ultrafast so even this stays cheap.
         trim_args = ["-ss", f"{w_start:.3f}", "-to", f"{w_end:.3f}"]
-        needs_reencode = True
+        window_reencode = True
 
-    if needs_reencode:
+    if window_reencode:
         norm_cmd = [
             ffmpeg, "-y", *trim_args, "-i", str(downloaded),
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30",
-            "-c:a", "aac", "-movflags", "+faststart",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
+            "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart",
             str(norm_target),
         ]
     else:
+        # Whole video: pure stream-copy remux. Fast for any codec.
         norm_cmd = [
             ffmpeg, "-y", "-i", str(downloaded),
             "-c", "copy", "-movflags", "+faststart", str(norm_target),
         ]
-    subprocess.run(norm_cmd, check=True)
+    try:
+        subprocess.run(norm_cmd, check=True)
+    except subprocess.CalledProcessError:
+        # Some containers won't stream-copy cleanly into MP4 (odd timestamps, an
+        # unsupported audio codec, etc.). Fall back to copying the VIDEO stream and
+        # only RE-ENCODING THE AUDIO (cheap) - still no whole-video video re-encode.
+        fallback_cmd = [
+            ffmpeg, "-y", *trim_args, "-i", str(downloaded),
+            "-c:v", "copy", "-c:a", "aac", "-movflags", "+faststart",
+            str(norm_target),
+        ]
+        try:
+            subprocess.run(fallback_cmd, check=True)
+        except subprocess.CalledProcessError:
+            # Last resort only: the download itself may already be a usable mp4 -
+            # just use it as-is rather than paying a full re-encode.
+            if downloaded.suffix.lower() == ".mp4" and norm_target != downloaded:
+                shutil.copyfile(downloaded, norm_target)
+            else:
+                raise
     if norm_target != out_path:
         out_path.unlink(missing_ok=True)
         norm_target.replace(out_path)

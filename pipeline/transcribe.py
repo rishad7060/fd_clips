@@ -41,11 +41,25 @@ from typing import Any, Optional
 
 try:
     from .config import get_settings
+    from .ingest import _resolve_tool
 except ImportError:
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from config import get_settings  # type: ignore
+    from ingest import _resolve_tool  # type: ignore
+
+
+def _ffmpeg_bin() -> str:
+    """Resolve a runnable ffmpeg binary the same way ingest/extract do.
+
+    settings.ffmpeg_path may be a FULL path or a bare name on PATH, or empty. The
+    old code used ``settings.ffmpeg_path or 'ffmpeg'`` directly, which crashed
+    with WinError 2 whenever FFMPEG_PATH was unset and ffmpeg wasn't literally on
+    the child process's PATH. _resolve_tool handles both cases; fall back to the
+    bare name so the CalledProcessError message stays informative if truly absent.
+    """
+    return _resolve_tool(get_settings().ffmpeg_path, "ffmpeg") or "ffmpeg"
 
 
 def _fixture_path() -> Path:
@@ -184,8 +198,7 @@ def _extract_audio_for_groq(source_path: Path, out_path: Path) -> Path:
     mono 16kHz mp3 is the cheapest representation Whisper accepts and keeps long
     videos well under the cap (~1MB/min).
     """
-    settings = get_settings()
-    ffmpeg = settings.ffmpeg_path or "ffmpeg"
+    ffmpeg = _ffmpeg_bin()
     cmd = [
         ffmpeg, "-y",
         "-i", str(source_path),
