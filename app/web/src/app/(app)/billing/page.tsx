@@ -301,25 +301,18 @@ export default function BillingPage() {
           priceSuffix="/mo"
           features={[`${plans.free.monthlyCredits} credits / mo`, "Up to 1080p clips", "Auto captions + hooks", "Has watermark · clips expire in 3 days"]}
         >
-          {current === "free" ? (
-            <Button variant="secondary" full disabled className="mt-5" title="Free plan">
-              Your plan
-            </Button>
-          ) : (
-            /* On a paid plan, Free is below current: downgrading to Free = cancel
-               the paid subscription (existing keep-credits cancel path). */
-            <Button
-              variant="secondary"
-              full
-              loading={pending === "cancel"}
-              disabled={pending !== null}
-              className="mt-5"
-              onClick={cancel}
-              title="Cancel your paid plan and move to Free (you keep credits already granted)"
-            >
-              {pending === "cancel" ? "Canceling…" : "Downgrade to Free"}
-            </Button>
-          )}
+          {/* Free is the baseline - never a "downgrade" CTA. When it's the
+              current plan show "Your plan"; on a paid plan it's just "Included"
+              (to leave a paid plan, use "Cancel plan" on the paid card). */}
+          <Button
+            variant="secondary"
+            full
+            disabled
+            className="mt-5"
+            title={current === "free" ? "Free plan" : "Included with every account"}
+          >
+            {current === "free" ? "Your plan" : "Included"}
+          </Button>
         </PlanTile>
 
         {/* Starter - monthly only (Opus parity) */}
