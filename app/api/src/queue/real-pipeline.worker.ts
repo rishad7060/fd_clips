@@ -409,19 +409,23 @@ export class RealPipelineWorker implements JobWorker {
         (result ? ` (${result.rows.length} rows reported).` : '.'),
     );
 
-    // "Your clips are ready" email to the delivery address (best-effort; the
-    // mailer no-ops/logs when SMTP is unset and never throws). The payload
-    // carries the account email captured at submit time. Only meaningful when at
-    // least one clip was produced.
-    if (this.deps.mail && clipsReady > 0 && payload.email) {
-      try {
-        await this.deps.mail.sendClipsReady({
-          to: payload.email,
-          clipsCount: clipsReady,
-          jobId,
-        });
-      } catch (err) {
-        this.logger.warn(`clips-ready email skipped for ${jobId}: ${(err as Error).message}`);
+    // "Your clips are ready" email (best-effort; the mailer no-ops/logs when
+    // SMTP is unset and never throws). Recipient = the payload email captured at
+    // submit time (dto.email, else the signed-in account email). Log loudly when
+    // it's missing so a "no email arrived" report is diagnosable.
+    if (this.deps.mail && clipsReady > 0) {
+      const to = payload.email ?? null;
+      if (to) {
+        try {
+          await this.deps.mail.sendClipsReady({ to, clipsCount: clipsReady, jobId });
+        } catch (err) {
+          this.logger.warn(`clips-ready email skipped for ${jobId}: ${(err as Error).message}`);
+        }
+      } else {
+        this.logger.warn(
+          `clips-ready email NOT sent for ${jobId}: no recipient on the job payload ` +
+            `(the account email wasn't captured at submit - is the user signed in with real auth?).`,
+        );
       }
     }
   }
