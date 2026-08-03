@@ -19,6 +19,8 @@ import { AuthContext } from '../auth/auth.types';
 import { DataStore, DATA_STORE } from '../persistence/store.types';
 import { StorageService } from '../storage/storage.service';
 import { RenderClipDto } from './dto/render-clip.dto';
+import { computeClipExpiry, sweepExpiredClipFiles } from './clip-expiry';
+import { PLANS } from '../billing/plans';
 
 // Repo root: pipeline/render_one.py resolves workspace/ relative to here.
 // This file is app/api/src/clips/clips.controller.ts → up 4 to the repo root.
@@ -41,6 +43,13 @@ interface ClipView {
   suggestedTitle: string;
   downloadUrl: string | null;
   thumbnailUrl: string | null;
+  /**
+   * ISO timestamp when this clip's files are deleted (createdAt + the org
+   * plan's clipRetentionDays). null = kept indefinitely. Computed on read.
+   */
+  expiresAt: string | null;
+  /** True once the retention window has passed (files swept, URLs null). */
+  expired: boolean;
 }
 
 /** One transcript word, re-based to CLIP-RELATIVE seconds. */
@@ -104,6 +113,12 @@ export class ClipsController {
         end: newEnd,
       })) ?? { ...clip, start: newStart, end: newEnd };
 
+    const org = await this.store.getOrganization(auth.organizationId);
+    const { expiresAt, expired } = computeClipExpiry(
+      updated,
+      org?.plan ?? PLANS.free.tier,
+    );
+
     return {
       clipId: updated.id,
       jobId: updated.jobId,
@@ -117,6 +132,8 @@ export class ClipsController {
       suggestedTitle: updated.suggestedTitle,
       downloadUrl: await this.storage.signKey(updated.finalKey),
       thumbnailUrl: await this.storage.signKey(updated.thumbKey),
+      expiresAt,
+      expired,
     };
   }
 
@@ -154,21 +171,51 @@ export class ClipsController {
     @Query('jobId') jobId?: string,
   ): Promise<{ clips: ClipView[] }> {
     const clips = await this.store.listClips(auth.organizationId, jobId);
+
+    // Retention comes from the org's CURRENT plan tier (computed on read, no
+    // stored column / migration). Fall back to 'free' - the strictest window -
+    // if the org can't be loaded.
+    const org = await this.store.getOrganization(auth.organizationId);
+    const plan = org?.plan ?? PLANS.free.tier;
+
+    // Lazy sweep: delete the on-disk files for any clips whose retention window
+    // has passed, grouped by job so the path stays workspace/<jobId>/clips/.
+    // Runs only in real-pipeline mode (mock mode has no files to remove).
+    if (process.env.USE_REAL_PIPELINE === 'true') {
+      const expiredByJob = new Map<string, typeof clips>();
+      for (const c of clips) {
+        if (computeClipExpiry(c, plan).expired) {
+          const group = expiredByJob.get(c.jobId) ?? [];
+          group.push(c);
+          expiredByJob.set(c.jobId, group);
+        }
+      }
+      for (const [jid, group] of expiredByJob) {
+        sweepExpiredClipFiles(REPO_ROOT, jid, group);
+      }
+    }
+
     const views = await Promise.all(
-      clips.map(async (c): Promise<ClipView> => ({
-        clipId: c.id,
-        jobId: c.jobId,
-        rank: c.rank,
-        start: c.start,
-        end: c.end,
-        hookLine: c.hookLine,
-        hookTitle: c.hookTitle ?? null,
-        viralityScore: c.viralityScore,
-        reason: c.reason,
-        suggestedTitle: c.suggestedTitle,
-        downloadUrl: await this.storage.signKey(c.finalKey),
-        thumbnailUrl: await this.storage.signKey(c.thumbKey),
-      })),
+      clips.map(async (c): Promise<ClipView> => {
+        const { expiresAt, expired } = computeClipExpiry(c, plan);
+        return {
+          clipId: c.id,
+          jobId: c.jobId,
+          rank: c.rank,
+          start: c.start,
+          end: c.end,
+          hookLine: c.hookLine,
+          hookTitle: c.hookTitle ?? null,
+          viralityScore: c.viralityScore,
+          reason: c.reason,
+          suggestedTitle: c.suggestedTitle,
+          // Expired clips: files are gone, so don't hand out playable/download URLs.
+          downloadUrl: expired ? null : await this.storage.signKey(c.finalKey),
+          thumbnailUrl: expired ? null : await this.storage.signKey(c.thumbKey),
+          expiresAt,
+          expired,
+        };
+      }),
     );
     return { clips: views };
   }

@@ -78,6 +78,8 @@ export interface RealPipelineWorkerDeps {
   repoRoot?: string;
   /** Python executable on PATH (defaults to 'python'). */
   pythonBin?: string;
+  /** Optional mailer: sends the "clips ready" email on completion (no-op if unset). */
+  mail?: { sendClipsReady: (args: { to: string | null | undefined; clipsCount: number; jobId: string; expiresAt?: string | null }) => Promise<boolean> };
 }
 
 /**
@@ -406,5 +408,21 @@ export class RealPipelineWorker implements JobWorker {
       `Real pipeline job ${jobId} completed with ${clipsReady} clips` +
         (result ? ` (${result.rows.length} rows reported).` : '.'),
     );
+
+    // "Your clips are ready" email to the delivery address (best-effort; the
+    // mailer no-ops/logs when SMTP is unset and never throws). The payload
+    // carries the account email captured at submit time. Only meaningful when at
+    // least one clip was produced.
+    if (this.deps.mail && clipsReady > 0 && payload.email) {
+      try {
+        await this.deps.mail.sendClipsReady({
+          to: payload.email,
+          clipsCount: clipsReady,
+          jobId,
+        });
+      } catch (err) {
+        this.logger.warn(`clips-ready email skipped for ${jobId}: ${(err as Error).message}`);
+      }
+    }
   }
 }

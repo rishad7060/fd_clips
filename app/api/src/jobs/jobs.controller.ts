@@ -15,7 +15,9 @@ export class JobsController {
   @Post()
   @HttpCode(201)
   async create(@CurrentOrg() auth: AuthContext, @Body() dto: CreateJobDto): Promise<JobView> {
-    const job = await this.jobs.create(auth.organizationId, dto);
+    // Pass the signed-in account email so the worker can send the "clips ready"
+    // notification to it (dto.email, if provided, still takes precedence).
+    const job = await this.jobs.create(auth.organizationId, dto, auth.email ?? null);
     return toJobView(job);
   }
 

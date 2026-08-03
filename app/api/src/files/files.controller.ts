@@ -5,6 +5,7 @@ import {
   Headers,
   NotFoundException,
   Param,
+  Query,
   Res,
 } from '@nestjs/common';
 import { createReadStream, existsSync, statSync } from 'fs';
@@ -50,6 +51,8 @@ export class FilesController {
     @Param('jobId') jobId: string,
     @Param('name') name: string,
     @Headers('range') range: string | undefined,
+    @Query('download') download: string | undefined,
+    @Query('filename') filename: string | undefined,
     @Res() res: Response,
   ): void {
     if (!FilesController.JOB_ID_RE.test(jobId)) {
@@ -86,6 +89,20 @@ export class FilesController {
     res.setHeader('Content-Type', contentType);
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'private, max-age=300');
+
+    // Force a SAVE (not in-browser playback) when ?download=1. The <a download>
+    // attribute is IGNORED for cross-origin URLs (clips are served from the API
+    // origin, the page is on the web origin), so the browser just plays the mp4.
+    // Content-Disposition: attachment forces the download regardless of origin.
+    // An optional ?filename= sets a friendly saved name (sanitized to a safe set).
+    if (download === '1' || download === 'true') {
+      const safe = (filename || name)
+        .replace(/[^\w.\- ]+/g, '_')
+        .slice(0, 120)
+        .trim();
+      const dlName = /\.(mp4|jpg)$/i.test(safe) ? safe : `${safe || 'clip'}${ext}`;
+      res.setHeader('Content-Disposition', `attachment; filename="${dlName}"`);
+    }
 
     // Range request - stream a partial body so the player can seek.
     if (range) {

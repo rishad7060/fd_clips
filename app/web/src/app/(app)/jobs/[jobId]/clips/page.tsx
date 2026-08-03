@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { downloadFile, clipFileName } from "@/lib/download";
 import type { Clip, ClipsResponse } from "@/lib/types";
 import { ClipCard } from "@/components/ClipCard";
 import { Button } from "@/components/ui/Button";
@@ -40,6 +41,54 @@ function sortClips(clips: Clip[], key: SortKey): Clip[] {
   }
 }
 
+/**
+ * Human, relative countdown to an expiry date: "today", "tomorrow", "in 3
+ * days". Past dates read "today" (the sweep runs on read, so an at-or-past
+ * clip is treated as gone). Uses whole-day granularity from local midnight.
+ */
+function humanCountdown(iso: string): string {
+  const target = new Date(iso);
+  if (Number.isNaN(target.getTime())) return "soon";
+  const startOfDay = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round(
+    (startOfDay(target) - startOfDay(new Date())) / 86_400_000,
+  );
+  if (days <= 0) return "today";
+  if (days === 1) return "tomorrow";
+  return `in ${days} days`;
+}
+
+/** Absolute expiry date, e.g. "Aug 6, 2026". */
+function formatExpiryDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/**
+ * Expiry summary across a job's clips: whether all are already expired, and (if
+ * not) the SOONEST upcoming deletion date, so the banner warns before the first
+ * clip disappears. Indefinite clips (no expires_at) never contribute a date.
+ */
+function expirySummary(clips: Clip[]): {
+  allExpired: boolean;
+  soonestExpiry: string | null;
+} {
+  if (clips.length === 0) return { allExpired: false, soonestExpiry: null };
+  const allExpired = clips.every((c) => c.expired);
+  let soonest: string | null = null;
+  for (const c of clips) {
+    if (c.expired || !c.expires_at) continue;
+    if (!soonest || c.expires_at < soonest) soonest = c.expires_at;
+  }
+  return { allExpired, soonestExpiry: soonest };
+}
+
 function matchesQuery(clip: Clip, q: string): boolean {
   if (!q.trim()) return true;
   const hay = [
@@ -61,22 +110,26 @@ export default function ClipGalleryPage({ params }: { params: { jobId: string } 
     return sortClips(data.clips.filter((c) => matchesQuery(c, query)), sort);
   }, [data, sort, query]);
 
+  // Retention warning: derived from ALL clips (not the filtered view) so the
+  // banner reflects the whole job's expiry, not the current search.
+  const expiry = useMemo(
+    () => expirySummary(data?.clips ?? []),
+    [data],
+  );
+
   async function downloadAll() {
     if (!data || downloadingAll) return;
     const withVideo = visibleClips.filter((c) => c.final_url);
     if (withVideo.length === 0) return;
     setDownloadingAll(true);
     try {
+      // Use the shared cross-origin-safe downloader (blob fetch + attachment
+      // header) so files SAVE instead of playing in the browser. Sequential with
+      // a small gap so the browser doesn't drop concurrent downloads.
       for (let i = 0; i < withVideo.length; i++) {
         const clip = withVideo[i]!;
-        const name = (clip.suggested_title?.trim().replace(/\s+/g, "_") || `clip_${clip.rank}`) + ".mp4";
-        const a = document.createElement("a");
-        a.href = clip.final_url;
-        a.download = name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        if (i < withVideo.length - 1) await new Promise((r) => setTimeout(r, 300));
+        await downloadFile(clip.final_url, clipFileName(clip.suggested_title, clip.rank));
+        if (i < withVideo.length - 1) await new Promise((r) => setTimeout(r, 400));
       }
     } finally {
       setDownloadingAll(false);
@@ -161,6 +214,28 @@ export default function ClipGalleryPage({ params }: { params: { jobId: string } 
 
       {error && (
         <Card className="border-danger-500/40 bg-danger-500/10 p-4 text-sm text-danger-300">{error}</Card>
+      )}
+
+      {/* Clip retention notice */}
+      {data && total > 0 && expiry.allExpired && (
+        <div className="mb-5 flex items-start gap-3 rounded-2xl border border-danger-500/40 bg-danger-500/10 p-4 text-sm text-danger-200">
+          <svg viewBox="0 0 24 24" className="mt-0.5 h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2m-9 0v14a2 2 0 002 2h6a2 2 0 002-2V6" /></svg>
+          <p>
+            <span className="font-semibold text-white">These clips have expired and were removed.</span>{" "}
+            Clips are kept for a limited time - re-run the video to generate them again.
+          </p>
+        </div>
+      )}
+      {data && total > 0 && !expiry.allExpired && expiry.soonestExpiry && (
+        <div className="mb-5 flex items-start gap-3 rounded-2xl border border-white/10 bg-ink-900 p-4 text-sm text-ink-200">
+          <svg viewBox="0 0 24 24" className="mt-0.5 h-5 w-5 shrink-0 text-brand" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+          <p>
+            <span className="font-semibold text-white">
+              These clips will be deleted on {formatExpiryDate(expiry.soonestExpiry)} ({humanCountdown(expiry.soonestExpiry)}).
+            </span>{" "}
+            Download them before then to keep a copy.
+          </p>
+        </div>
       )}
 
       {/* Loading skeleton - dense grid */}

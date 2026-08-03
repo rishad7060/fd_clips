@@ -52,7 +52,7 @@ export function CreditsChip() {
   return (
     <div className="flex items-center gap-2">
       <span
-        title={bal ? `${bal.credit_balance} of ${bal.monthly_credits} min remaining · ${bal.plan} plan` : "Credits"}
+        title={bal ? `${bal.credit_balance} of ${bal.monthly_credits} credits remaining (1 credit = 1 minute of source video) · ${bal.plan} plan` : "Credits"}
         className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-ink-850 px-2.5 py-1.5 text-sm font-semibold text-white shadow-rim"
       >
         <svg viewBox="0 0 24 24" className="h-4 w-4 text-brand-400" fill="currentColor" aria-hidden>

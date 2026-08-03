@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Check, Minus, Plus } from "lucide-react";
+import { Check, Info, Minus, Plus } from "lucide-react";
 import { api, FALLBACK_PLANS, type PlanCatalogEntry } from "@/lib/api";
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -15,34 +15,30 @@ import { api, FALLBACK_PLANS, type PlanCatalogEntry } from "@/lib/api";
  * instantly and offline so the page never blocks on the fetch.
  * ──────────────────────────────────────────────────────────────────────────── */
 
+const CREDIT_TOOLTIP = "1 credit = 1 minute of source video";
+
 const STARTER_FEATURES = [
-  "150 source-minutes per month",
+  "150 credits / mo",
   "AI clipping with Virality Score",
-  "AI animated captions in 40+ languages",
+  "AI animated captions",
+  "Auto captions + hooks",
   "Face-aware vertical reframe",
-  "Powerful editor",
-  "1 brand template",
-  "Filler & silence removal",
+  "1080p clips",
   "No watermark",
+  "Powerful editor",
 ];
 
 const PRO_FEATURES = [
-  "Priority GPU processing",
+  "300 credits / mo, available instantly",
   "Active-speaker reframe",
-  "AI B-roll",
   "Multiple aspect ratios (9:16, 1:1, 16:9)",
-  "Export to Premiere Pro & DaVinci Resolve",
-  "Team workspace with 2 seats",
-  "Custom fonts & speech enhancement",
+  "Clips kept indefinitely",
 ];
 
 const BUSINESS_FEATURES = [
-  "Custom credits, team seats & connections",
+  "Custom credits & connections",
   "API & custom integrations",
-  "Dedicated storage",
-  "Master Service Agreement (MSA)",
-  "Priority support via a dedicated Slack channel",
-  "Enterprise-grade security",
+  "Priority support",
 ];
 
 const MAX_PACK = 10;
@@ -194,6 +190,21 @@ function CtaLink({
   );
 }
 
+/** Small inline "(i)" info icon with a native tooltip (title attr) - no dedicated
+ *  Tooltip primitive exists in this codebase, so this mirrors the `title=`
+ *  pattern already used elsewhere (e.g. CreditsChip). */
+function InfoHint({ label }: { label: string }) {
+  return (
+    <span title={label} className="inline-flex align-text-top">
+      <Info
+        className="ml-1 inline h-3.5 w-3.5 shrink-0 text-ink-500"
+        strokeWidth={2}
+        aria-hidden
+      />
+    </span>
+  );
+}
+
 function FeatureList({
   lead,
   features,
@@ -207,7 +218,16 @@ function FeatureList({
       {features.map((f) => (
         <li key={f} className="flex items-start gap-2.5 text-ink-200">
           <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-300" strokeWidth={2.5} aria-hidden />
-          <span>{f}</span>
+          <span>
+            {f.includes("credits") ? (
+              <>
+                {f}
+                <InfoHint label={CREDIT_TOOLTIP} />
+              </>
+            ) : (
+              f
+            )}
+          </span>
         </li>
       ))}
     </ul>
@@ -232,6 +252,7 @@ function StarterCard({ plan, yearly }: { plan: PlanCatalogEntry; yearly: boolean
                 ${fmt(plan.priceUsd)}
               </span>
               <span className="text-sm font-medium text-ink-400">USD /mo</span>
+              <InfoHint label={CREDIT_TOOLTIP} />
             </p>
             <p className="mt-1 text-xs text-ink-500">Billed monthly</p>
           </>
@@ -241,7 +262,11 @@ function StarterCard({ plan, yearly }: { plan: PlanCatalogEntry; yearly: boolean
       <CtaLink href="/new" label="Get started" />
       <p className="mt-2 text-center text-xs text-ink-500">No credit card required</p>
 
-      <FeatureList features={STARTER_FEATURES.map((f) => f.replace("150 source-minutes per month", `${plan.monthlyCredits} source-minutes per month`))} />
+      <FeatureList
+        features={STARTER_FEATURES.map((f) =>
+          f.replace("150 credits / mo", `${plan.monthlyCredits} credits / mo`),
+        )}
+      />
     </CardShell>
   );
 }
@@ -297,6 +322,7 @@ function ProCard({
                 ${fmt(monthlyEquivalentPacked)}
               </span>
               <span className="text-sm font-medium text-ink-400">USD /mo</span>
+              <InfoHint label={CREDIT_TOOLTIP} />
             </p>
             <p className="mt-1 text-xs text-ink-500">${fmt(billedAnnually)} billed annually</p>
           </>
@@ -307,6 +333,7 @@ function ProCard({
                 ${fmt(monthlyPrice)}
               </span>
               <span className="text-sm font-medium text-ink-400">USD /mo</span>
+              <InfoHint label={CREDIT_TOOLTIP} />
             </p>
             <p className="mt-1 text-xs text-ink-500">Billed monthly</p>
           </>
@@ -316,7 +343,7 @@ function ProCard({
       {/* Pack stepper */}
       <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-ink-900/60 px-3 py-2">
         <span className="text-xs font-medium text-ink-300">
-          Pack <span className="text-white">×{pack}</span> · {credits.toLocaleString()} min
+          Pack <span className="text-white">×{pack}</span> · {credits.toLocaleString()} credits
           {yearly ? "/yr" : "/mo"}
         </span>
         <div className="flex items-center gap-1">

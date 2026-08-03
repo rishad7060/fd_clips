@@ -2,6 +2,8 @@ import { Global, Inject, Logger, Module, OnApplicationShutdown } from '@nestjs/c
 import { AppConfigService } from '../config/config.service';
 import { ConfigModule } from '../config/config.module';
 import { BillingService } from '../billing/billing.service';
+import { MailService } from '../mail/mail.service';
+import { MailModule } from '../mail/mail.module';
 import { PersistenceModule } from '../persistence/persistence.module';
 import { ProgressModule } from '../progress/progress.module';
 import { DataStore, DATA_STORE } from '../persistence/store.types';
@@ -19,16 +21,17 @@ import { JobQueue, JobWorker, JOB_QUEUE } from './queue.types';
  */
 @Global()
 @Module({
-  imports: [ConfigModule, PersistenceModule, ProgressModule],
+  imports: [ConfigModule, PersistenceModule, ProgressModule, MailModule],
   providers: [
     {
       provide: JOB_QUEUE,
-      inject: [AppConfigService, DATA_STORE, PROGRESS_BUS, BillingService],
+      inject: [AppConfigService, DATA_STORE, PROGRESS_BUS, BillingService, MailService],
       useFactory: async (
         config: AppConfigService,
         store: DataStore,
         bus: ProgressBus,
         billing: BillingService,
+        mail: MailService,
       ): Promise<JobQueue> => {
         const logger = new Logger('QueueModule');
         if (!config.flags.mockQueue && config.redisUrl) {
@@ -69,7 +72,7 @@ import { JobQueue, JobWorker, JOB_QUEUE } from './queue.types';
           return { insufficient: r.insufficient };
         };
         const worker: JobWorker = config.flags.useRealPipeline
-          ? new RealPipelineWorker({ store, bus, onFailure, onIngestDuration })
+          ? new RealPipelineWorker({ store, bus, onFailure, onIngestDuration, mail })
           : new MockWorker({ store, bus, onFailure });
         logger.log(
           `In-memory queue using ${config.flags.useRealPipeline ? 'RealPipelineWorker' : 'MockWorker'}.`,

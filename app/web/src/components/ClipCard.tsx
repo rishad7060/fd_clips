@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import type { Clip } from "@/lib/types";
 import { formatDuration, scoreTextColor } from "@/lib/format";
+import { downloadFile } from "@/lib/download";
 
 /**
  * Opus-style clip card: the video sits PAUSED on its poster with a play button,
@@ -277,9 +278,9 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
             </button>
           )}
           {hasVideo ? (
-            <a
-              href={clip.final_url}
-              download={safeName}
+            <button
+              type="button"
+              onClick={() => void downloadFile(clip.final_url, safeName)}
               title="Download"
               aria-label="Download clip"
               className="grid h-7 w-7 place-items-center rounded-lg transition hover:bg-ink-800 hover:text-white"
@@ -287,7 +288,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
               </svg>
-            </a>
+            </button>
           ) : (
             <span
               title="Download unavailable"

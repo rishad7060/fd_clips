@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Minus, Plus } from "lucide-react";
+import { Info, Minus, Plus } from "lucide-react";
 import { api, FALLBACK_PLANS, type BillingPeriod, type PlanCatalogEntry } from "@/lib/api";
 import { emitCreditsChanged } from "@/lib/creditsBus";
 import type { CreditBalance, CreditBreakdown } from "@/lib/types";
@@ -54,6 +54,22 @@ function ctaVerb(relation: PlanRelation): "Upgrade" | "Downgrade" {
 /** Format a USD price, dropping the trailing .00 but keeping .50 etc. */
 function fmt(n: number): string {
   return Number.isInteger(n) ? `${n}` : n.toFixed(2).replace(/0$/, "");
+}
+
+const CREDIT_TOOLTIP = "1 credit = 1 minute of source video";
+
+/** Small inline "(i)" info icon with a native tooltip (title attr) - mirrors
+ *  the `title=` pattern already used elsewhere (e.g. CreditsChip). */
+function InfoHint({ label }: { label: string }) {
+  return (
+    <span title={label} className="inline-flex align-text-top">
+      <Info
+        className="ml-1 inline h-3.5 w-3.5 shrink-0 text-ink-500"
+        strokeWidth={2}
+        aria-hidden
+      />
+    </span>
+  );
 }
 
 export default function BillingPage() {
@@ -180,10 +196,13 @@ export default function BillingPage() {
           Home
         </Link>
       </div>
-      <h1 className="text-2xl font-semibold tracking-tight text-white">Plans &amp; credits</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-white">
+        Plans &amp; credits
+        <InfoHint label={CREDIT_TOOLTIP} />
+      </h1>
       <p className="mt-1 text-sm text-ink-300">
         {bal
-          ? `You're on the ${cap(bal.plan)} plan - you have ${bal.credit_balance.toLocaleString()} minute${bal.credit_balance === 1 ? "" : "s"} of credit left${bal.plan !== "free" ? ` (${bal.monthly_credits.toLocaleString()} added each month).` : "."}`
+          ? `You're on the ${cap(bal.plan)} plan - you have ${bal.credit_balance.toLocaleString()} credit${bal.credit_balance === 1 ? "" : "s"} left${bal.plan !== "free" ? ` (${bal.monthly_credits.toLocaleString()} added each month).` : "."}`
           : "Loading your balance…"}
       </p>
 
@@ -202,7 +221,7 @@ export default function BillingPage() {
               />
             </div>
             <p className="mt-1.5 font-mono text-xs tabular-nums text-ink-400">
-              {bal.credit_balance.toLocaleString()} min available
+              {bal.credit_balance.toLocaleString()} credits available
             </p>
           </div>
         );
@@ -241,7 +260,7 @@ export default function BillingPage() {
           </ul>
           <div className="mt-2.5 flex items-center justify-between border-t border-white/10 pt-2.5 text-sm font-semibold">
             <span className="text-white">Balance</span>
-            <span className="font-mono tabular-nums text-white">{breakdown.balance.toLocaleString()} min</span>
+            <span className="font-mono tabular-nums text-white">{breakdown.balance.toLocaleString()} credits</span>
           </div>
         </div>
       )}
@@ -280,7 +299,7 @@ export default function BillingPage() {
           isCurrent={current === "free"}
           price={0}
           priceSuffix="/mo"
-          features={[`${plans.free.monthlyCredits} source-minutes / mo`, "Up to 1080p clips", "Auto captions + hooks", "Has watermark · clips expire in 3 days"]}
+          features={[`${plans.free.monthlyCredits} credits / mo`, "Up to 1080p clips", "Auto captions + hooks", "Has watermark · clips expire in 3 days"]}
         >
           {current === "free" ? (
             <Button variant="secondary" full disabled className="mt-5" title="Free plan">
@@ -311,7 +330,7 @@ export default function BillingPage() {
           price={plans.starter.priceUsd}
           priceSuffix="/mo"
           note={yearly ? "Starter plan only available in monthly" : undefined}
-          features={[`${plans.starter.monthlyCredits} source-minutes / mo`, "All Free features", "No watermark", "Powerful editor"]}
+          features={[`${plans.starter.monthlyCredits} credits / mo`, "AI clipping with Virality Score", "AI animated captions", "1080p clips, no watermark", "Powerful editor"]}
         >
           {current === "starter" ? (
             <Button
@@ -366,11 +385,13 @@ export default function BillingPage() {
                 ${fmt((annualPrice / 12) * pack)}
               </span>
               <span className="font-sans text-sm font-medium text-ink-400">/mo</span>
+              <InfoHint label={CREDIT_TOOLTIP} />
             </p>
           ) : (
             <p className="mt-2 font-mono text-3xl font-semibold tabular-nums text-white">
               ${fmt(plans.pro.priceUsd * pack)}
               <span className="font-sans text-sm font-medium text-ink-400">/mo</span>
+              <InfoHint label={CREDIT_TOOLTIP} />
             </p>
           )}
           <p className="mt-0.5 text-xs text-ink-500">
@@ -381,7 +402,7 @@ export default function BillingPage() {
           <div className="mt-3 flex items-center justify-between rounded-xl border border-white/10 bg-ink-900/60 px-3 py-2">
             <span className="text-xs font-medium text-ink-300">
               Pack <span className="text-white">×{pack}</span> ·{" "}
-              {((yearly ? annualCredits : plans.pro.monthlyCredits) * pack).toLocaleString()} min
+              {((yearly ? annualCredits : plans.pro.monthlyCredits) * pack).toLocaleString()} credits
               {yearly ? "/yr" : "/mo"}
             </span>
             <div className="flex items-center gap-1">
@@ -410,7 +431,7 @@ export default function BillingPage() {
           </div>
 
           <ul className="mt-4 flex-1 space-y-2 text-sm text-ink-300">
-            {["All Starter features", "Active-speaker reframe", "Priority processing", "Multiple aspect ratios"].map((f) => (
+            {["All Starter features", "Active-speaker reframe", "Multiple aspect ratios (9:16, 1:1, 16:9)", "Clips kept indefinitely"].map((f) => (
               <li key={f} className="flex items-start gap-2">
                 <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-brand-300" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 6L9 17l-5-5" />
@@ -466,9 +487,10 @@ export default function BillingPage() {
       <p className="mt-3 text-xs text-ink-400">
         Subscriptions are billed through Polar (card &amp; more, no account required). Pro&apos;s
         annual plan is 60% off and its pack stepper (×1-10) scales both credits and price -
-        Starter is monthly-only. Pricing is half of Opus Clip&apos;s for the same minutes. Cancel
-        anytime - you keep access until the period ends. In this demo build (no Polar token),
-        upgrades activate locally so you can try the flow.
+        Starter is monthly-only. Pricing is half of Opus Clip&apos;s for the same credits (1
+        credit = 1 minute of source video). Cancel anytime - you keep access until the period
+        ends. In this demo build (no Polar token), upgrades activate locally so you can try the
+        flow.
       </p>
     </div>
   );
@@ -506,6 +528,7 @@ function PlanTile({
         <p className="mt-2 font-mono text-3xl font-semibold tabular-nums text-white">
           ${price.toFixed(2)}
           <span className="font-sans text-sm font-medium text-ink-400">{priceSuffix}</span>
+          <InfoHint label={CREDIT_TOOLTIP} />
         </p>
       )}
       <ul className="mt-4 flex-1 space-y-2 text-sm text-ink-300">
@@ -514,7 +537,16 @@ function PlanTile({
             <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-brand-300" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M20 6L9 17l-5-5" />
             </svg>
-            {f}
+            <span>
+              {f.includes("credits") ? (
+                <>
+                  {f}
+                  <InfoHint label={CREDIT_TOOLTIP} />
+                </>
+              ) : (
+                f
+              )}
+            </span>
           </li>
         ))}
       </ul>

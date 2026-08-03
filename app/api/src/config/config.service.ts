@@ -141,6 +141,36 @@ export class AppConfigService {
     return this.get<string>('WEB_APP_URL', 'http://localhost:3000').replace(/\/$/, '');
   }
 
+  // ── SMTP (transactional email: "your clips are ready") ─────────────────────
+  // When SMTP_HOST is set the MailService sends real email via nodemailer;
+  // otherwise it logs the intended email and no-ops (safe offline default).
+  get smtpHost(): string | undefined {
+    return this.get<string>('SMTP_HOST', undefined);
+  }
+  get smtpPort(): number {
+    return this.get<number>('SMTP_PORT', 587);
+  }
+  /** true => implicit TLS (port 465); false => STARTTLS (port 587). Auto by port if unset. */
+  get smtpSecure(): boolean {
+    const raw = this.get<string>('SMTP_SECURE', undefined);
+    if (raw === undefined) return this.smtpPort === 465;
+    return raw === 'true' || raw === '1';
+  }
+  get smtpUser(): string | undefined {
+    return this.get<string>('SMTP_USER', undefined);
+  }
+  get smtpPass(): string | undefined {
+    return this.get<string>('SMTP_PASS', undefined);
+  }
+  /** From header for outbound mail. Falls back to EMAIL_FROM, then a sensible default. */
+  get mailFrom(): string {
+    return (
+      this.get<string>('SMTP_FROM', undefined) ??
+      this.get<string>('EMAIL_FROM', undefined) ??
+      'ClipsHQ <no-reply@clipshq.pro>'
+    );
+  }
+
   /**
    * Global default affiliate commission rate (0–1, e.g. 0.30 = 30% of each paid
    * invoice from a referred org). This is the fallback; an admin can override it

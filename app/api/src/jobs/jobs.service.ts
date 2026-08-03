@@ -25,7 +25,11 @@ export class JobsService {
     private readonly billing: BillingService,
   ) {}
 
-  async create(organizationId: string, dto: CreateJobDto): Promise<JobRecord> {
+  async create(
+    organizationId: string,
+    dto: CreateJobDto,
+    accountEmail: string | null = null,
+  ): Promise<JobRecord> {
     // Platform control: operators can pause all new clip jobs (e.g. when the
     // worker fleet is down for maintenance) without a redeploy.
     const platform = await this.store.getPlatformSettings();
@@ -78,8 +82,9 @@ export class JobsService {
       // Opus-style config in run.py's SNAKE_CASE --config-json shape (null when
       // none was set → run.py applies all defaults = current behavior).
       config: toPipelineConfig(jobConfig),
-      // MVP: carry the delivery email so the worker can email finished clips.
-      email: dto.email ?? null,
+      // Carry the delivery email so the worker can email finished clips. Prefer
+      // an explicit dto.email, else fall back to the signed-in account email.
+      email: dto.email ?? accountEmail ?? null,
     };
     try {
       await this.queue.enqueue(payload);

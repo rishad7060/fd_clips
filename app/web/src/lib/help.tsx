@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
  * control over styling (the design-system primitives) without a markdown layer.
  *
  * Facts here are kept in sync with the real product (verified against code):
- *  - 60 free source-minutes/mo  → app/api/src/billing/plans.ts (SINGLE SOURCE OF TRUTH)
+ *  - 60 free credits/mo (1 credit = 1 source-minute) → app/api/src/billing/plans.ts (SINGLE SOURCE OF TRUTH)
  *  - 11 caption presets          → app/web/src/lib/templates.ts (STYLE_TEMPLATES)
  *  - Pricing: Starter $7.50/mo · Pro $14.50/mo (half of Opus) → plans.ts
  *  - Free tier: 1080p, watermark, clips expire after 3 days, editing gated → plans.ts
@@ -216,16 +216,16 @@ export const HELP_ARTICLES: HelpArticle[] = [
   {
     slug: "credits-and-billing",
     title: "Credits & billing",
-    summary: "How credits work (1 credit ≈ 1 source-minute), what spends them, and how your monthly grant resets.",
+    summary: "How credits work (1 credit = 1 minute of source video), what spends them, and how your monthly grant resets.",
     category: "Billing",
     readMins: 3,
     body: () => (
       <>
         <H>How credits work</H>
         <P>
-          Credits are <B>source-minutes</B>: roughly <B>1 credit = 1 minute</B> of the video you submit. A 12-minute
-          podcast costs about 12 credits to process, no matter how many clips come out the other side. You&apos;re
-          billed for the input you feed in, not the clips you get back.
+          <B>1 credit = 1 minute</B> of the video you submit. A 12-minute podcast costs about 12 credits to process,
+          no matter how many clips come out the other side. You&apos;re billed for the input you feed in, not the
+          clips you get back.
         </P>
 
         <H>What uses credits</H>
@@ -241,7 +241,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         <H>Your monthly grant</H>
         <P>
           Each plan comes with a monthly credit allowance that resets on renewal: <B>Free 60</B>, <B>Starter 150</B>,
-          and <B>Pro 300</B> source-minutes per month. You can always see your remaining balance in the credits chip
+          and <B>Pro 300</B> credits per month. You can always see your remaining balance in the credits chip
           at the top of the app and on the <B>Plans &amp; credits</B> page.
         </P>
         <Note>
@@ -263,8 +263,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
         <H>Free, forever</H>
         <P>
           There&apos;s no time-limited trial to expire - the <B>Free</B> plan is free forever. You get <B>60
-          source-minutes per month</B> to make real clips. The catch is a few limits, mirrored from Opus&apos;s
-          free tier:
+          credits per month</B> (1 credit = 1 minute of source video) to make real clips. The catch is a few
+          limits, mirrored from Opus&apos;s free tier:
         </P>
         <UL>
           <LI><B>1080p</B> output (same resolution as paid).</LI>
@@ -276,11 +276,11 @@ export const HELP_ARTICLES: HelpArticle[] = [
         <H>Paid plans</H>
         <P>Both paid tiers lift the watermark, keep your clips indefinitely, and unlock the editor:</P>
         <UL>
-          <LI><B>Starter - $7.50/mo</B> · 150 source-minutes/mo · 1080p, no watermark · clips kept · editing on · priority queue.</LI>
-          <LI><B>Pro - $14.50/mo</B> · 300 source-minutes/mo · everything in Starter · active-speaker reframe · clips kept.</LI>
+          <LI><B>Starter - $7.50/mo</B> · 150 credits/mo · 1080p, no watermark · clips kept · editing on.</LI>
+          <LI><B>Pro - $14.50/mo</B> · 300 credits/mo · everything in Starter · active-speaker reframe · multiple aspect ratios (9:16, 1:1, 16:9) · clips kept.</LI>
         </UL>
         <Note>
-          Pricing is deliberately set at <B>half of Opus Clip&apos;s</B> for the same monthly minutes
+          Pricing is deliberately set at <B>half of Opus Clip&apos;s</B> for the same monthly credits
           (Opus Starter $15, Pro $29). Checkout is handled by Polar.sh - recurring monthly
           subscriptions, with cards and more supported (no account required).
         </Note>

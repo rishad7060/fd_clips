@@ -129,6 +129,8 @@ interface ApiClipView {
   suggestedTitle: string;
   downloadUrl: string | null;
   thumbnailUrl: string | null;
+  expiresAt?: string | null;
+  expired?: boolean;
 }
 
 /** Mirrors preview.controller.ts PreviewView (camelCase boundary). */
@@ -261,6 +263,8 @@ function toClip(v: ApiClipView): Clip {
     // The real /clips endpoint does not return per-word caption lines; the
     // editor lazily falls back to an empty list (re-render is a later feature).
     caption_lines: [],
+    expires_at: v.expiresAt ?? null,
+    expired: v.expired ?? false,
   };
 }
 

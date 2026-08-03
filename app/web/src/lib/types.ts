@@ -118,6 +118,14 @@ export interface Clip extends ClipCandidate {
   thumb_url: string;
   /** Editable caption lines, sliced from transcript for this clip range. */
   caption_lines: CaptionLine[];
+  /**
+   * ISO timestamp when this clip's files are auto-deleted (createdAt + the org
+   * plan's retention window). null/undefined = kept indefinitely or unknown
+   * (mock mode). Set by the real /clips API.
+   */
+  expires_at?: string | null;
+  /** True once the retention window has passed - files removed, URLs empty. */
+  expired?: boolean;
 }
 
 export interface CaptionLine {

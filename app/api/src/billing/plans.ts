@@ -60,7 +60,9 @@ export const PLANS: Record<PlanTier, PlanDefinition> = {
     monthlyCredits: 150,
     watermark: false,
     editingEnabled: true,
-    clipRetentionDays: null,
+    // Paid clips are retained 30 days (was indefinite). Files are swept from
+    // disk after this window; see clips/clip-expiry.ts + clips.controller.ts.
+    clipRetentionDays: 30,
     maxResolution: '1080p',
   },
   pro: {
@@ -76,7 +78,8 @@ export const PLANS: Record<PlanTier, PlanDefinition> = {
     annualCredits: 3600,
     watermark: false,
     editingEnabled: true,
-    clipRetentionDays: null,
+    // Paid clips are retained 30 days (was indefinite). See starter above.
+    clipRetentionDays: 30,
     maxResolution: '1080p',
   },
 };
