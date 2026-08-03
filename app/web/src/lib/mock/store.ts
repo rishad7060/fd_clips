@@ -314,10 +314,15 @@ export const mockStore = {
     const chargedUsd = basePrice * qty;
     const subscriptionId = `polar_mock_${tier}_${period}_x${qty}_${Date.now().toString(36)}`;
     if (credits) {
+      // Credit STACKING (mirrors the real API's store.addCredits, which ADDS the
+      // grant to the existing balance): the new plan takes effect immediately and
+      // its credits are ADDED on top of whatever the org already had - a plan
+      // change (upgrade OR downgrade) never resets or claws back the balance.
+      // monthly_credits reflects the NEW plan's allotment (for the quota bar).
       billingState = {
         plan: tier,
         monthly_credits: credits,
-        credit_balance: credits,
+        credit_balance: billingState.credit_balance + credits,
       };
     }
     // Demo the affiliate funnel end-to-end: a paid upgrade flips a referral to

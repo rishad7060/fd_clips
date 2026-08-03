@@ -238,7 +238,7 @@ function StarterCard({ plan, yearly }: { plan: PlanCatalogEntry; yearly: boolean
         )}
       </div>
 
-      <CtaLink href="/new" label="Start your free trial" />
+      <CtaLink href="/new" label="Get started" />
       <p className="mt-2 text-center text-xs text-ink-500">No credit card required</p>
 
       <FeatureList features={STARTER_FEATURES.map((f) => f.replace("150 source-minutes per month", `${plan.monthlyCredits} source-minutes per month`))} />
@@ -344,7 +344,7 @@ function ProCard({
         </div>
       </div>
 
-      <CtaLink href="/new" label="Start your free trial" highlight />
+      <CtaLink href="/new" label="Get started" highlight />
       <p className="mt-2 text-center text-xs text-ink-500">No credit card required</p>
 
       <FeatureList lead="Everything in Starter, plus:" features={PRO_FEATURES} />

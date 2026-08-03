@@ -22,6 +22,35 @@ import { Button } from "@/components/ui/Button";
 const MIN_PACK = 1;
 const MAX_PACK = 10;
 
+/** Plan rank order for upgrade/downgrade comparisons: free(0) < starter(1) < pro(2). */
+const PLAN_RANK: Record<"free" | "starter" | "pro", number> = {
+  free: 0,
+  starter: 1,
+  pro: 2,
+};
+
+/**
+ * The CTA a plan card should show, computed from the card's tier relative to the
+ * user's CURRENT plan:
+ *   - "current"   -> this IS the current plan (badge + Cancel for paid).
+ *   - "upgrade"   -> a plan ABOVE the current one ("Upgrade to X").
+ *   - "downgrade" -> a plan BELOW the current one ("Downgrade to X").
+ */
+type PlanRelation = "current" | "upgrade" | "downgrade";
+
+function planRelation(
+  tier: "free" | "starter" | "pro",
+  current: "free" | "starter" | "pro",
+): PlanRelation {
+  if (tier === current) return "current";
+  return PLAN_RANK[tier] > PLAN_RANK[current] ? "upgrade" : "downgrade";
+}
+
+/** The verb shown on a paid tier's CTA for a given relation ("Upgrade"/"Downgrade"). */
+function ctaVerb(relation: PlanRelation): "Upgrade" | "Downgrade" {
+  return relation === "downgrade" ? "Downgrade" : "Upgrade";
+}
+
 /** Format a USD price, dropping the trailing .00 but keeping .50 etc. */
 function fmt(n: number): string {
   return Number.isInteger(n) ? `${n}` : n.toFixed(2).replace(/0$/, "");
@@ -77,7 +106,8 @@ export default function BillingPage() {
     return () => { alive = false; };
   }, []);
 
-  const current = bal?.plan ?? "free";
+  const current: "free" | "starter" | "pro" =
+    bal?.plan === "starter" || bal?.plan === "pro" ? bal.plan : "free";
   const pro = plans.pro;
   const annualPrice = pro.annualPriceUsd ?? FALLBACK_PLANS.pro.annualPriceUsd!;
   const annualCredits = pro.annualCredits ?? FALLBACK_PLANS.pro.annualCredits!;
@@ -192,9 +222,25 @@ export default function BillingPage() {
           priceSuffix="/mo"
           features={[`${plans.free.monthlyCredits} source-minutes / mo`, "Up to 1080p clips", "Auto captions + hooks", "Has watermark · clips expire in 3 days"]}
         >
-          <Button variant="secondary" full disabled className="mt-5" title="Free plan">
-            {current === "free" ? "Your plan" : "Included"}
-          </Button>
+          {current === "free" ? (
+            <Button variant="secondary" full disabled className="mt-5" title="Free plan">
+              Your plan
+            </Button>
+          ) : (
+            /* On a paid plan, Free is below current: downgrading to Free = cancel
+               the paid subscription (existing keep-credits cancel path). */
+            <Button
+              variant="secondary"
+              full
+              loading={pending === "cancel"}
+              disabled={pending !== null}
+              className="mt-5"
+              onClick={cancel}
+              title="Cancel your paid plan and move to Free (you keep credits already granted)"
+            >
+              {pending === "cancel" ? "Canceling…" : "Downgrade to Free"}
+            </Button>
+          )}
         </PlanTile>
 
         {/* Starter - monthly only (Opus parity) */}
@@ -227,9 +273,15 @@ export default function BillingPage() {
               disabled={pending !== null}
               className="mt-5"
               onClick={() => upgrade("starter")}
-              title="Subscribe with Polar"
+              title={
+                planRelation("starter", current) === "downgrade"
+                  ? "Switch to Starter via Polar (credits already granted are kept)"
+                  : "Subscribe with Polar"
+              }
             >
-              {pending === "starter" ? "Processing…" : "Upgrade to Starter"}
+              {pending === "starter"
+                ? "Processing…"
+                : `${ctaVerb(planRelation("starter", current))} to Starter`}
             </Button>
           )}
         </PlanTile>
@@ -328,9 +380,15 @@ export default function BillingPage() {
               disabled={pending !== null}
               className="mt-5"
               onClick={() => upgrade("pro")}
-              title="Subscribe with Polar"
+              title={
+                planRelation("pro", current) === "downgrade"
+                  ? "Switch to Pro via Polar (credits already granted are kept)"
+                  : "Subscribe with Polar"
+              }
             >
-              {pending === "pro" ? "Processing…" : "Upgrade to Pro"}
+              {pending === "pro"
+                ? "Processing…"
+                : `${ctaVerb(planRelation("pro", current))} to Pro`}
             </Button>
           )}
         </Card>
@@ -339,7 +397,13 @@ export default function BillingPage() {
       {error && (
         <p className="mt-6 text-xs text-danger-300">{error}</p>
       )}
-      <p className="mt-6 text-xs text-ink-400">
+      <p className="mt-6 rounded-xl border border-brand/20 bg-brand/5 px-3.5 py-2.5 text-xs text-ink-300">
+        <span className="font-semibold text-white">New plan credits are added to your current balance.</span>{" "}
+        When you change plans, the new plan starts immediately and its credits stack on top of what you
+        already have - nothing you&apos;ve been granted is lost. Downgrading keeps every credit already in
+        your balance.
+      </p>
+      <p className="mt-3 text-xs text-ink-400">
         Subscriptions are billed through Polar (card &amp; more, no account required). Pro&apos;s
         annual plan is 60% off and its pack stepper (×1-10) scales both credits and price -
         Starter is monthly-only. Pricing is half of Opus Clip&apos;s for the same minutes. Cancel
