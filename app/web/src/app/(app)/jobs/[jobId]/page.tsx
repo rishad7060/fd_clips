@@ -77,7 +77,10 @@ export default function JobProgressPage({
       if (status === "failed") setError(jobError || "Job failed");
       if (status === "completed" && !redirected.current) {
         redirected.current = true;
-        setTimeout(() => router.push(`/jobs/${jobId}/clips`), 900);
+        // Send the user straight to their clips the moment the job finishes -
+        // no lingering on the progress screen. `replace` (not push) so the dead
+        // progress page isn't left in history (Back won't return to "0%").
+        router.replace(`/jobs/${jobId}/clips`);
       }
     };
 
