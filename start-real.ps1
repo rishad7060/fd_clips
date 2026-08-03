@@ -10,9 +10,13 @@ $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 
 # 0. Load the repo-root .env into this process so the Prisma CLI (db push) and any
-#    child process sees DATABASE_URL etc. NestJS also reads .env on its own, but
-#    the prisma CLI only looks at the process env / app/api/.env. Existing env
-#    vars win (don't clobber an override the caller set).
+#    child process sees DATABASE_URL etc. NestJS also reads .env on its own.
+#    IMPORTANT: .env ALWAYS WINS. Previously this skipped vars already set in the
+#    shell ("don't clobber the caller"), but a STALE var lingering in the
+#    PowerShell session (e.g. an old MOCK_AUTH=true) then silently overrode .env -
+#    which put the API in mock-auth mode where EVERY user shares one org (same
+#    credits + projects for different logins). Overwriting from .env each run
+#    prevents that class of stale-env bug.
 $envFile = Join-Path $root ".env"
 if (Test-Path $envFile) {
   foreach ($line in Get-Content $envFile) {
@@ -22,24 +26,29 @@ if (Test-Path $envFile) {
     if ($i -lt 1) { continue }
     $k = $t.Substring(0, $i).Trim()
     $v = $t.Substring($i + 1).Trim()
-    if (-not (Test-Path "Env:$k")) { Set-Item -Path "Env:$k" -Value $v }
+    Set-Item -Path "Env:$k" -Value $v   # .env wins - overwrite any stale value
   }
 }
 
 # 1. Make sure FFmpeg is reachable for the API process (the pipeline also reads
 #    FFMPEG_PATH from .env, but exporting it on PATH covers yt-dlp + child procs).
-$ffbin = "C:/Users/ARSHAQ SHAZLY/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-8.1.1-full_build/bin"
-if (Test-Path $ffbin) { $env:Path = "$ffbin;$env:Path" }
+# Derive the ffmpeg bin dir from FFMPEG_PATH in .env (per-machine, not hardcoded).
+$ffbin = ""
+if ($env:FFMPEG_PATH) { $ffbin = Split-Path -Parent $env:FFMPEG_PATH }
+if ($ffbin -and (Test-Path $ffbin)) { $env:Path = "$ffbin;$env:Path" }
 if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
-  Write-Warning "ffmpeg not on PATH and not at the expected WinGet location. Real ingest may fail. Set FFMPEG_PATH in .env."
+  Write-Warning "ffmpeg not on PATH and FFMPEG_PATH not set/valid. Real ingest may fail. Set FFMPEG_PATH in .env."
 }
 
-# 2. API env: real pipeline worker + serve local clip files + mock auth (no Clerk key needed).
+# 2. API env: real pipeline worker + serve local clip files.
+#    NOTE: MOCK_AUTH is deliberately NOT forced here anymore. It used to be
+#    hardcoded to "true", which put EVERY logged-in user into one shared org
+#    (identical credits + projects across different accounts). It now comes from
+#    .env (MOCK_AUTH=false => real per-user Google auth). Same for API_PUBLIC_URL.
 $env:USE_REAL_PIPELINE = "true"
 $env:LOCAL_FILES        = "true"
-$env:MOCK_AUTH          = "true"
 $env:API_PORT           = "4000"
-$env:API_PUBLIC_URL     = "http://localhost:4000"
+if (-not $env:API_PUBLIC_URL) { $env:API_PUBLIC_URL = "http://localhost:4000" }
 $env:PIPELINE_REPO_ROOT = $root
 
 # npm is npm.cmd (a batch script); Start-Process can't launch it directly on
