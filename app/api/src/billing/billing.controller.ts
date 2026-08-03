@@ -12,7 +12,7 @@ import { AppAuthGuard } from '../auth/auth.guard';
 import { CurrentOrg } from '../auth/current-org.decorator';
 import { AuthContext, AuthedRequest } from '../auth/auth.types';
 import { PlanRecord, PlanTier } from '../persistence/store.types';
-import { BillingService, PlanStatus } from './billing.service';
+import { BillingService, CreditBreakdown, PlanStatus } from './billing.service';
 import { BillingPeriod, PolarService } from './polar.service';
 import { PlansService } from '../plans/plans.service';
 
@@ -64,6 +64,17 @@ export class BillingController {
   @Get('billing/balance')
   async balance(@CurrentOrg() auth: AuthContext): Promise<{ plan: PlanTier; creditBalance: number }> {
     return this.billing.getBalance(auth.organizationId);
+  }
+
+  /**
+   * Breakdown of WHERE the current credit balance came from (free grant, each
+   * plan/pack purchase, minus used, plus refunds) so the billing UI can show a
+   * transparent "60 free + 300 Pro - 27 used = 333" instead of a bare number.
+   */
+  @UseGuards(AppAuthGuard)
+  @Get('billing/breakdown')
+  async breakdown(@CurrentOrg() auth: AuthContext): Promise<CreditBreakdown> {
+    return this.billing.getCreditBreakdown(auth.organizationId);
   }
 
   /**

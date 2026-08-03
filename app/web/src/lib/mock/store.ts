@@ -91,6 +91,15 @@ let billingState: { plan: string; credit_balance: number; monthly_credits: numbe
   monthly_credits: 60,
 };
 
+/** Mock credit ledger so getCreditBreakdown can show where credits came from.
+ *  Seeded to match the initial 54/60 free balance (60 granted, 6 used). Real API
+ *  derives this from the persisted CreditLedgerRecord rows. */
+type MockLedgerEntry = { reason: "grant" | "debit" | "refund"; amount: number; label: string };
+let mockLedger: MockLedgerEntry[] = [
+  { reason: "grant", amount: 60, label: "Free tier signup" },
+  { reason: "debit", amount: 6, label: "Clip job" },
+];
+
 /** Plan prices (USD) - mirrors PLANS in app/api/src/billing/plans.ts. */
 const MOCK_PLAN_PRICE: Record<"starter" | "pro", number> = {
   starter: 7.5,
@@ -288,6 +297,36 @@ export const mockStore = {
     return { ...billingState };
   },
 
+  /** Mock credit breakdown from the in-session ledger (mirrors the real API's
+   *  BillingService.getCreditBreakdown). Groups grants by label, sums debits. */
+  getCreditBreakdown(): {
+    plan: string;
+    balance: number;
+    grants: { label: string; amount: number; count: number }[];
+    used: number;
+    refunded: number;
+  } {
+    const grants = new Map<string, { label: string; amount: number; count: number }>();
+    let used = 0;
+    let refunded = 0;
+    for (const e of mockLedger) {
+      if (e.reason === "grant") {
+        const prev = grants.get(e.label) ?? { label: e.label, amount: 0, count: 0 };
+        prev.amount += e.amount;
+        prev.count += 1;
+        grants.set(e.label, prev);
+      } else if (e.reason === "debit") used += Math.abs(e.amount);
+      else if (e.reason === "refund") refunded += Math.abs(e.amount);
+    }
+    return {
+      plan: billingState.plan,
+      balance: billingState.credit_balance,
+      grants: [...grants.values()].sort((a, b) => b.amount - a.amount),
+      used,
+      refunded,
+    };
+  },
+
   /**
    * Mock Polar recurring subscription. There is no real redirect offline, so
    * we immediately "activate": set the plan + grant the period's credits, and
@@ -324,6 +363,12 @@ export const mockStore = {
         monthly_credits: credits,
         credit_balance: billingState.credit_balance + credits,
       };
+      const planLabel = tier === "pro" ? "Pro plan" : "Starter plan";
+      mockLedger.push({
+        reason: "grant",
+        amount: credits,
+        label: qty > 1 ? `${planLabel} x${qty}` : planLabel,
+      });
     }
     // Demo the affiliate funnel end-to-end: a paid upgrade flips a referral to
     // converted and credits a commission (mirrors PolarService.grantMonthly →

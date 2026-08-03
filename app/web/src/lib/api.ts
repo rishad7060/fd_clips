@@ -9,6 +9,7 @@ import type {
   ClipTranscript,
   CreateJobInput,
   CreditBalance,
+  CreditBreakdown,
   Job,
   JobProgressEvent,
   ReferralSummary,
@@ -521,6 +522,17 @@ export const api = {
       credit_balance: v.creditBalance,
       monthly_credits: MONTHLY_CREDITS[v.plan] ?? DEFAULT_MONTHLY_CREDITS,
     };
+  },
+
+  /**
+   * Where the current balance came from (GET /billing/breakdown): a line per
+   * grant source (free grant, each plan/pack purchase), plus total used and
+   * refunded. Powers the transparent "60 free + 300 Pro - 27 used" UI. Mock mode
+   * derives it from the mock store's ledger.
+   */
+  async getCreditBreakdown(): Promise<CreditBreakdown> {
+    if (USING_MOCK_API) return delay(mockStore.getCreditBreakdown(), 120);
+    return http<CreditBreakdown>("/billing/breakdown");
   },
 
   /**

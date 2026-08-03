@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Minus, Plus } from "lucide-react";
 import { api, FALLBACK_PLANS, type BillingPeriod, type PlanCatalogEntry } from "@/lib/api";
 import { emitCreditsChanged } from "@/lib/creditsBus";
-import type { CreditBalance } from "@/lib/types";
+import type { CreditBalance, CreditBreakdown } from "@/lib/types";
 import { Card, SectionTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
@@ -58,6 +58,7 @@ function fmt(n: number): string {
 
 export default function BillingPage() {
   const [bal, setBal] = useState<CreditBalance | null>(null);
+  const [breakdown, setBreakdown] = useState<CreditBreakdown | null>(null);
   const [plans, setPlans] = useState<Record<"free" | "starter" | "pro", PlanCatalogEntry>>(
     FALLBACK_PLANS,
   );
@@ -92,10 +93,15 @@ export default function BillingPage() {
         );
       }
 
-      const [b, p] = await Promise.all([api.getBalance(), api.getPlans()]);
+      const [b, p, bd] = await Promise.all([
+        api.getBalance(),
+        api.getPlans(),
+        api.getCreditBreakdown().catch(() => null),
+      ]);
       if (alive) {
         setBal(b);
         setPlans(p);
+        setBreakdown(bd);
       }
       // A confirm above may have just granted the plan after the top-bar chip
       // already fetched the old balance - ping it to re-fetch.
@@ -126,8 +132,12 @@ export default function BillingPage() {
       const quantity = tier === "pro" ? pack : 1;
       const sub = await api.createSubscription(tier, { period, quantity });
       if (sub.mock) {
-        const fresh = await api.getBalance();
+        const [fresh, bd] = await Promise.all([
+          api.getBalance(),
+          api.getCreditBreakdown().catch(() => null),
+        ]);
         setBal(fresh);
+        setBreakdown(bd);
         emitCreditsChanged();
       } else {
         // Real Polar: redirect to the hosted checkout immediately. On success
@@ -148,8 +158,12 @@ export default function BillingPage() {
     setPending("cancel");
     try {
       await api.cancelSubscription();
-      const fresh = await api.getBalance();
+      const [fresh, bd] = await Promise.all([
+        api.getBalance(),
+        api.getCreditBreakdown().catch(() => null),
+      ]);
       setBal(fresh);
+      setBreakdown(bd);
       emitCreditsChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not cancel. Please try again.");
@@ -169,20 +183,66 @@ export default function BillingPage() {
       <h1 className="text-2xl font-semibold tracking-tight text-white">Plans &amp; credits</h1>
       <p className="mt-1 text-sm text-ink-300">
         {bal
-          ? `You're on the ${cap(bal.plan)} plan - you have ${bal.credit_balance} of ${bal.monthly_credits} monthly minutes left.`
+          ? `You're on the ${cap(bal.plan)} plan - you have ${bal.credit_balance.toLocaleString()} minute${bal.credit_balance === 1 ? "" : "s"} of credit left${bal.plan !== "free" ? ` (${bal.monthly_credits.toLocaleString()} added each month).` : "."}`
           : "Loading your balance…"}
       </p>
 
-      {/* Balance bar */}
-      {bal && (
-        <div className="mt-5 max-w-md">
-          <div className="h-2 overflow-hidden rounded-full bg-ink-800 ring-1 ring-white/10">
-            <div
-              className="h-full rounded-full bg-brand transition-all ease-premium"
-              style={{ width: `${Math.round((bal.credit_balance / Math.max(1, bal.monthly_credits)) * 100)}%` }}
-            />
+      {/* Balance bar. Credits STACK (free + purchases + packs) so the balance can
+          exceed the plan's monthly grant. Use the larger of the two as the bar's
+          full mark so it never overflows 100% and the "333 of 300" nonsense is gone. */}
+      {bal && (() => {
+        const barMax = Math.max(bal.credit_balance, bal.monthly_credits, 1);
+        const pct = Math.min(100, Math.round((bal.credit_balance / barMax) * 100));
+        return (
+          <div className="mt-5 max-w-md">
+            <div className="h-2 overflow-hidden rounded-full bg-ink-800 ring-1 ring-white/10">
+              <div
+                className="h-full rounded-full bg-brand transition-all ease-premium"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <p className="mt-1.5 font-mono text-xs tabular-nums text-ink-400">
+              {bal.credit_balance.toLocaleString()} min available
+            </p>
           </div>
-          <p className="mt-1.5 font-mono text-xs tabular-nums text-ink-400">{bal.credit_balance} / {bal.monthly_credits} min</p>
+        );
+      })()}
+
+      {/* Where your credits came from: one line per grant source (free grant, each
+          plan/pack purchase), minus what you've used. Makes the stacked balance
+          transparent ("60 free + 300 Pro - 27 used = 333"). */}
+      {breakdown && (breakdown.grants.length > 0 || breakdown.used > 0) && (
+        <div className="mt-4 max-w-md rounded-xl border border-white/10 bg-ink-900/60 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
+            Where your credits came from
+          </p>
+          <ul className="mt-2.5 space-y-1.5 text-sm">
+            {breakdown.grants.map((g) => (
+              <li key={g.label} className="flex items-center justify-between">
+                <span className="text-ink-200">
+                  {g.label}
+                  {g.count > 1 && <span className="ml-1.5 text-ink-500">×{g.count}</span>}
+                </span>
+                <span className="font-mono tabular-nums text-success">+{g.amount.toLocaleString()}</span>
+              </li>
+            ))}
+            {breakdown.used > 0 && (
+              <li className="flex items-center justify-between">
+                <span className="text-ink-200">Used on clips</span>
+                <span className="font-mono tabular-nums text-ink-400">-{breakdown.used.toLocaleString()}</span>
+              </li>
+            )}
+            {breakdown.refunded > 0 && (
+              <li className="flex items-center justify-between">
+                <span className="text-ink-200">Refunded (failed jobs)</span>
+                <span className="font-mono tabular-nums text-success">+{breakdown.refunded.toLocaleString()}</span>
+              </li>
+            )}
+          </ul>
+          <div className="mt-2.5 flex items-center justify-between border-t border-white/10 pt-2.5 text-sm font-semibold">
+            <span className="text-white">Balance</span>
+            <span className="font-mono tabular-nums text-white">{breakdown.balance.toLocaleString()} min</span>
+          </div>
         </div>
       )}
 

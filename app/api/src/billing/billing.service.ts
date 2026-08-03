@@ -21,6 +21,25 @@ export interface PlanStatus {
   subscriptionStatus: SubscriptionStatus | null;
 }
 
+/** One grant source line in the credit breakdown (e.g. "Pro plan", 600, 2). */
+export interface CreditGrantLine {
+  label: string;
+  amount: number;
+  count: number;
+}
+
+/** Where the current credit balance came from (for the billing UI breakdown). */
+export interface CreditBreakdown {
+  plan: PlanTier;
+  balance: number;
+  /** One line per grant source, largest first. */
+  grants: CreditGrantLine[];
+  /** Total minutes spent on jobs (positive number). */
+  used: number;
+  /** Total minutes refunded from failed jobs (positive number). */
+  refunded: number;
+}
+
 /** Result of reconciling a job's charge against its real source duration. */
 export interface TrueUpResult {
   /** Extra credits debited (0 when the up-front charge already covered it). */
@@ -57,6 +76,62 @@ export class BillingService {
   async getBalance(organizationId: string): Promise<{ plan: PlanTier; creditBalance: number }> {
     const org = await this.requireOrg(organizationId);
     return { plan: org.plan, creditBalance: org.creditBalance };
+  }
+
+  /**
+   * A human-friendly breakdown of WHERE the current credit balance came from, so
+   * the billing UI can show "Free grant 60 + Pro plan 300 - used 27 = 333"
+   * instead of a bare number. Groups the ledger:
+   *   - grants  -> one line per distinct source (the note, e.g. "Pro plan grant",
+   *                "Free tier signup grant", "Starter plan grant x2")
+   *   - used    -> sum of all debits (job charges), as a negative
+   *   - refunds -> sum of all refunds (failed jobs), as a positive
+   * `balance` echoes the org's authoritative balance (grants - used + refunds
+   * should equal it; we return the org value as the source of truth).
+   */
+  async getCreditBreakdown(organizationId: string): Promise<CreditBreakdown> {
+    const org = await this.requireOrg(organizationId);
+    const ledger = await this.store.listLedger(organizationId);
+
+    // Group grants by a normalized label so repeated monthly Pro grants collapse
+    // into one "Pro plan" line with a summed amount + count.
+    const grants = new Map<string, { label: string; amount: number; count: number }>();
+    let used = 0;
+    let refunded = 0;
+    for (const e of ledger) {
+      if (e.reason === 'grant') {
+        const label = this.grantLabel(e.note);
+        const prev = grants.get(label) ?? { label, amount: 0, count: 0 };
+        prev.amount += e.amount;
+        prev.count += 1;
+        grants.set(label, prev);
+      } else if (e.reason === 'debit') {
+        used += Math.abs(e.amount);
+      } else if (e.reason === 'refund') {
+        refunded += Math.abs(e.amount);
+      }
+    }
+
+    return {
+      plan: org.plan,
+      balance: org.creditBalance,
+      grants: [...grants.values()].sort((a, b) => b.amount - a.amount),
+      used,
+      refunded,
+    };
+  }
+
+  /**
+   * Normalize a ledger note into a short grant-source label. Notes look like
+   * "Pro plan grant (monthly x2, 600 min)" or "Free tier signup grant" - we keep
+   * the leading source words and drop the parenthetical detail so grants from the
+   * same source collapse together.
+   */
+  private grantLabel(note: string | null): string {
+    if (!note) return 'Credit grant';
+    const base = note.split('(')[0].trim();
+    // Trim a trailing "grant" verb for a cleaner label ("Pro plan grant" -> "Pro plan").
+    return base.replace(/\s*grant$/i, '').trim() || base || 'Credit grant';
   }
 
   /**

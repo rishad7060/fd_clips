@@ -199,6 +199,22 @@ export interface CreditBalance {
   monthly_credits: number;
 }
 
+/** One grant-source line in the credit breakdown (e.g. "Pro plan", 600, 2). */
+export interface CreditGrantLine {
+  label: string;
+  amount: number;
+  count: number;
+}
+
+/** Where the current credit balance came from (billing breakdown view). */
+export interface CreditBreakdown {
+  plan: string;
+  balance: number;
+  grants: CreditGrantLine[];
+  used: number;
+  refunded: number;
+}
+
 /** Output aspect ratio for the reframe stage. */
 export type AspectRatio = "9:16" | "1:1" | "16:9";
 
