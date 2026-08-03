@@ -878,7 +878,7 @@ def _score_real(
             {"role": "user", "content": user_payload},
         ],
     )
-    parsed = json.loads(resp.choices[0].message.content or "{}")
+    parsed = _loads_llm_json(resp.choices[0].message.content or "{}")
     candidates = parsed.get("candidates", [])
 
     if sentences:
@@ -886,6 +886,53 @@ def _score_real(
     # Enforce length bounds defensively (the model is told but we double-check).
     candidates = _enforce_length_bounds(candidates)
     return {"job_id": job_id, "model": settings.scoring_model, "candidates": candidates}
+
+
+def _loads_llm_json(raw: str) -> dict[str, Any]:
+    """Parse an LLM's JSON response, tolerating the usual malformations.
+
+    Even with response_mime_type=application/json / json_object, models
+    (esp. gemini-*-flash-lite on long transcripts) occasionally emit invalid
+    JSON: ```json fences, a trailing comma before ] or }, or trailing prose
+    after the closing brace. A bare json.loads() then crashes the whole job
+    (JSONDecodeError → pipeline exit 1 → "Failed at score"). This repairs the
+    common cases and, as a last resort, extracts the largest {...} span. Returns
+    {} if nothing parses (caller then yields zero candidates, not a crash).
+    """
+    if not raw:
+        return {}
+    text = raw.strip()
+    # Strip a leading ```json / ``` fence and a trailing ``` if present.
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z0-9]*\s*", "", text)
+        text = re.sub(r"\s*```$", "", text).strip()
+
+    def _try(s: str) -> Optional[dict[str, Any]]:
+        try:
+            out = json.loads(s)
+            return out if isinstance(out, dict) else None
+        except (json.JSONDecodeError, ValueError):
+            return None
+
+    # 1) straight parse
+    got = _try(text)
+    if got is not None:
+        return got
+    # 2) remove trailing commas before } or ] (the most common LLM slip)
+    repaired = re.sub(r",(\s*[}\]])", r"\1", text)
+    got = _try(repaired)
+    if got is not None:
+        return got
+    # 3) last resort: grab the outermost {...} and retry the trailing-comma fix
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        span = re.sub(r",(\s*[}\]])", r"\1", text[start : end + 1])
+        got = _try(span)
+        if got is not None:
+            return got
+    print("  [score] WARNING: could not parse LLM JSON; returning no candidates.")
+    return {}
 
 
 # ── Real Gemini scorer (free tier) ───────────────────────────────────────────
@@ -960,7 +1007,7 @@ def _score_gemini(
             f"Gemini scoring failed after retries across {models}: {last_err}"
         )
 
-    parsed = json.loads(resp.text or "{}")
+    parsed = _loads_llm_json(resp.text or "{}")
     candidates = parsed.get("candidates", [])
 
     # Resolve sentence indices → real word-level times (sentence-aligned, orphan
