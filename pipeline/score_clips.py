@@ -162,9 +162,27 @@ def score_clips(
 
     provider = settings.resolved_scoring_provider()
     if provider == "gemini":
-        result = _score_gemini(job_id, transcript, bias=bias)
+        # If Gemini is down (all models 503-overloaded on the free tier, a dead
+        # model, a transient network error), DON'T fail the whole job with 0
+        # clips - fall back to the deterministic heuristic scorer so the user
+        # still gets clips. The LLM gives better ranking, but "some good clips"
+        # beats "No clips found" every time.
+        try:
+            result = _score_gemini(job_id, transcript, bias=bias)
+            if not result.get("candidates"):
+                print("  [score] Gemini returned 0 candidates; using heuristic fallback.")
+                result = _score_mock(job_id, transcript)
+        except Exception as e:  # noqa: BLE001
+            print(f"  [score] Gemini scoring failed ({str(e)[:120]}); using heuristic fallback.")
+            result = _score_mock(job_id, transcript)
     elif provider == "openai":
-        result = _score_real(job_id, transcript, bias=bias)
+        try:
+            result = _score_real(job_id, transcript, bias=bias)
+            if not result.get("candidates"):
+                result = _score_mock(job_id, transcript)
+        except Exception as e:  # noqa: BLE001
+            print(f"  [score] OpenAI scoring failed ({str(e)[:120]}); using heuristic fallback.")
+            result = _score_mock(job_id, transcript)
     else:  # "mock"
         result = _score_mock(job_id, transcript)
 
@@ -973,11 +991,14 @@ def _score_gemini(
     # The free tier returns transient 503 UNAVAILABLE ("high demand") and 429
     # spikes. Retry with backoff, and fall back to lighter models that share a
     # different capacity pool. The configured model is tried first.
+    # NOTE: do NOT list deprecated models here - e.g. "gemini-2.5-flash" now
+    # returns 404 NOT_FOUND ("no longer available to new users"), which used to
+    # kill the whole scorer (0 clips) when the ladder reached it. Current, live
+    # lite models only.
     fallback_models = [
         settings.gemini_model,
         "gemini-2.5-flash-lite",
         "gemini-flash-lite-latest",
-        "gemini-2.5-flash",
     ]
     # De-dupe while preserving order.
     models: list[str] = list(dict.fromkeys(fallback_models))
@@ -996,6 +1017,15 @@ def _score_gemini(
             except Exception as e:  # noqa: BLE001 - inspect status to decide retry
                 last_err = e
                 msg = str(e)
+                # A dead/unknown model (404 NOT_FOUND) or permission (403) can't be
+                # retried - but it MUST NOT kill scoring: skip to the NEXT model in
+                # the ladder instead of raising. Only truly fatal-for-all-models
+                # errors (bad request/auth key) should abort.
+                model_gone = any(
+                    s in msg for s in ("404", "NOT_FOUND", "not found", "no longer available", "is not supported")
+                )
+                if model_gone:
+                    break  # try the next model in the ladder
                 transient = any(s in msg for s in ("503", "UNAVAILABLE", "429", "overloaded"))
                 if not transient:
                     raise
