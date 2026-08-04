@@ -11,8 +11,7 @@ export default function WhyClipshqBetterValue() {
         in minutes of source video, not abstract &quot;credits&quot; that cost a
         different amount depending on which feature you touch. One credit equals
         one minute of the video you feed in, so you can price a job before you
-        run it. Add a genuinely free tier with no credit card, paid plans that
-        land at roughly half of comparable competitor pricing, and no watermark
+        run it. Add a genuinely free tier with no credit card, paid plans that land well under typical competitor pricing, and no watermark
         on paid clips, and the math tends to favor ClipsHQ for the people it is
         built for.
       </p>
@@ -41,9 +40,9 @@ export default function WhyClipshqBetterValue() {
           you can actually evaluate output quality.
         </li>
         <li>
-          <strong>Roughly half the cost.</strong> Paid plans come in near half
-          of typical competitor pricing for comparable output, with an annual
-          option for larger savings.
+          <strong>Genuinely low cost.</strong> Paid plans start at $7.50/mo and
+          land well under typical competitor pricing for comparable output, with
+          an annual option for larger savings.
         </li>
         <li>
           <strong>No watermark on paid clips.</strong> What you export is yours,
@@ -298,7 +297,7 @@ export default function WhyClipshqBetterValue() {
         Best value is a narrower claim than best overall, and it is the honest
         one. ClipsHQ wins on the things that decide value for a solo creator or a
         small team: you can predict what a job costs, you start free without a
-        card, paid plans land near half of typical competitor pricing, your paid
+        card, paid plans land well under typical competitor pricing, your paid
         clips are clean, and the caption engine reaches languages the cheap tools
         skip. It does not have every enterprise bell an incumbent offers, and for
         the people it is built for, that is a feature. If that sounds like your

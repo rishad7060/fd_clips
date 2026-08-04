@@ -25,8 +25,8 @@ export default function ClipshqVsOpusClip2026() {
             credits system that most people have to sit down and calculate.
           </li>
           <li>
-            <strong>Cost:</strong> ClipsHQ&apos;s paid plans land at roughly half
-            the price of comparable competitor tiers, and the free tier needs no
+            <strong>Cost:</strong> ClipsHQ&apos;s paid plans start at $7.50/mo and
+            land well under comparable competitor tiers, and the free tier needs no
             credit card.
           </li>
           <li>
@@ -92,7 +92,7 @@ export default function ClipshqVsOpusClip2026() {
             </tr>
             <tr>
               <td>Relative cost</td>
-              <td>Roughly half of comparable tiers</td>
+              <td>From $7.50/mo, well under comparable tiers</td>
               <td>Higher on comparable tiers</td>
             </tr>
             <tr>
@@ -147,11 +147,13 @@ export default function ClipshqVsOpusClip2026() {
         price.
       </p>
       <p>
-        On raw cost, ClipsHQ paid plans land at roughly half of comparable
-        competitor tiers. The Free tier needs no credit card, so you can test
-        the actual output on your own footage before spending anything. Starter
-        and Pro are the paid steps up, priced to be entry-friendly rather than
-        agency-first. If you want the numbers live, they&apos;re on the{" "}
+        On raw cost, ClipsHQ is deliberately cheap: Starter is $7.50 a month and
+        Pro is $14.50 a month, which lands well under what most established
+        competitors charge on comparable tiers. The Free tier needs no credit
+        card, so you can test the actual output on your own footage before
+        spending anything. Starter and Pro are priced to be entry-friendly
+        rather than agency-first. If you want the numbers live, they&apos;re on
+        the{" "}
         <a href="/billing">billing page</a>, and the value argument gets its own
         write-up in{" "}
         <a href="/blog/why-clipshq-better-value">
@@ -302,8 +304,8 @@ export default function ClipshqVsOpusClip2026() {
 
       <h3>Is ClipsHQ actually cheaper than Opus.pro?</h3>
       <p>
-        On comparable tiers, yes. ClipsHQ paid plans sit at roughly half the
-        price of typical competitor tiers, and its minute-based pricing makes the
+        On comparable tiers, yes. ClipsHQ paid plans start at $7.50/mo and sit
+        well under typical competitor tiers, and its minute-based pricing makes the
         cost per video predictable. Opus.pro&apos;s credits system can be
         cost-effective for some usage patterns, but you usually have to calculate
         it rather than read it off the video length.
