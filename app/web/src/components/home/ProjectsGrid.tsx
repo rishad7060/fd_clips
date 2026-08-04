@@ -8,6 +8,7 @@ import { formatRelative } from "@/lib/format";
 import { StatusPill } from "@/components/StatusPill";
 import { Card, SectionTitle } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { ProcessingModal } from "@/components/home/ProcessingModal";
 
 /**
  * Opus-style projects grid below the hero. Each project is a card with a poster
@@ -100,10 +101,15 @@ export function ProjectsGrid() {
 
 function ProjectCard({ job }: { job: Job }) {
   const [thumb, setThumb] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
   const produced = job.clips_produced ?? 0;
   const completed = job.status === "completed";
   const completedNoClips = completed && produced === 0;
-  const href = completed ? `/jobs/${job.job_id}/clips` : `/jobs/${job.job_id}`;
+  // Completed WITH clips -> go straight to the gallery. Everything else
+  // (running/queued/failed) -> open the processing popup (Opus-style) instead
+  // of navigating to a separate progress page.
+  const opensGallery = completed && produced > 0;
+  const href = `/jobs/${job.job_id}/clips`;
 
   // Lazily derive a poster from the rank-1 clip once the job is done.
   useEffect(() => {
@@ -121,8 +127,8 @@ function ProjectCard({ job }: { job: Job }) {
     };
   }, [job.job_id, completed, produced]);
 
-  return (
-    <Link href={href} className="group block">
+  const cardInner = (
+    <>
       <Card interactive className="flex flex-col overflow-hidden">
         {/* Poster / status surface */}
         <div className="relative aspect-video overflow-hidden bg-ink-950">
@@ -165,6 +171,27 @@ function ProjectCard({ job }: { job: Job }) {
           </p>
         </div>
       </Card>
-    </Link>
+    </>
+  );
+
+  // Completed-with-clips: a real link to the gallery. Otherwise a button that
+  // opens the processing popup (running/queued/failed/completed-no-clips).
+  return (
+    <>
+      {opensGallery ? (
+        <Link href={href} className="group block text-left">
+          {cardInner}
+        </Link>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className="group block w-full text-left"
+        >
+          {cardInner}
+        </button>
+      )}
+      {showModal && <ProcessingModal job={job} onClose={() => setShowModal(false)} />}
+    </>
   );
 }
