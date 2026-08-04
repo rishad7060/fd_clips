@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { sortedBlogPosts } from "@/lib/blog";
+import { fetchBlogPosts } from "@/lib/blog";
 
 const TITLE = "Blog";
 const DESCRIPTION =
@@ -25,12 +25,15 @@ export const metadata: Metadata = {
 
 const SITE = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
 
+/** ISR: re-fetch the post list from the API at most every 5 minutes. */
+export const revalidate = 300;
+
 function dateLabel(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
 
-export default function BlogHubPage() {
-  const posts = sortedBlogPosts();
+export default async function BlogHubPage() {
+  const posts = await fetchBlogPosts();
   const itemListLd = {
     "@context": "https://schema.org",
     "@type": "Blog",
@@ -69,28 +72,32 @@ export default function BlogHubPage() {
       </section>
 
       <section className="mt-12 space-y-4">
-        {posts.map((post) => (
-          <Link
-            key={post.slug}
-            href={`/blog/${post.slug}`}
-            className="group flex flex-col gap-1.5 rounded-2xl border border-white/10 bg-ink-850 p-6 shadow-rim transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-ink-800 hover:shadow-lift"
-          >
-            <div className="flex flex-wrap items-center gap-2 text-xs text-ink-400">
-              <span className="rounded-full bg-brand/15 px-2 py-0.5 font-medium text-brand-300">
-                {post.category}
-              </span>
-              <span aria-hidden>&middot;</span>
-              <time dateTime={post.publishedAt}>{dateLabel(post.publishedAt)}</time>
-              <span aria-hidden>&middot;</span>
-              <span>{post.readingMinutes} min read</span>
-            </div>
-            <h2 className="flex items-center gap-1.5 text-lg font-semibold text-white">
-              {post.title}
-              <span className="text-brand-300 transition group-hover:translate-x-0.5">→</span>
-            </h2>
-            <p className="text-sm text-ink-300">{post.excerpt}</p>
-          </Link>
-        ))}
+        {posts.length === 0 ? (
+          <p className="text-center text-sm text-ink-400">
+            No posts published yet - check back soon.
+          </p>
+        ) : (
+          posts.map((post) => (
+            <Link
+              key={post.slug}
+              href={`/blog/${post.slug}`}
+              className="group flex flex-col gap-1.5 rounded-2xl border border-white/10 bg-ink-850 p-6 shadow-rim transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-ink-800 hover:shadow-lift"
+            >
+              <div className="flex flex-wrap items-center gap-2 text-xs text-ink-400">
+                <span className="rounded-full bg-brand/15 px-2 py-0.5 font-medium text-brand-300">
+                  {post.category}
+                </span>
+                <span aria-hidden>&middot;</span>
+                <time dateTime={post.publishedAt}>{dateLabel(post.publishedAt)}</time>
+              </div>
+              <h2 className="flex items-center gap-1.5 text-lg font-semibold text-white">
+                {post.title}
+                <span className="text-brand-300 transition group-hover:translate-x-0.5">→</span>
+              </h2>
+              <p className="text-sm text-ink-300">{post.excerpt}</p>
+            </Link>
+          ))
+        )}
       </section>
 
       <section className="mt-16 rounded-3xl border border-white/10 bg-gradient-to-b from-brand/[0.10] to-transparent p-8 text-center sm:p-12">

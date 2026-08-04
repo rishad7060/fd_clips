@@ -254,6 +254,46 @@ export interface CreateJobInput {
   creditsCharged: number;
 }
 
+/**
+ * A ClipsHQ marketing blog post (admin-managed). Body is stored as Markdown
+ * (`bodyMarkdown`) and rendered by the web. Slugs are globally unique and
+ * URL-safe (^[a-z0-9-]+$, enforced at the DTO layer).
+ */
+export interface BlogPostRecord {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  excerpt: string;
+  category: string;
+  tags: string[];
+  author: string;
+  bodyMarkdown: string;
+  heroAlt: string;
+  published: boolean;
+  publishedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateBlogPostInput {
+  slug: string;
+  title: string;
+  description: string;
+  excerpt: string;
+  category: string;
+  tags: string[];
+  author: string;
+  bodyMarkdown: string;
+  heroAlt: string;
+  published: boolean;
+  /** ISO date/datetime string; defaults to now() if omitted. */
+  publishedAt?: string;
+}
+
+/** Partial update to a blog post (everything except id/createdAt/updatedAt). */
+export type BlogPostPatch = Partial<Omit<BlogPostRecord, 'id' | 'createdAt' | 'updatedAt'>>;
+
 export interface CreateClipInput {
   organizationId: string;
   jobId: string;
@@ -441,6 +481,15 @@ export interface DataStore {
     name?: string | null;
     source?: string | null;
   }): Promise<{ entry: WaitlistEntryRecord; already: boolean }>;
+
+  // Blog (admin-managed marketing posts; not tenant-scoped, like Plan/Waitlist).
+  /** Newest publishedAt first. `publishedOnly` filters to published==true. */
+  listBlogPosts(opts?: { publishedOnly?: boolean }): Promise<BlogPostRecord[]>;
+  getBlogPostBySlug(slug: string): Promise<BlogPostRecord | null>;
+  getBlogPost(id: string): Promise<BlogPostRecord | null>;
+  createBlogPost(input: CreateBlogPostInput): Promise<BlogPostRecord>;
+  updateBlogPost(id: string, patch: BlogPostPatch): Promise<BlogPostRecord>;
+  deleteBlogPost(id: string): Promise<void>;
 
   // ── Admin (cross-tenant) ──────────────────────────────────────────────────
   adminGetOverview(rangeDays: number): Promise<AdminOverviewStats>;

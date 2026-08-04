@@ -1,25 +1,19 @@
-# Blog post content files
+# Blog posts are now DB-managed
 
-Each file in this directory is named `<slug>.tsx` and matches a `slug` in
-`src/lib/blog.ts` (`BLOG_POSTS`). It exports a **default React component** with
-no props that renders the post body.
+This directory used to hold hardcoded `<slug>.tsx` body files for each post.
+The blog is now backed by the API's database and rendered server-side:
 
-To fill in a real post:
+- Posts are created/edited/published from **`/admin/blog`** (see
+  `src/app/(admin)/admin/blog/`), which calls `POST/PATCH/DELETE
+  /admin/blog/*` on the API.
+- The public `/blog` hub and `/blog/<slug>` pages fetch published posts from
+  the API (`GET /blog`, `GET /blog/:slug`) in `src/app/(blog)/blog/*` - see
+  `src/lib/blog.ts` for the fetch helpers.
+- A post's body is authored as **Markdown** (`bodyMarkdown`) in the admin
+  editor. It is rendered server-side via `src/lib/markdown.ts`
+  (`marked` -> `sanitize-html`, allowlisted tags only) into the same
+  `.blog-prose` styling (`src/app/globals.css`) these old TSX files used.
 
-1. Open `src/content/blog/<slug>.tsx`.
-2. Replace the placeholder JSX with the real article, wrapped in the same
-   root `<div className="blog-prose">...</div>` element - that class (defined
-   in `src/app/globals.css`) styles `h2`/`h3`/`p`/`ul`/`ol`/`blockquote`/`code`/
-   `table`/`a`/`strong` automatically, so plain semantic HTML tags are enough.
-3. Wrap any `<table>` in `<div className="overflow-x-auto">` (see the `.legal-
-   prose`/compare-table pattern) so wide tables scroll instead of breaking
-   mobile layout.
-4. Update the matching entry in `src/lib/blog.ts` (description, excerpt,
-   readingMinutes, updatedAt, tags) if the real content changes those facts.
-5. Optionally drop a hero image at `public/blog/<slug>.webp` (1600x900 or
-   16:9) - the post page uses it automatically when present and otherwise
-   falls back to a gradient placeholder, so this step is optional.
-
-No new dependencies, no MDX pipeline - it's plain TSX so you get full
-TypeScript + design-system component access (Button, Card, etc.) in post
-bodies if needed.
+No content was lost - the original 5 posts were migrated into the database by
+the API team's seed data. There is nothing to wire up here anymore; this
+folder is kept only for this note.

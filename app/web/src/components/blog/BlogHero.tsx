@@ -1,15 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import type { BlogPost } from "@/lib/blog";
+import type { BlogPostView } from "@/lib/blog";
 
-const CATEGORY_GRADIENT: Record<BlogPost["category"], string> = {
+// Category is admin-editable free text on the API, so key off a lookup with a
+// safe default gradient for any category outside the known set (never a broken
+// className).
+const CATEGORY_GRADIENT: Record<string, string> = {
   Comparisons: "from-brand-400/40 to-ink-900",
   Guides: "from-cyan-400/30 to-ink-900",
   Tools: "from-emerald-400/25 to-ink-900",
   Playbooks: "from-amber-400/25 to-ink-900",
   Company: "from-fuchsia-400/25 to-ink-900",
 };
+const DEFAULT_GRADIENT = "from-brand-400/30 to-ink-900";
 
 /**
  * LCP-friendly hero: tries /blog/<slug>.webp (dropped in later by content
@@ -18,12 +22,12 @@ const CATEGORY_GRADIENT: Record<BlogPost["category"], string> = {
  * aspect box (16:9) reserves the space either way. Client component only
  * because the "no image yet" fallback needs an onError handler.
  */
-export function BlogHero({ post, priority = false }: { post: BlogPost; priority?: boolean }) {
+export function BlogHero({ post, priority = false }: { post: BlogPostView; priority?: boolean }) {
   const [imageFailed, setImageFailed] = useState(false);
 
   return (
     <div
-      className={`relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${CATEGORY_GRADIENT[post.category]} shadow-rim`}
+      className={`relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${CATEGORY_GRADIENT[post.category] ?? DEFAULT_GRADIENT} shadow-rim`}
     >
       {!imageFailed && (
         // eslint-disable-next-line @next/next/no-img-element

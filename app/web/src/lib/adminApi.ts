@@ -11,6 +11,7 @@ import { getAuthHeader } from "@/lib/api";
 import { adminMock } from "@/lib/mock/adminStore";
 import type {
   AdminAffiliate,
+  AdminBlogPost,
   AdminClip,
   AdminJob,
   AdminLedgerEntry,
@@ -22,6 +23,7 @@ import type {
   AdminUser,
   AdminWaitlistEntry,
   AffiliateSettings,
+  BlogPostInput,
   ListParams,
   Paged,
   PlanPatch,
@@ -210,5 +212,27 @@ export const adminApi = {
     const res = await fetch(`${API_URL}/admin/waitlist/export`, { headers: { ...auth } });
     if (!res.ok) throw new Error(`Admin API ${res.status}: ${await res.text().catch(() => "")}`);
     return res.text();
+  },
+
+  // ---- Blog (DB-backed posts, admin CRUD) ----------------------------------
+  listBlogPosts(): Promise<AdminBlogPost[]> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.listBlogPosts());
+    return http(`/admin/blog`);
+  },
+  getBlogPost(id: string): Promise<AdminBlogPost> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.getBlogPost(id));
+    return http(`/admin/blog/${id}`);
+  },
+  createBlogPost(input: BlogPostInput): Promise<AdminBlogPost> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.createBlogPost(input));
+    return http(`/admin/blog`, { method: "POST", body: JSON.stringify(input) });
+  },
+  updateBlogPost(id: string, patch: Partial<BlogPostInput>): Promise<AdminBlogPost> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.updateBlogPost(id, patch));
+    return http(`/admin/blog/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  },
+  deleteBlogPost(id: string): Promise<{ deleted: boolean }> {
+    if (USING_MOCK_ADMIN) return delay(adminMock.deleteBlogPost(id));
+    return http(`/admin/blog/${id}`, { method: "DELETE" });
   },
 };

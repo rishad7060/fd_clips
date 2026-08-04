@@ -284,6 +284,30 @@ model PlatformSetting {
   @@map("platform_settings")
 }
 
+// ClipsHQ marketing blog post (admin-managed). Not tenant-scoped (no
+// organization) - a global content record, like Plan / PlatformSetting.
+// Body is stored as Markdown and rendered by the web. Seeded from the 5
+// legacy hardcoded posts (see app/api/src/blog/blog.seed.ts) on first boot.
+model BlogPost {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  title         String
+  description   String
+  excerpt       String
+  category      String
+  tags          String[]
+  author        String
+  bodyMarkdown  String   @map("body_markdown")
+  heroAlt       String   @map("hero_alt")
+  published     Boolean  @default(true)
+  publishedAt   DateTime @map("published_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([published])
+  @@map("blog_posts")
+}
+
 // A public pre-launch waitlist signup. Not tenant-scoped (no organization) - a
 // visitor leaves their email before any account exists, like Plan /
 // PlatformSetting. Admin lists/exports/deletes these from the dashboard.

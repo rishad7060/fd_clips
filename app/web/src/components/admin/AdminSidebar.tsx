@@ -14,6 +14,7 @@ import {
   Server,
   Share2,
   ClipboardList,
+  Newspaper,
   LogOut,
   ArrowLeftToLine,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const NAV = [
   { href: "/admin/plans", label: "Plans", icon: Layers, group: 2 },
   { href: "/admin/affiliates", label: "Affiliates", icon: Share2, group: 2 },
   { href: "/admin/waitlist", label: "Waitlist", icon: ClipboardList, group: 2 },
+  { href: "/admin/blog", label: "Blog", icon: Newspaper, group: 2 },
   { href: "/admin/system", label: "System", icon: Server, group: 2 },
 ] as const;
 

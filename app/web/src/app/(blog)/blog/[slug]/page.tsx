@@ -1,39 +1,16 @@
 import type { Metadata } from "next";
-import type { ComponentType } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BLOG_POSTS, blogPostBySlug, relatedBlogPosts } from "@/lib/blog";
+import { fetchBlogPost, fetchBlogPosts, relatedBlogPosts } from "@/lib/blog";
+import { renderMarkdown, readingMinutes } from "@/lib/markdown";
 import { BlogSchema, Breadcrumbs } from "@/components/blog/BlogSchema";
 import { BlogHero } from "@/components/blog/BlogHero";
 
-import ClipshqVsOpusClip2026 from "@/content/blog/clipshq-vs-opus-clip-2026";
-import BestAiShortsTools20262027 from "@/content/blog/best-ai-shorts-tools-2026-2027";
-import FreeYoutubeTranscriptGuide from "@/content/blog/free-youtube-transcript-guide";
-import RepurposeLongVideosIntoShorts from "@/content/blog/repurpose-long-videos-into-shorts";
-import WhyClipshqBetterValue from "@/content/blog/why-clipshq-better-value";
+/** ISR: re-fetch a post from the API at most every 5 minutes. */
+export const revalidate = 300;
 
-/**
- * Static slug -> body-component map. Each post's rich content lives in its own
- * file under src/content/blog/<slug>.tsx (see that folder's README) - this map
- * is the one place a new post's body is wired in, kept next to the route so
- * generateStaticParams/metadata and the render below all stay in sync with
- * lib/blog.ts's BLOG_POSTS registry.
- */
-const BODY_BY_SLUG: Record<string, ComponentType> = {
-  "clipshq-vs-opus-clip-2026": ClipshqVsOpusClip2026,
-  "best-ai-shorts-tools-2026-2027": BestAiShortsTools20262027,
-  "free-youtube-transcript-guide": FreeYoutubeTranscriptGuide,
-  "repurpose-long-videos-into-shorts": RepurposeLongVideosIntoShorts,
-  "why-clipshq-better-value": WhyClipshqBetterValue,
-};
-
-/** Pre-render every blog post at build time. */
-export function generateStaticParams() {
-  return BLOG_POSTS.map((p) => ({ slug: p.slug }));
-}
-
-export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
-  const post = blogPostBySlug(params.slug);
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const post = await fetchBlogPost(params.slug);
   if (!post) return { title: "Blog" };
   const image = `/og/blog-${post.slug}.png`;
   return {
@@ -64,12 +41,14 @@ function dateLabel(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
 
-export default function BlogPostPage({ params }: { params: { slug: string } }) {
-  const post = blogPostBySlug(params.slug);
+export default async function BlogPostPage({ params }: { params: { slug: string } }) {
+  const post = await fetchBlogPost(params.slug);
   if (!post) notFound();
 
-  const Body = BODY_BY_SLUG[post.slug];
-  const related = relatedBlogPosts(post.slug, 3);
+  const allPosts = await fetchBlogPosts();
+  const related = relatedBlogPosts(allPosts, post, 3);
+  const minutes = readingMinutes(post.bodyMarkdown ?? "");
+  const bodyHtml = renderMarkdown(post.bodyMarkdown ?? "");
 
   return (
     <article>
@@ -87,7 +66,7 @@ export default function BlogPostPage({ params }: { params: { slug: string } }) {
           <span aria-hidden>&middot;</span>
           <time dateTime={post.publishedAt}>{dateLabel(post.publishedAt)}</time>
           <span aria-hidden>&middot;</span>
-          <span>{post.readingMinutes} min read</span>
+          <span>{minutes} min read</span>
         </div>
       </header>
 
@@ -96,7 +75,9 @@ export default function BlogPostPage({ params }: { params: { slug: string } }) {
       </div>
 
       <div className="mx-auto mt-10 max-w-2xl">
-        {Body ? <Body /> : (
+        {bodyHtml ? (
+          <div className="blog-prose" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+        ) : (
           <div className="blog-prose">
             <p>Content coming soon.</p>
           </div>

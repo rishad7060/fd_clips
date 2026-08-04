@@ -4,7 +4,10 @@ import {
   AdminOverviewStats,
   AffiliateRecord,
   AffiliateWithOwner,
+  BlogPostPatch,
+  BlogPostRecord,
   ClipRecord,
+  CreateBlogPostInput,
   CreateClipInput,
   CreateJobInput,
   CreditLedgerRecord,
@@ -30,6 +33,7 @@ import {
   DEFAULT_PLATFORM_SETTINGS,
 } from './store.types';
 import { PLANS } from '../billing/plans';
+import { BLOG_POST_SEED } from '../blog/blog.seed';
 
 /**
  * Prisma/Postgres DataStore (real mode, e.g. on the VPS).
@@ -53,6 +57,31 @@ export class PrismaStore implements DataStore {
     });
     await this.prisma.$connect();
     this.logger.log('Connected to Postgres via Prisma.');
+    await this.seedBlogPosts();
+  }
+
+  /** Seed the 5 legacy hardcoded posts on first boot (empty table only). */
+  private async seedBlogPosts(): Promise<void> {
+    const count = await this.prisma.blogPost.count();
+    if (count > 0) return;
+    for (const seed of BLOG_POST_SEED) {
+      await this.prisma.blogPost.create({
+        data: {
+          slug: seed.slug,
+          title: seed.title,
+          description: seed.description,
+          excerpt: seed.excerpt,
+          category: seed.category,
+          tags: seed.tags,
+          author: seed.author,
+          bodyMarkdown: seed.bodyMarkdown,
+          heroAlt: seed.heroAlt,
+          published: seed.published,
+          publishedAt: new Date(seed.publishedAt ?? Date.now()),
+        },
+      });
+    }
+    this.logger.log(`Seeded ${BLOG_POST_SEED.length} blog posts.`);
   }
 
   async shutdown(): Promise<void> {
@@ -690,6 +719,88 @@ export class PrismaStore implements DataStore {
       },
     });
     return { entry: this.mapWaitlist(created), already: false };
+  }
+
+  // ── Blog ────────────────────────────────────────────────────────────────────
+
+  private mapBlogPost(p: any): BlogPostRecord {
+    return {
+      id: p.id,
+      slug: p.slug,
+      title: p.title,
+      description: p.description,
+      excerpt: p.excerpt,
+      category: p.category,
+      tags: p.tags ?? [],
+      author: p.author,
+      bodyMarkdown: p.bodyMarkdown,
+      heroAlt: p.heroAlt,
+      published: p.published,
+      publishedAt: this.toIso(p.publishedAt),
+      createdAt: this.toIso(p.createdAt),
+      updatedAt: this.toIso(p.updatedAt),
+    };
+  }
+
+  async listBlogPosts(opts?: { publishedOnly?: boolean }): Promise<BlogPostRecord[]> {
+    const rows = await this.prisma.blogPost.findMany({
+      where: opts?.publishedOnly ? { published: true } : {},
+      orderBy: { publishedAt: 'desc' },
+    });
+    return rows.map((r: any) => this.mapBlogPost(r));
+  }
+
+  async getBlogPostBySlug(slug: string): Promise<BlogPostRecord | null> {
+    const p = await this.prisma.blogPost.findUnique({ where: { slug } });
+    return p ? this.mapBlogPost(p) : null;
+  }
+
+  async getBlogPost(id: string): Promise<BlogPostRecord | null> {
+    const p = await this.prisma.blogPost.findUnique({ where: { id } });
+    return p ? this.mapBlogPost(p) : null;
+  }
+
+  async createBlogPost(input: CreateBlogPostInput): Promise<BlogPostRecord> {
+    const existing = await this.prisma.blogPost.findUnique({ where: { slug: input.slug } });
+    if (existing) throw new Error(`Blog post slug already exists: ${input.slug}`);
+    const created = await this.prisma.blogPost.create({
+      data: {
+        slug: input.slug,
+        title: input.title,
+        description: input.description,
+        excerpt: input.excerpt,
+        category: input.category,
+        tags: input.tags,
+        author: input.author,
+        bodyMarkdown: input.bodyMarkdown,
+        heroAlt: input.heroAlt,
+        published: input.published,
+        publishedAt: new Date(input.publishedAt ?? Date.now()),
+      },
+    });
+    return this.mapBlogPost(created);
+  }
+
+  async updateBlogPost(id: string, patch: BlogPostPatch): Promise<BlogPostRecord> {
+    if (patch.slug) {
+      const clash = await this.prisma.blogPost.findUnique({ where: { slug: patch.slug } });
+      if (clash && clash.id !== id) {
+        throw new Error(`Blog post slug already exists: ${patch.slug}`);
+      }
+    }
+    const { publishedAt, ...rest } = patch;
+    const updated = await this.prisma.blogPost.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(publishedAt !== undefined ? { publishedAt: new Date(publishedAt) } : {}),
+      },
+    });
+    return this.mapBlogPost(updated);
+  }
+
+  async deleteBlogPost(id: string): Promise<void> {
+    await this.prisma.blogPost.deleteMany({ where: { id } });
   }
 
   // ── Admin (cross-tenant) ──────────────────────────────────────────────────

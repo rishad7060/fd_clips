@@ -6,6 +6,7 @@
  */
 import type {
   AdminAffiliate,
+  AdminBlogPost,
   AdminClip,
   AdminJob,
   AdminLedgerEntry,
@@ -17,6 +18,7 @@ import type {
   AdminUser,
   AdminWaitlistEntry,
   AffiliateSettings,
+  BlogPostInput,
   JobStatus,
   ListParams,
   Paged,
@@ -49,6 +51,7 @@ interface DB {
   affiliates: AdminAffiliate[];
   referrals: AdminReferral[];
   waitlist: AdminWaitlistEntry[];
+  blog: AdminBlogPost[];
   settings: AffiliateSettings;
   platform: PlatformSettings;
 }
@@ -148,7 +151,102 @@ function seed(): DB {
     { id: "wl_4", email: "hello@shortsfactory.co", name: "Sam", source: "landing-hero", status: "converted", createdAt: daysAgo(6), invitedAt: daysAgo(3) },
   ];
 
-  return { orgs, users, jobs, clips, ledger, affiliates, referrals, waitlist, settings: { commissionRate: DEFAULT_COMMISSION_RATE }, platform: { ...DEFAULT_PLATFORM } };
+  // Seed with the 5 posts migrated from the old hardcoded content/blog/*.tsx
+  // files, so /blog and /admin/blog render real content offline too.
+  const blog: AdminBlogPost[] = [
+    {
+      id: "post_1",
+      slug: "clipshq-vs-opus-clip-2026",
+      title: "ClipsHQ vs Opus.pro: Which AI Shorts Tool Wins in 2026?",
+      description:
+        "A detailed 2026 comparison of ClipsHQ and Opus.pro - pricing, watermarks, captions, and workflow - to help you pick the right AI shorts tool.",
+      excerpt:
+        "We put ClipsHQ head-to-head with Opus.pro on price, captions, and workflow. Here's the honest breakdown.",
+      category: "Comparisons",
+      tags: ["opus clip alternative", "clipshq vs opus", "ai shorts tools"],
+      author: "ClipsHQ Team",
+      bodyMarkdown:
+        "## The short version\n\nClipsHQ and Opus.pro both turn long video into ranked, captioned vertical clips. The difference comes down to **pricing transparency** and **workflow speed**.\n\n## Pricing\n\nClipsHQ bills by the minute processed, with no hidden credit math. Opus.pro uses a credit system that can be harder to predict for longer sources.\n\n## Captions & watermark\n\nBoth support burned-in karaoke captions. ClipsHQ does not watermark paid plans; free plans carry a small watermark that can be removed on upgrade.\n\n## Verdict\n\nIf you want predictable pricing and fast turnaround, ClipsHQ is the better value pick for most creators.",
+      heroAlt: "Split-screen comparison of ClipsHQ and Opus.pro clip editors",
+      published: true,
+      publishedAt: "2026-01-12T00:00:00.000Z",
+      updatedAt: "2026-01-12T00:00:00.000Z",
+    },
+    {
+      id: "post_2",
+      slug: "best-ai-shorts-tools-2026-2027",
+      title: "The Best AI Tools to Create Shorts in 2026 & 2027",
+      description:
+        "The best AI tools for turning long videos into short-form clips in 2026 and 2027, ranked by value, caption quality, and workflow.",
+      excerpt:
+        "A ranked roundup of the AI shorts tools actually worth your time and money going into 2027.",
+      category: "Comparisons",
+      tags: ["ai shorts tools", "best ai clip generator", "short form video"],
+      author: "ClipsHQ Team",
+      bodyMarkdown:
+        "## Why this list\n\nThere are dozens of \"AI shorts\" tools now. We ranked the ones worth trying by three criteria: caption quality, price transparency, and how well they pick the actual best moments.\n\n### 1. ClipsHQ\n\nStrong virality scoring and clean minute-based pricing.\n\n### 2. Opus.pro\n\nMature product, credit-based pricing.\n\n### 3. Others\n\nSeveral newer entrants are catching up on caption styling but still lag on clip selection quality.\n\n## Takeaway\n\nTry two or three on the same source video before committing to a subscription.",
+      heroAlt: "Grid of vertical short-form video thumbnails on a dark background",
+      published: true,
+      publishedAt: "2026-02-03T00:00:00.000Z",
+      updatedAt: "2026-02-03T00:00:00.000Z",
+    },
+    {
+      id: "post_3",
+      slug: "free-youtube-transcript-guide",
+      title: "How to Get a Free YouTube Transcript (No Login, No API Key)",
+      description:
+        "Step-by-step guide to grabbing a full, accurate YouTube transcript for free - no sign-up, no API key, no browser extension required.",
+      excerpt:
+        "Every free way to pull a YouTube transcript in seconds, plus when you actually need one.",
+      category: "Guides",
+      tags: ["youtube transcript", "free tools", "how-to"],
+      author: "ClipsHQ Team",
+      bodyMarkdown:
+        "## The fastest way\n\nPaste the video URL into [ClipsHQ's free transcript tool](/tools) - no login, no API key.\n\n## Manual method\n\n1. Open the video on YouTube.\n2. Click **...more** under the description, then **Show transcript**.\n3. Copy the text out of the panel.\n\n## When you need a transcript\n\n- Repurposing a podcast into blog posts\n- Finding quotable moments for clips\n- Translation and localization",
+      heroAlt: "A YouTube video player next to a scrolling text transcript panel",
+      published: true,
+      publishedAt: "2026-02-18T00:00:00.000Z",
+      updatedAt: "2026-02-18T00:00:00.000Z",
+    },
+    {
+      id: "post_4",
+      slug: "repurpose-long-videos-into-shorts",
+      title: "How to Repurpose Long Videos into Viral Shorts (2026 Playbook)",
+      description:
+        "The full 2026 playbook for repurposing podcasts, interviews, and long-form video into ranked, captioned short clips that actually get views.",
+      excerpt:
+        "A practical, repeatable playbook for turning one long video into a week of short-form content.",
+      category: "Playbooks",
+      tags: ["repurpose video", "short form strategy", "content playbook"],
+      author: "ClipsHQ Team",
+      bodyMarkdown:
+        "## Step 1: Pick the right source\n\nLong interviews and podcasts with clear hooks work best - look for moments with a strong opening line.\n\n## Step 2: Let the AI rank moments\n\nUpload to ClipsHQ and let virality scoring surface the top 8-10 candidate clips.\n\n## Step 3: Edit only what needs it\n\nMost clips need zero editing. Trim the rest with the inline editor.\n\n## Step 4: Schedule a week of posts\n\nSpread 8-10 clips across a week for consistent posting without new source material.",
+      heroAlt: "A long video timeline being cut into several short vertical clips",
+      published: true,
+      publishedAt: "2026-03-05T00:00:00.000Z",
+      updatedAt: "2026-03-05T00:00:00.000Z",
+    },
+    {
+      id: "post_5",
+      slug: "why-clipshq-better-value",
+      title: "Why ClipsHQ Is the Best-Value AI Clip Generator",
+      description:
+        "Why ClipsHQ's minute-based pricing, no-watermark clips, and multilingual captions make it the best-value AI clip generator on the market.",
+      excerpt:
+        "No credit math, no watermark, no lock-in - here's the case for ClipsHQ as the value pick.",
+      category: "Company",
+      tags: ["clipshq", "pricing", "value"],
+      author: "ClipsHQ Team",
+      bodyMarkdown:
+        "## Simple pricing\n\nNo credit-conversion math - plans map directly to minutes processed per month.\n\n## No lock-in\n\nCancel anytime; exported clips are yours, watermark-free on paid plans.\n\n## Multilingual captions\n\nKaraoke-style captions support RTL scripts (Arabic, Urdu) out of the box.\n\n## Bottom line\n\nFor creators who want predictable costs and no surprises, ClipsHQ is the value pick.",
+      heroAlt: "ClipsHQ pricing plans displayed on a dark dashboard",
+      published: true,
+      publishedAt: "2026-03-22T00:00:00.000Z",
+      updatedAt: "2026-03-22T00:00:00.000Z",
+    },
+  ];
+
+  return { orgs, users, jobs, clips, ledger, affiliates, referrals, waitlist, blog, settings: { commissionRate: DEFAULT_COMMISSION_RATE }, platform: { ...DEFAULT_PLATFORM } };
 }
 
 const db: DB = seed();
@@ -314,6 +412,35 @@ export const adminMock = {
   },
   deleteWaitlistEntry(id: string) {
     db.waitlist = db.waitlist.filter((x) => x.id !== id);
+    return { deleted: true };
+  },
+  listBlogPosts(): AdminBlogPost[] {
+    return [...db.blog].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  },
+  getBlogPost(id: string): AdminBlogPost {
+    const p = db.blog.find((x) => x.id === id);
+    if (!p) throw new Error(`Blog post ${id} not found`);
+    return p;
+  },
+  createBlogPost(input: BlogPostInput): AdminBlogPost {
+    const now = new Date().toISOString();
+    const post: AdminBlogPost = {
+      id: `post_${Math.random().toString(36).slice(2, 10)}`,
+      ...input,
+      publishedAt: now,
+      updatedAt: now,
+    };
+    db.blog.unshift(post);
+    return post;
+  },
+  updateBlogPost(id: string, patch: Partial<BlogPostInput>): AdminBlogPost {
+    const p = db.blog.find((x) => x.id === id);
+    if (!p) throw new Error(`Blog post ${id} not found`);
+    Object.assign(p, patch, { updatedAt: new Date().toISOString() });
+    return p;
+  },
+  deleteBlogPost(id: string) {
+    db.blog = db.blog.filter((x) => x.id !== id);
     return { deleted: true };
   },
   waitlistCsv(): string {

@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { TOOLS } from "@/lib/tools";
 import { HELP_ARTICLES } from "@/lib/help";
 import { COMPARE_PAGES } from "@/lib/compare";
-import { BLOG_POSTS } from "@/lib/blog";
+import { fetchBlogPosts } from "@/lib/blog";
 
 /**
  * Sitemap for search engines. Lists the public, indexable pages - the marketing
@@ -12,12 +12,18 @@ import { BLOG_POSTS } from "@/lib/blog";
  *
  * Base URL comes from NEXT_PUBLIC_SITE_URL (set it to the production origin,
  * e.g. https://clips.focaldive.com); falls back to localhost for dev.
+ *
+ * Blog URLs are now DB-backed (fetchBlogPosts hits GET /blog) instead of the
+ * old static registry - fetchBlogPosts already degrades to [] on any failure
+ * (API unset/unreachable at build time), so this never crashes the build; it
+ * just degrades to listing /blog with no individual post URLs.
  */
 const BASE = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
   type Freq = MetadataRoute.Sitemap[number]["changeFrequency"];
+  const blogPosts = await fetchBlogPosts();
   const routes: { path: string; priority: number; changeFrequency: Freq }[] = [
     { path: "/", priority: 1.0, changeFrequency: "weekly" },
     { path: "/tools", priority: 0.9, changeFrequency: "weekly" },
@@ -37,10 +43,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
       changeFrequency: "weekly" as Freq,
     })),
-    // Blog hub + every post, driven by the shared registry so new posts
-    // appear here automatically.
+    // Blog hub + every published post, fetched from the API.
     { path: "/blog", priority: 0.7, changeFrequency: "weekly" },
-    ...BLOG_POSTS.map((p) => ({
+    ...blogPosts.map((p) => ({
       path: `/blog/${p.slug}`,
       priority: 0.7,
       changeFrequency: "weekly" as Freq,

@@ -207,6 +207,28 @@ export interface PlatformStatus {
   updatedAt: string;
 }
 
+export type BlogCategory = "Comparisons" | "Guides" | "Tools" | "Playbooks" | "Company";
+
+/** Admin view of a blog post (GET /admin/blog, /admin/blog/:id) - includes drafts + bodyMarkdown. */
+export interface AdminBlogPost {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  excerpt: string;
+  category: BlogCategory;
+  tags: string[];
+  author: string;
+  bodyMarkdown: string;
+  heroAlt: string;
+  published: boolean;
+  publishedAt: string;
+  updatedAt: string;
+}
+
+/** Fields accepted by POST/PATCH /admin/blog (everything but server-managed timestamps). */
+export type BlogPostInput = Omit<AdminBlogPost, "id" | "publishedAt" | "updatedAt">;
+
 export type WaitlistStatus = "pending" | "invited" | "converted";
 
 /** A public pre-launch waitlist signup (cross-tenant; no organization). */

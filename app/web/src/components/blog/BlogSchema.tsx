@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { BlogPost } from "@/lib/blog";
+import type { BlogPostView } from "@/lib/blog";
 
 /**
  * Shared structured data + shared UI bits for a blog post page:
@@ -11,7 +11,7 @@ import type { BlogPost } from "@/lib/blog";
  */
 const SITE = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
 
-export function BlogSchema({ post }: { post: BlogPost }) {
+export function BlogSchema({ post }: { post: BlogPostView }) {
   const url = `${SITE}/blog/${post.slug}`;
   const image = `${SITE}/og/blog-${post.slug}.png`;
   const breadcrumb = {

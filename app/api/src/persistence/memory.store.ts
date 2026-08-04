@@ -6,7 +6,10 @@ import {
   AdminOverviewStats,
   AffiliateRecord,
   AffiliateWithOwner,
+  BlogPostPatch,
+  BlogPostRecord,
   ClipRecord,
+  CreateBlogPostInput,
   CreateClipInput,
   CreateJobInput,
   CreditLedgerRecord,
@@ -31,6 +34,7 @@ import {
   DEFAULT_PLATFORM_SETTINGS,
 } from './store.types';
 import { PLANS } from '../billing/plans';
+import { BLOG_POST_SEED } from '../blog/blog.seed';
 
 const now = (): string => new Date().toISOString();
 const id = (): string => randomUUID();
@@ -57,6 +61,8 @@ export class MemoryStore implements DataStore {
   private readonly referralsByOrg = new Map<string, string>();
   private readonly waitlist = new Map<string, WaitlistEntryRecord>();
   private readonly waitlistByEmail = new Map<string, string>();
+  private readonly blogPosts = new Map<string, BlogPostRecord>();
+  private readonly blogPostsBySlug = new Map<string, string>();
   private affiliateSettings: { commissionRate: number | null } = { commissionRate: null };
   private platformSettings: PlatformSettings = { ...DEFAULT_PLATFORM_SETTINGS, updatedAt: now() };
 
@@ -65,6 +71,24 @@ export class MemoryStore implements DataStore {
     if ((process.env.MOCK_ADMIN ?? '').toLowerCase() !== 'false') {
       this.seedAdmin();
     }
+    this.seedBlogPosts();
+  }
+
+  /** Seed the 5 legacy hardcoded posts on first boot (empty table only). */
+  private seedBlogPosts(): void {
+    if (this.blogPosts.size > 0) return;
+    for (const seed of BLOG_POST_SEED) {
+      const record: BlogPostRecord = {
+        id: id(),
+        ...seed,
+        publishedAt: seed.publishedAt ?? now(),
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      this.blogPosts.set(record.id, record);
+      this.blogPostsBySlug.set(record.slug, record.id);
+    }
+    this.logger.log(`Seeded ${BLOG_POST_SEED.length} blog posts.`);
   }
 
   /**
@@ -283,6 +307,8 @@ export class MemoryStore implements DataStore {
     this.affiliatesByCode.clear();
     this.referrals.clear();
     this.referralsByOrg.clear();
+    this.blogPosts.clear();
+    this.blogPostsBySlug.clear();
   }
 
   async upsertOrganizationByClerkId(
@@ -773,6 +799,71 @@ export class MemoryStore implements DataStore {
     this.waitlist.set(entry.id, entry);
     this.waitlistByEmail.set(email, entry.id);
     return { entry: { ...entry }, already: false };
+  }
+
+  // ── Blog ────────────────────────────────────────────────────────────────────
+
+  async listBlogPosts(opts?: { publishedOnly?: boolean }): Promise<BlogPostRecord[]> {
+    const rows = [...this.blogPosts.values()].filter((p) =>
+      opts?.publishedOnly ? p.published : true,
+    );
+    return rows.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+  }
+
+  async getBlogPostBySlug(slug: string): Promise<BlogPostRecord | null> {
+    const pid = this.blogPostsBySlug.get(slug);
+    return pid ? this.blogPosts.get(pid) ?? null : null;
+  }
+
+  async getBlogPost(id: string): Promise<BlogPostRecord | null> {
+    return this.blogPosts.get(id) ?? null;
+  }
+
+  async createBlogPost(input: CreateBlogPostInput): Promise<BlogPostRecord> {
+    if (this.blogPostsBySlug.has(input.slug)) {
+      throw new Error(`Blog post slug already exists: ${input.slug}`);
+    }
+    const record: BlogPostRecord = {
+      id: id(),
+      slug: input.slug,
+      title: input.title,
+      description: input.description,
+      excerpt: input.excerpt,
+      category: input.category,
+      tags: input.tags,
+      author: input.author,
+      bodyMarkdown: input.bodyMarkdown,
+      heroAlt: input.heroAlt,
+      published: input.published,
+      publishedAt: input.publishedAt ?? now(),
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    this.blogPosts.set(record.id, record);
+    this.blogPostsBySlug.set(record.slug, record.id);
+    return record;
+  }
+
+  async updateBlogPost(id: string, patch: BlogPostPatch): Promise<BlogPostRecord> {
+    const existing = this.blogPosts.get(id);
+    if (!existing) throw new Error(`Blog post ${id} not found`);
+    if (patch.slug && patch.slug !== existing.slug && this.blogPostsBySlug.has(patch.slug)) {
+      throw new Error(`Blog post slug already exists: ${patch.slug}`);
+    }
+    const updated: BlogPostRecord = { ...existing, ...patch, updatedAt: now() };
+    this.blogPosts.set(id, updated);
+    if (patch.slug && patch.slug !== existing.slug) {
+      this.blogPostsBySlug.delete(existing.slug);
+      this.blogPostsBySlug.set(updated.slug, id);
+    }
+    return updated;
+  }
+
+  async deleteBlogPost(id: string): Promise<void> {
+    const existing = this.blogPosts.get(id);
+    if (!existing) return;
+    this.blogPosts.delete(id);
+    this.blogPostsBySlug.delete(existing.slug);
   }
 
   // ── Admin (cross-tenant) ──────────────────────────────────────────────────

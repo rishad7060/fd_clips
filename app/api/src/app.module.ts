@@ -3,6 +3,7 @@ import { AdminModule } from './admin/admin.module';
 import { AffiliatesModule } from './affiliates/affiliates.module';
 import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
+import { BlogModule } from './blog/blog.module';
 import { ClipsModule } from './clips/clips.module';
 import { ConfigModule } from './config/config.module';
 import { FilesModule } from './files/files.module';
@@ -29,6 +30,7 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     ProgressModule,
     QueueModule,
     BillingModule,
+    BlogModule,
     JobsModule,
     ClipsModule,
     PreviewModule,
