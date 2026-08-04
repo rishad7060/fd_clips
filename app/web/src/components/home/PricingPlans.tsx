@@ -1,15 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { Check, Info, Minus, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Info } from "lucide-react";
 import { api, FALLBACK_PLANS, type PlanCatalogEntry } from "@/lib/api";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Landing pricing - "Choose a plan", Opus-Clip-style layout with ClipsHQ's
  * half-Opus prices: Starter $7.50 (monthly only), Pro $14.50 with a Monthly /
- * Yearly toggle (Pro annual = 60% off, billed as $69.60/yr) and a ×N pack
- * stepper (1-10) that scales both Pro's credits and price. Business is
+ * Yearly toggle (Pro annual = 60% off, billed as $69.60/yr). Business is
  * contact-only (no checkout). Live prices come from GET /plans when the real
  * API is configured; FALLBACK_PLANS (same confirmed economics) render
  * instantly and offline so the page never blocks on the fetch.
@@ -41,9 +40,6 @@ const BUSINESS_FEATURES = [
   "Priority support",
 ];
 
-const MAX_PACK = 10;
-const MIN_PACK = 1;
-
 /** Format a USD price, dropping the trailing .00 but keeping .50 etc. */
 function fmt(n: number): string {
   return Number.isInteger(n) ? `${n}` : n.toFixed(2).replace(/0$/, "");
@@ -51,7 +47,6 @@ function fmt(n: number): string {
 
 export function PricingPlans() {
   const [yearly, setYearly] = useState(false);
-  const [pack, setPack] = useState(1);
   const [plans, setPlans] = useState<Record<"free" | "starter" | "pro", PlanCatalogEntry>>(
     FALLBACK_PLANS,
   );
@@ -133,8 +128,6 @@ export function PricingPlans() {
         <ProCard
           plan={pro}
           yearly={yearly}
-          pack={pack}
-          setPack={setPack}
           annualPrice={proAnnualPrice}
           annualCredits={proAnnualCredits}
           monthlyEquivalent={proMonthlyEquivalent}
@@ -274,30 +267,19 @@ function StarterCard({ plan, yearly }: { plan: PlanCatalogEntry; yearly: boolean
 function ProCard({
   plan,
   yearly,
-  pack,
-  setPack,
   annualPrice,
   annualCredits,
   monthlyEquivalent,
 }: {
   plan: PlanCatalogEntry;
   yearly: boolean;
-  pack: number;
-  setPack: (updater: (n: number) => number) => void;
   annualPrice: number;
   annualCredits: number;
   monthlyEquivalent: number;
 }) {
-  const credits = useMemo(
-    () => (yearly ? annualCredits : plan.monthlyCredits) * pack,
-    [yearly, annualCredits, plan.monthlyCredits, pack],
-  );
-  const billedAnnually = annualPrice * pack;
-  const monthlyEquivalentPacked = monthlyEquivalent * pack;
-  const monthlyPrice = plan.priceUsd * pack;
-
-  const dec = () => setPack((n) => Math.max(MIN_PACK, n - 1));
-  const inc = () => setPack((n) => Math.min(MAX_PACK, n + 1));
+  const credits = yearly ? annualCredits : plan.monthlyCredits;
+  const billedAnnually = annualPrice;
+  const monthlyPrice = plan.priceUsd;
 
   return (
     <CardShell highlight>
@@ -316,10 +298,10 @@ function ProCard({
           <>
             <p className="flex items-baseline gap-1">
               <span className="mr-1 text-lg font-medium text-ink-500 line-through">
-                ${fmt(plan.priceUsd * pack)}
+                ${fmt(plan.priceUsd)}
               </span>
               <span className="font-display text-4xl font-semibold tracking-tighter text-success-300 tabular-nums">
-                ${fmt(monthlyEquivalentPacked)}
+                ${fmt(monthlyEquivalent)}
               </span>
               <span className="text-sm font-medium text-ink-400">USD /mo</span>
               <InfoHint label={CREDIT_TOOLTIP} />
@@ -340,35 +322,12 @@ function ProCard({
         )}
       </div>
 
-      {/* Pack stepper */}
-      <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-ink-900/60 px-3 py-2">
+      {/* Plan credits */}
+      <div className="mt-4 rounded-xl border border-white/10 bg-ink-900/60 px-3 py-2">
         <span className="text-xs font-medium text-ink-300">
-          Pack <span className="text-white">×{pack}</span> · {credits.toLocaleString()} credits
+          <span className="text-white">{credits.toLocaleString()}</span> credits
           {yearly ? "/yr" : "/mo"}
         </span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            aria-label="Decrease pack quantity"
-            onClick={dec}
-            disabled={pack <= MIN_PACK}
-            className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-ink-800 text-white transition hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Minus className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
-          </button>
-          <span className="w-6 text-center text-sm font-semibold tabular-nums text-white" aria-live="polite">
-            {pack}
-          </span>
-          <button
-            type="button"
-            aria-label="Increase pack quantity"
-            onClick={inc}
-            disabled={pack >= MAX_PACK}
-            className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-ink-800 text-white transition hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Plus className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
-          </button>
-        </div>
       </div>
 
       <CtaLink href="/new" label="Get started" highlight />

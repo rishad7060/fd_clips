@@ -15,7 +15,11 @@ import { PlansService } from '../plans/plans.service';
 /** Billing period for a subscription checkout. Starter is monthly-only. */
 export type BillingPeriod = 'monthly' | 'annual';
 
-/** Options accepted by createSubscription (period/quantity default below). */
+/**
+ * Options accepted by createSubscription. `quantity` is retained for wire
+ * compatibility only and is always clamped to 1 - packs were removed (Polar
+ * bills a fixed-price subscription ×1 regardless of a sent quantity).
+ */
 export interface SubscribeOptions {
   period?: BillingPeriod;
   quantity?: number;
@@ -67,10 +71,10 @@ export class PolarService {
    * Start a Polar checkout for a paid tier. Returns the hosted checkout URL.
    * In mock mode, grants the plan locally and returns a stub URL (mock=true).
    *
-   * opts.period ('monthly'|'annual', default 'monthly') and opts.quantity
-   * (1-10, default 1 - the Pro "pack" multiplier) are validated against the
-   * confirmed economics: annual and quantity>1 are Pro-only; Starter must be
-   * monthly with quantity 1.
+   * opts.period ('monthly'|'annual', default 'monthly') is validated against
+   * the confirmed economics: annual is Pro-only; Starter must be monthly.
+   * opts.quantity is accepted for wire compatibility but always clamped to 1
+   * (packs were removed - Polar bills a fixed-price subscription ×1 regardless).
    */
   async createSubscription(
     organizationId: string,
@@ -112,17 +116,18 @@ export class PolarService {
       method: 'POST',
       body: JSON.stringify({
         products: [productId],
-        // Pro "packs" are a quantity multiplier on the ONE Pro product (no
-        // separate pack products) - Nx price and Nx credits on grant.
-        quantity,
+        // NOTE: no `quantity` here. Polar ignores a top-level quantity on a
+        // fixed-price subscription (it always bills ×1), so sending one is a
+        // misleading revenue leak ("×2" would still charge ×1). Packs are gone;
+        // we sell only single-unit subscriptions (Starter, Pro, Pro annual).
         // {CHECKOUT_ID} is interpolated by Polar on redirect so the return URL
         // carries the checkout id for the post-payment confirmation fallback
         // (used when webhooks can't reach a local API - see confirmCheckout).
         success_url: this.withCheckoutId(this.config.billingReturnUrl),
         // metadata is echoed back on the checkout + order + subscription webhooks
-        // so we can resolve the org/tier/period/quantity to grant without a
-        // separate lookup - the webhook grant must match the purchase exactly.
-        metadata: { organizationId, tier, period, quantity: String(quantity) },
+        // so we can resolve the org/tier/period to grant without a separate
+        // lookup - the webhook grant must match the purchase exactly.
+        metadata: { organizationId, tier, period, quantity: '1' },
       }),
     });
     const checkout = (await res.json()) as { id: string; url: string };
@@ -364,9 +369,10 @@ export class PolarService {
   /**
    * Grant a plan's credits, idempotent on externalEventId. `opts.period`
    * ('monthly'|'annual', default monthly) selects monthlyCredits vs
-   * annualCredits; `opts.quantity` (default 1, the Pro pack multiplier)
-   * multiplies BOTH the credit grant and the priceUsd used for the affiliate
-   * commission, so the webhook grant always matches what was actually charged.
+   * annualCredits. Grants are ALWAYS the plan's base credits - there is no ×N
+   * pack multiplier anymore (packs were removed because Polar bills a
+   * fixed-price subscription ×1 regardless of a sent quantity). So Pro monthly
+   * grants exactly 300, Pro annual 3600, Starter 150.
    */
   private async grantMonthly(
     organizationId: string,
@@ -376,25 +382,22 @@ export class PolarService {
   ): Promise<OrganizationRecord> {
     const plan = this.plans.get(tier);
     const period: BillingPeriod = opts?.period === 'annual' ? 'annual' : 'monthly';
-    const quantity = opts?.quantity && opts.quantity > 0 ? Math.trunc(opts.quantity) : 1;
     const ledger = await this.store.listLedger(organizationId);
     const already = ledger.some((l) => l.reason === 'grant' && l.stripeEventId === externalEventId);
     if (already) {
       this.logger.warn(`Skipping duplicate Polar grant org=${organizationId} event=${externalEventId}.`);
       return this.requireOrg(organizationId);
     }
-    const baseCredits = period === 'annual' ? this.annualCreditsFor(plan) : plan.monthlyCredits;
-    const basePriceUsd = period === 'annual' ? this.annualPriceFor(plan) : plan.priceUsd;
-    const credits = baseCredits * quantity;
-    const chargedUsd = basePriceUsd * quantity;
+    const credits = period === 'annual' ? this.annualCreditsFor(plan) : plan.monthlyCredits;
+    const chargedUsd = period === 'annual' ? this.annualPriceFor(plan) : plan.priceUsd;
 
     await this.store.setOrganizationPlan(organizationId, tier);
     const org = await this.store.addCredits(organizationId, credits, 'grant', {
       stripeEventId: externalEventId,
-      note: `${plan.label} plan grant (${period}${quantity > 1 ? ` x${quantity}` : ''}, ${credits} min)`,
+      note: `${plan.label} plan grant (${period}, ${credits} min)`,
     });
     // Referral commission: if this org was referred, credit the affiliate a % of
-    // the ACTUAL amount charged (annual price / Nx quantity, not the flat
+    // the ACTUAL amount charged (annual price for an annual sub, else the flat
     // monthly price). Idempotent on externalEventId (same key as the grant), so
     // a webhook + confirm replay never double-pays. Best-effort - never block
     // the grant on an affiliate bookkeeping error.
@@ -430,31 +433,28 @@ export class PolarService {
 
   /**
    * Validate + normalize a subscribe request against the confirmed economics:
-   * annual billing and quantity>1 ("packs") are Pro-only; Starter is always
-   * monthly with quantity 1. Defaults: period='monthly', quantity=1. Throws
-   * BadRequestException on any invalid combo (mirrors the SubscribeDto guard
-   * on the web boundary, but re-checked here since this is money-touching).
+   * annual billing is Pro-only; Starter is always monthly. Defaults:
+   * period='monthly'. Quantity is ALWAYS clamped to 1 - "packs" were removed
+   * because Polar ignores a top-level quantity on a fixed-price subscription
+   * (it bills ×1 regardless), so a ×N pack was a revenue leak. Any quantity a
+   * stale client still sends is silently ignored (not an error). Throws
+   * BadRequestException only on an invalid period combo (mirrors the
+   * SubscribeDto guard on the web boundary, re-checked here since this is
+   * money-touching).
    */
   private resolveSubscribeOptions(
     tier: Exclude<PlanTier, 'free'>,
     opts?: SubscribeOptions,
   ): ResolvedSubscribeOptions {
     const period: BillingPeriod = opts?.period ?? 'monthly';
-    const quantity = opts?.quantity ?? 1;
+    // FORCE quantity to 1 always - packs are gone (Polar ignores it anyway).
+    const quantity = 1;
 
     if (period !== 'monthly' && period !== 'annual') {
       throw new BadRequestException(`Invalid billing period: ${String(period)}.`);
     }
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
-      throw new BadRequestException('quantity must be an integer between 1 and 10.');
-    }
-    if (tier === 'starter') {
-      if (period !== 'monthly') {
-        throw new BadRequestException('Starter does not support annual billing.');
-      }
-      if (quantity !== 1) {
-        throw new BadRequestException('Starter does not support quantity packs.');
-      }
+    if (tier === 'starter' && period !== 'monthly') {
+      throw new BadRequestException('Starter does not support annual billing.');
     }
     return { period, quantity };
   }
@@ -494,10 +494,8 @@ export class PolarService {
   }
 
   /**
-   * Resolve the Polar product id for a tier+period. Pro "packs" (quantity
-   * 1-10) reuse this SAME product id via checkout `quantity` - never a
-   * separate product. Annual Pro uses its own product id
-   * (POLAR_PRODUCT_PRO_ANNUAL); Starter is monthly-only.
+   * Resolve the Polar product id for a tier+period. Annual Pro uses its own
+   * product id (POLAR_PRODUCT_PRO_ANNUAL); Starter is monthly-only.
    */
   private productIdFor(tier: Exclude<PlanTier, 'free'>, period: BillingPeriod = 'monthly'): string {
     let id: string | undefined;

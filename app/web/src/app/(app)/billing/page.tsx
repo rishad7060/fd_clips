@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Info, Minus, Plus } from "lucide-react";
+import { Info } from "lucide-react";
 import { api, FALLBACK_PLANS, type BillingPeriod, type PlanCatalogEntry } from "@/lib/api";
 import { emitCreditsChanged } from "@/lib/creditsBus";
 import type { CreditBalance, CreditBreakdown } from "@/lib/types";
@@ -12,15 +12,12 @@ import { Button } from "@/components/ui/Button";
 /**
  * Billing / plans page (the "Add credits" target). Shows the current plan +
  * credit balance and the three tiers (Free / Starter / Pro), with Pro's
- * Monthly⇄Yearly toggle (annual = 60% off) and ×N pack stepper (1-10, scales
- * both credits and price). Credits are source-MINUTES (1 credit = 1 minute).
- * Pricing is half of Opus Clip's (Starter $7.50, Pro $14.50) for the same
- * minutes. Upgrade buttons start a Polar.sh subscription checkout with the
- * chosen period + quantity; in mock/MVP the plan is granted locally so the
- * balance bar updates live.
+ * Monthly⇄Yearly toggle (annual = 60% off). Credits are source-MINUTES (1
+ * credit = 1 minute). Pricing is half of Opus Clip's (Starter $7.50, Pro
+ * $14.50) for the same minutes. Upgrade buttons start a Polar.sh subscription
+ * checkout with the chosen period; in mock/MVP the plan is granted locally so
+ * the balance bar updates live.
  */
-const MIN_PACK = 1;
-const MAX_PACK = 10;
 
 /** Plan rank order for upgrade/downgrade comparisons: free(0) < starter(1) < pro(2). */
 const PLAN_RANK: Record<"free" | "starter" | "pro", number> = {
@@ -81,7 +78,6 @@ export default function BillingPage() {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [yearly, setYearly] = useState(false);
-  const [pack, setPack] = useState(1);
 
   useEffect(() => {
     let alive = true;
@@ -140,13 +136,11 @@ export default function BillingPage() {
     setPending(tier);
     try {
       // Recurring subscription flow: start the subscription, then hand off to
-      // Polar's hosted checkout. Starter is always monthly/×1 (Opus parity);
-      // Pro sends the chosen period + pack quantity. In mock mode there's no
-      // real redirect (the plan is granted locally), so we just refresh the
-      // balance.
+      // Polar's hosted checkout. Starter is always monthly (Opus parity); Pro
+      // sends the chosen period. In mock mode there's no real redirect (the
+      // plan is granted locally), so we just refresh the balance.
       const period: BillingPeriod = tier === "pro" && yearly ? "annual" : "monthly";
-      const quantity = tier === "pro" ? pack : 1;
-      const sub = await api.createSubscription(tier, { period, quantity });
+      const sub = await api.createSubscription(tier, { period });
       if (sub.mock) {
         const [fresh, bd] = await Promise.all([
           api.getBalance(),
@@ -358,7 +352,7 @@ export default function BillingPage() {
           )}
         </PlanTile>
 
-        {/* Pro - annual + pack */}
+        {/* Pro - annual toggle */}
         <Card className={`flex flex-col p-5 ${current === "pro" ? "border-brand bg-brand/10 ring-1 ring-brand/40" : "border-brand/30"}`}>
           <div className="flex items-baseline justify-between">
             <h3 className="text-lg font-semibold tracking-tight text-white">Pro</h3>
@@ -372,56 +366,26 @@ export default function BillingPage() {
           {yearly ? (
             <p className="mt-2 flex items-baseline gap-1.5">
               <span className="font-mono text-lg font-medium text-ink-500 line-through">
-                ${fmt(plans.pro.priceUsd * pack)}
+                ${fmt(plans.pro.priceUsd)}
               </span>
               <span className="font-mono text-3xl font-semibold tabular-nums text-success-300">
-                ${fmt((annualPrice / 12) * pack)}
+                ${fmt(annualPrice / 12)}
               </span>
               <span className="font-sans text-sm font-medium text-ink-400">/mo</span>
               <InfoHint label={CREDIT_TOOLTIP} />
             </p>
           ) : (
             <p className="mt-2 font-mono text-3xl font-semibold tabular-nums text-white">
-              ${fmt(plans.pro.priceUsd * pack)}
+              ${fmt(plans.pro.priceUsd)}
               <span className="font-sans text-sm font-medium text-ink-400">/mo</span>
               <InfoHint label={CREDIT_TOOLTIP} />
             </p>
           )}
           <p className="mt-0.5 text-xs text-ink-500">
-            {yearly ? `$${fmt(annualPrice * pack)} billed annually` : "Billed monthly"}
+            {yearly
+              ? `$${fmt(annualPrice)} billed annually · ${annualCredits.toLocaleString()} credits/yr`
+              : `Billed monthly · ${plans.pro.monthlyCredits.toLocaleString()} credits/mo`}
           </p>
-
-          {/* Pack stepper */}
-          <div className="mt-3 flex items-center justify-between rounded-xl border border-white/10 bg-ink-900/60 px-3 py-2">
-            <span className="text-xs font-medium text-ink-300">
-              Pack <span className="text-white">×{pack}</span> ·{" "}
-              {((yearly ? annualCredits : plans.pro.monthlyCredits) * pack).toLocaleString()} credits
-              {yearly ? "/yr" : "/mo"}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                aria-label="Decrease pack quantity"
-                onClick={() => setPack((n) => Math.max(MIN_PACK, n - 1))}
-                disabled={pack <= MIN_PACK}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-ink-800 text-white transition hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Minus className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
-              </button>
-              <span className="w-6 text-center text-sm font-semibold tabular-nums text-white" aria-live="polite">
-                {pack}
-              </span>
-              <button
-                type="button"
-                aria-label="Increase pack quantity"
-                onClick={() => setPack((n) => Math.min(MAX_PACK, n + 1))}
-                disabled={pack >= MAX_PACK}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-ink-800 text-white transition hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
-              </button>
-            </div>
-          </div>
 
           <ul className="mt-4 flex-1 space-y-2 text-sm text-ink-300">
             {["All Starter features", "Active-speaker reframe", "Multiple aspect ratios (9:16, 1:1, 16:9)", "Clips kept indefinitely"].map((f) => (
@@ -479,11 +443,10 @@ export default function BillingPage() {
       </p>
       <p className="mt-3 text-xs text-ink-400">
         Subscriptions are billed through Polar (card &amp; more, no account required). Pro&apos;s
-        annual plan is 60% off and its pack stepper (×1-10) scales both credits and price -
-        Starter is monthly-only. Pricing is half of Opus Clip&apos;s for the same credits (1
-        credit = 1 minute of source video). Cancel anytime - you keep access until the period
-        ends. In this demo build (no Polar token), upgrades activate locally so you can try the
-        flow.
+        annual plan is 60% off - Starter is monthly-only. Pricing is half of Opus Clip&apos;s for
+        the same credits (1 credit = 1 minute of source video). Cancel anytime - you keep access
+        until the period ends. In this demo build (no Polar token), upgrades activate locally so
+        you can try the flow.
       </p>
     </div>
   );

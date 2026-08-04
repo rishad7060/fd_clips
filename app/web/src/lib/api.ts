@@ -162,14 +162,13 @@ interface ApiSubscriptionStartView {
 export type BillingPeriod = "monthly" | "annual";
 
 /**
- * Options for starting a subscription. `period` and `quantity` only apply to
- * "pro" (Starter is monthly-only, quantity 1 - the caller should omit them or
- * pass the defaults). `quantity` is the Pro "pack" multiplier (1-10): it scales
- * both credits and price server-side.
+ * Options for starting a subscription. `period` only applies to "pro" (Starter
+ * is monthly-only - the caller should omit it or pass "monthly"). Packs were
+ * removed (Polar bills a fixed-price subscription ×1 regardless of a sent
+ * quantity), so there is no quantity here.
  */
 export interface CreateSubscriptionOptions {
   period?: BillingPeriod;
-  quantity?: number;
 }
 
 /** Result of starting a Polar recurring subscription (snake_case wire shape). */
@@ -553,18 +552,18 @@ export const api = {
    * In mock mode the URL is a local stub, mock=true, and the plan is already granted
    * locally - the caller refreshes the balance instead of redirecting.
    *
-   * `period`/`quantity` only matter for "pro" (annual billing + the ×N pack
-   * multiplier, 1-10). Starter is monthly-only - callers should omit them (or
-   * pass the defaults) so the API always sees period:"monthly", quantity:1.
+   * `period` only matters for "pro" (annual billing). Starter is monthly-only -
+   * callers should omit it (or pass "monthly") so the API always sees
+   * period:"monthly". No quantity is sent - packs were removed (Polar bills a
+   * fixed-price subscription ×1 regardless).
    */
   async createSubscription(
     tier: "starter" | "pro",
     opts: CreateSubscriptionOptions = {},
   ): Promise<SubscriptionStart> {
     const period: BillingPeriod = opts.period ?? "monthly";
-    const quantity = opts.quantity ?? 1;
     if (USING_MOCK_API) {
-      const r = mockStore.createSubscription(tier, period, quantity);
+      const r = mockStore.createSubscription(tier, period);
       return delay({
         url: r.url,
         subscription_id: r.subscriptionId,
@@ -574,7 +573,7 @@ export const api = {
     }
     const v = await http<ApiSubscriptionStartView>("/billing/subscribe", {
       method: "POST",
-      body: JSON.stringify({ tier, period, quantity }),
+      body: JSON.stringify({ tier, period }),
     });
     return { url: v.url, subscription_id: v.subscriptionId, mock: v.mock, tier: v.tier };
   },
