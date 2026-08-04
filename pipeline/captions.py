@@ -861,6 +861,9 @@ def _escape_subtitles_path(path: Path) -> str:
 _WATERMARK_PATH = Path(__file__).resolve().parent / "assets" / "watermark.png"
 # Text shown vertically beside the corner logo.
 _WATERMARK_TEXT = "clipshq.pro"
+# How long the watermark is visible at the START of the clip before it fades out
+# (Opus-style intro branding, not a whole-clip overlay).
+_WATERMARK_SECONDS = 4.0
 
 # Candidate font files for the vertical watermark text (drawtext needs an
 # explicit fontfile - there's no fontconfig on Windows). Covers Windows (Arial),
@@ -906,20 +909,26 @@ def _burn_in(
 
     use_watermark = watermark and _WATERMARK_PATH.is_file()
     if use_watermark:
-        # TOP-LEFT vertical watermark (Opus-style, stays the whole clip):
-        #   - a small ClipsHQ logo tucked in the top-left corner, and
-        #   - "clipshq.pro" running VERTICALLY (reading bottom-to-top) below it.
-        # One ffmpeg pass after the caption burn:
+        # TOP-LEFT vertical watermark (Opus-style): a BIGGER, brighter ClipsHQ
+        # logo + "clipshq.pro" running VERTICALLY, shown PROMINENTLY for the first
+        # few seconds then FADED OUT (like Opus/OpusClip's intro watermark) - not
+        # left over the whole clip. Timed via overlay enable + a fade on the logo.
         #   [0:v] captions -> [v]
-        #   [1:v] logo scaled ~56px, overlaid top-left -> [vl]
-        #   a transparent strip + drawtext, rotated 270deg -> vertical text [vt]
-        #   overlay [vt] on the left edge -> [outv]
-        # drawtext needs an explicit fontfile (no fontconfig on Windows); we
-        # resolve a system font and, if none is found, drop to a LOGO-ONLY
-        # watermark so the render never fails over a missing font.
+        #   [1:v] logo scaled bigger (~84px), fade-out near the end of the window,
+        #         overlaid top-left ONLY between t=0..WM_SECONDS -> [vl]
+        #   transparent strip + drawtext (bigger), rotated 270 -> vertical text,
+        #         same timed enable -> [outv]
+        # drawtext needs an explicit fontfile (no fontconfig on Windows); if none
+        # is found we drop to a LOGO-ONLY (still timed) watermark.
+        end = _WATERMARK_SECONDS
+        fade_start = max(0.0, end - 0.6)  # 0.6s fade-out at the end of the window
+        enable = f"enable='between(t,0,{end})'"
+        # Logo: fade in quickly, hold, fade out; overlay only within the window.
         logo_layer = (
-            "[1:v]scale=56:-1,format=rgba,colorchannelmixer=aa=0.9[wm];"
-            "[v][wm]overlay=x=20:y=22[vl]"
+            f"[1:v]scale=84:-1,format=rgba,"
+            f"fade=t=in:st=0:d=0.3:alpha=1,fade=t=out:st={fade_start:.2f}:d=0.6:alpha=1,"
+            "colorchannelmixer=aa=0.95[wm];"
+            f"[v][wm]overlay=x=24:y=26:{enable}[vl]"
         )
         font = _resolve_watermark_font()
         if font:
@@ -927,14 +936,15 @@ def _burn_in(
             filtergraph = (
                 f"[0:v]{subs}[v];"
                 f"{logo_layer};"
-                "color=black@0:size=300x44:d=1,format=rgba[bg];"
+                "color=black@0:size=340x56:d=1,format=rgba[bg];"
                 f"[bg]drawtext=fontfile='{font_arg}':text='{_WATERMARK_TEXT}':"
-                "fontcolor=white@0.85:fontsize=28:x=8:y=6,"
-                "rotate=3*PI/2:c=none:ow=44:oh=300[vt];"
-                "[vl][vt]overlay=x=16:y=86[outv]"
+                "fontcolor=white:fontsize=36:x=8:y=8:"
+                "shadowcolor=black@0.6:shadowx=2:shadowy=2,"
+                "rotate=3*PI/2:c=none:ow=56:oh=340[vt];"
+                f"[vl][vt]overlay=x=20:y=118:{enable}[outv]"
             )
         else:
-            # No usable font: logo-only corner watermark (still burns fine).
+            # No usable font: logo-only timed corner watermark (still burns fine).
             filtergraph = f"[0:v]{subs}[v];{logo_layer.replace('[vl]', '[outv]')}"
         cmd = [
             (ffmpeg or "ffmpeg"), "-y", "-i", str(vertical), "-i", str(_WATERMARK_PATH),
