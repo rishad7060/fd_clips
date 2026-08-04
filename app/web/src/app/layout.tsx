@@ -132,7 +132,11 @@ export default async function RootLayout({
       <html lang="en">
         <body className={bodyClass}>
           <SiteSchema />
-          <SessionProvider>
+          {/* refetchInterval re-fetches the session every ~10 min (and on window
+              focus), re-minting the app API token before it can go stale - so
+              users rarely hit a 401 in the first place; if one still slips
+              through, AuthTokenBridge auto-signs-out + re-prompts sign-in. */}
+          <SessionProvider refetchInterval={600} refetchOnWindowFocus>
             <AuthTokenBridge />
             <ReferralCapture />
             <SmoothScroll>{children}</SmoothScroll>

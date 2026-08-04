@@ -9,7 +9,18 @@ import { CredentialsSignInForm, OrDivider } from "@/components/CredentialsAuthFo
  * kept so old /sign-in/* links still resolve. In mock/dev mode (auth disabled)
  * we show a friendly note so the route still resolves with no credentials.
  */
-export default function SignInPage() {
+export default function SignInPage({
+  searchParams,
+}: {
+  searchParams?: { callbackUrl?: string; expired?: string };
+}) {
+  // Where to return after sign-in - honor ?callbackUrl (set by the auto-sign-out
+  // on a 401), but only allow SAME-SITE relative paths to avoid open-redirects.
+  const raw = searchParams?.callbackUrl ?? "";
+  const callbackUrl = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
+  // "expired" is set when the auto-sign-out bounced them here mid-session.
+  const expired = searchParams?.expired === "1" || callbackUrl !== "/dashboard";
+
   return (
     <main className="relative grid min-h-screen place-items-center overflow-hidden bg-ink-950 px-6 py-12">
       {/* Brand glow behind the card */}
@@ -18,13 +29,13 @@ export default function SignInPage() {
         className="pointer-events-none absolute left-1/2 top-[-10rem] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-brand/20 blur-[130px]"
       />
       <div className="relative w-full max-w-md">
-        {AUTH_ENABLED ? <SignInCard /> : <DevNote />}
+        {AUTH_ENABLED ? <SignInCard callbackUrl={callbackUrl} expired={expired} /> : <DevNote />}
       </div>
     </main>
   );
 }
 
-function SignInCard() {
+function SignInCard({ callbackUrl, expired }: { callbackUrl: string; expired: boolean }) {
   return (
     <div className="rounded-3xl border border-white/[0.08] bg-gradient-to-b from-ink-900 to-ink-950 p-8 shadow-rim sm:p-10">
       <Logo />
@@ -32,17 +43,18 @@ function SignInCard() {
         Welcome back
       </h1>
       <p className="mt-3 text-sm leading-relaxed text-ink-300">
-        Sign in to turn long videos into ranked, captioned, vertical shorts -
-        delivered to your inbox in about 30 minutes.
+        {expired
+          ? "Your session expired for security. Sign in again to pick up right where you left off."
+          : "Sign in to turn long videos into ranked, captioned, vertical shorts - delivered to your inbox in about 30 minutes."}
       </p>
 
       <div className="mt-7">
-        <GoogleSignInButton callbackUrl="/dashboard" />
+        <GoogleSignInButton callbackUrl={callbackUrl} />
       </div>
       <div className="my-5">
         <OrDivider />
       </div>
-      <CredentialsSignInForm callbackUrl="/dashboard" />
+      <CredentialsSignInForm callbackUrl={callbackUrl} />
 
       <p className="mt-6 text-center text-sm text-ink-400">
         New to Clips?{" "}

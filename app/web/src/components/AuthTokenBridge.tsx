@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useSession, getSession } from "next-auth/react";
+import { useSession, getSession, signOut } from "next-auth/react";
 import { setTokenGetter } from "@/lib/api";
 
 /**
@@ -35,6 +35,30 @@ export function AuthTokenBridge() {
       return s?.apiToken ?? null;
     });
     return () => setTokenGetter(null);
+  }, []);
+
+  // Auto sign-out on a 401 from the API (expired/invalid session, or a stale
+  // cached token). http() dispatches "clipshq:unauthorized"; we sign the user
+  // out and bounce them to sign-in with a callback back to where they were - so
+  // instead of a confusing "Unauthorized" error they just re-authenticate.
+  // A ref guards against a burst of 401s (many parallel requests) firing signOut
+  // repeatedly.
+  const signingOutRef = useRef(false);
+  useEffect(() => {
+    const onUnauthorized = () => {
+      if (signingOutRef.current) return;
+      signingOutRef.current = true;
+      const back =
+        typeof window !== "undefined"
+          ? window.location.pathname + window.location.search
+          : "/dashboard";
+      // Send them to sign-in (with an "expired" note + a return path), clearing
+      // the stale session as part of the sign-out.
+      const target = `/sign-in?expired=1&callbackUrl=${encodeURIComponent(back)}`;
+      void signOut({ callbackUrl: target });
+    };
+    window.addEventListener("clipshq:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("clipshq:unauthorized", onUnauthorized);
   }, []);
 
   return null;

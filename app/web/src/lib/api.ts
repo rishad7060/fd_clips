@@ -334,6 +334,14 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    // Session/token expired or invalid → don't show a raw "Unauthorized" error.
+    // Signal the app (AuthTokenBridge listens) to sign the user out and send them
+    // back to sign-in. Only when WE SENT a token (a real expired session) - a 401
+    // on an anonymous/public call must NOT sign anyone out. The listener guards
+    // against repeated redirects when many requests 401 at once.
+    if (res.status === 401 && typeof window !== "undefined" && "Authorization" in auth) {
+      window.dispatchEvent(new CustomEvent("clipshq:unauthorized"));
+    }
     throw new Error(`API ${res.status} ${res.statusText}: ${body}`);
   }
   return (await res.json()) as T;
