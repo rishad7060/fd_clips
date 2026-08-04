@@ -32,6 +32,7 @@ import {
   WaitlistStatus,
   DEFAULT_PLATFORM_SETTINGS,
 } from './store.types';
+import * as bcrypt from 'bcryptjs';
 import { PLANS } from '../billing/plans';
 import { BLOG_POST_SEED } from '../blog/blog.seed';
 
@@ -57,7 +58,48 @@ export class PrismaStore implements DataStore {
     });
     await this.prisma.$connect();
     this.logger.log('Connected to Postgres via Prisma.');
+    await this.seedAdmin();
     await this.seedBlogPosts();
+  }
+
+  /**
+   * Ensure the system admin user exists (Credentials login for /admin). The
+   * memory store seeds an equivalent admin on boot; Postgres needs it too, and
+   * the Docker CMD does not run `prisma db seed` (no ts-node in the prod image).
+   * Idempotent AND self-healing: creates the admin org+user on first boot, and
+   * on every boot re-applies the ADMIN_PASSWORD hash + role, so changing
+   * ADMIN_PASSWORD in .env and restarting fixes a wrong/forgotten password.
+   */
+  private async seedAdmin(): Promise<void> {
+    const email = (process.env.ADMIN_EMAIL ?? 'admin@focaldive.local').trim();
+    const password = (process.env.ADMIN_PASSWORD ?? 'changeme-admin').trim();
+    const name = (process.env.ADMIN_NAME ?? 'System Admin').trim();
+    const passwordHash = bcrypt.hashSync(password, 10);
+
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      // Re-apply role + password so a changed ADMIN_PASSWORD takes effect on restart.
+      await this.prisma.user.update({
+        where: { email },
+        data: { role: 'admin', passwordHash, name },
+      });
+      this.logger.log(`Admin user ensured (updated): ${email}`);
+      return;
+    }
+    // Create the admin's org + user.
+    const org = await this.prisma.organization.create({
+      data: { name: 'ClipsHQ Admin', plan: 'pro', creditBalance: 0 },
+    });
+    await this.prisma.user.create({
+      data: {
+        email,
+        name,
+        role: 'admin',
+        passwordHash,
+        organizationId: org.id,
+      },
+    });
+    this.logger.log(`Seeded admin user: ${email}`);
   }
 
   /** Seed the 5 legacy hardcoded posts on first boot (empty table only). */
