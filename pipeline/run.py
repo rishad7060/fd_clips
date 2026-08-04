@@ -198,6 +198,9 @@ def run_pipeline(
     genre = config.get("genre") or None
     include_moments = config.get("include_moments") or None
     process_range = _parse_process_range(config.get("process_range"))
+    # Free plan burns the ClipsHQ watermark into clips; paid plans don't. The API
+    # sets this from the org's plan capability (defaults False = clean render).
+    watermark = bool(config.get("watermark", False))
 
     settings = get_settings()
     ws = settings.workspace(job_id)
@@ -256,7 +259,8 @@ def run_pipeline(
         ws, state, force,
     )
     _run_stage(
-        "captions", lambda: captions.caption_clips(job_id, top_n=clip_count),
+        "captions",
+        lambda: captions.caption_clips(job_id, top_n=clip_count, watermark=watermark),
         ws, state, force,
     )
 

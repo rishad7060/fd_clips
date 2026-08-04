@@ -22,6 +22,8 @@ export class PlatformController {
       signupsEnabled: s.signupsEnabled,
       // Public so the marketing page can swap the hero for the waitlist form.
       waitlistMode: s.waitlistMode,
+      // Public so the clips page knows whether to show "Remove watermark".
+      watermarkFreeClips: s.watermarkFreeClips,
       updatedAt: s.updatedAt,
     };
   }

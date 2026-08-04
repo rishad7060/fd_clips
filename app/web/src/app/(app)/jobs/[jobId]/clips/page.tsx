@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { getPlatformStatus } from "@/lib/platformStatus";
 import { downloadFile, clipFileName } from "@/lib/download";
 import type { Clip, ClipsResponse } from "@/lib/types";
 import { ClipCard } from "@/components/ClipCard";
@@ -104,6 +105,9 @@ export default function ClipGalleryPage({ params }: { params: { jobId: string } 
   const [sort, setSort] = useState<SortKey>("score");
   const [query, setQuery] = useState("");
   const [downloadingAll, setDownloadingAll] = useState(false);
+  // Show "Remove watermark" only when the admin toggle is ON *and* this org is
+  // on the free plan (paid clips have no watermark, so the button is pointless).
+  const [showRemoveWatermark, setShowRemoveWatermark] = useState(false);
 
   const visibleClips = useMemo(() => {
     if (!data) return [];
@@ -141,6 +145,19 @@ export default function ClipGalleryPage({ params }: { params: { jobId: string } 
     api.getClips(jobId).then((d) => alive && setData(d)).catch((e) => alive && setError(String(e)));
     return () => { alive = false; };
   }, [jobId]);
+
+  // Decide whether to show the "Remove watermark" upgrade button: admin toggle
+  // ON + this org is on the free plan (paid = no watermark). Best-effort; hidden
+  // on any error so we never nag a paid user.
+  useEffect(() => {
+    let alive = true;
+    Promise.all([getPlatformStatus(), api.getBalance()])
+      .then(([status, bal]) => {
+        if (alive) setShowRemoveWatermark(status.watermarkFreeClips && bal.plan === "free");
+      })
+      .catch(() => {/* leave hidden */});
+    return () => { alive = false; };
+  }, []);
 
   const total = data?.clips.length ?? 0;
 
@@ -195,6 +212,13 @@ export default function ClipGalleryPage({ params }: { params: { jobId: string } 
               className="py-2"
             />
           </div>
+          {showRemoveWatermark && (
+            <Link href="/billing">
+              <Button variant="primary" size="sm" title="Upgrade to remove the ClipsHQ watermark">
+                Remove watermark
+              </Button>
+            </Link>
+          )}
           {visibleClips.some((c) => c.final_url) && (
             <Button
               variant="secondary"

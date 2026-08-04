@@ -758,8 +758,14 @@ def _make_thumbnail(final: Path, thumb: Path, *, mock: bool) -> bool:
     return False
 
 
-def caption_clips(job_id: str, top_n: Optional[int] = None) -> list[CaptionResult]:
-    """Build .ass + (burn-in) final clip for each candidate."""
+def caption_clips(
+    job_id: str, top_n: Optional[int] = None, *, watermark: bool = False,
+) -> list[CaptionResult]:
+    """Build .ass + (burn-in) final clip for each candidate.
+
+    ``watermark`` (free plan) burns the ClipsHQ logo into every clip; paid plans
+    pass False for a clean render.
+    """
     settings = get_settings()
     ws = settings.workspace(job_id)
     transcript = json.loads((ws / "transcript.json").read_text(encoding="utf-8"))
@@ -818,7 +824,9 @@ def caption_clips(job_id: str, top_n: Optional[int] = None) -> list[CaptionResul
 
         vertical = clips_dir / f"{rank}_vertical.mp4"
         final = clips_dir / f"{rank}_final.mp4"
-        burned = _burn_in(vertical, ass_path, final, mock=settings.mock_mode)
+        burned = _burn_in(
+            vertical, ass_path, final, mock=settings.mock_mode, watermark=watermark,
+        )
 
         # Poster frame for the gallery card (CONTRACTS §5 {n}_thumb.jpg).
         _make_thumbnail(final, clips_dir / f"{rank}_thumb.jpg", mock=settings.mock_mode)
@@ -849,8 +857,18 @@ def _escape_subtitles_path(path: Path) -> str:
     return s
 
 
-def _burn_in(vertical: Path, ass_path: Path, final: Path, *, mock: bool) -> bool:
+# ClipsHQ watermark logo (1024x1024 RGBA), burned into FREE-plan clips.
+_WATERMARK_PATH = Path(__file__).resolve().parent / "assets" / "watermark.png"
+
+
+def _burn_in(
+    vertical: Path, ass_path: Path, final: Path, *, mock: bool, watermark: bool = False,
+) -> bool:
     """Burn the .ass into the vertical clip with libx264 (CPU, no nvenc).
+
+    When ``watermark`` is True (free plan), the ClipsHQ logo is composited into
+    the top area of the clip and stays for the whole duration (an upsell to
+    upgrade, like Opus). Paid plans pass watermark=False for a clean render.
 
     Returns True if ffmpeg actually ran. The encoder is always ``libx264`` on
     this free CPU path (h264_nvenc is the documented GPU upgrade). When ffmpeg
@@ -862,13 +880,32 @@ def _burn_in(vertical: Path, ass_path: Path, final: Path, *, mock: bool) -> bool
     # fontsdir at the .ass directory so any bundled fonts resolve.
     ass_arg = _escape_subtitles_path(ass_path)
     fonts_arg = _escape_subtitles_path(ass_path.parent)
-    vf = f"subtitles='{ass_arg}':fontsdir='{fonts_arg}'"
-    cmd = [
-        (ffmpeg or "ffmpeg"), "-y", "-i", str(vertical),
-        "-vf", vf,
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
-        "-pix_fmt", "yuv420p", "-c:a", "copy", str(final),
-    ]
+    subs = f"subtitles='{ass_arg}':fontsdir='{fonts_arg}'"
+
+    use_watermark = watermark and _WATERMARK_PATH.is_file()
+    if use_watermark:
+        # Two inputs (clip + logo). Scale the logo to a modest ~180px width and
+        # ~70% opacity, then overlay it CENTERED at ~18% down - clear of the top
+        # hook caption but still prominent branding. It stays the whole clip.
+        # Captions are burned first (on the clip stream), then the logo overlaid.
+        filtergraph = (
+            f"[0:v]{subs}[v];"
+            "[1:v]scale=180:-1,format=rgba,colorchannelmixer=aa=0.70[wm];"
+            "[v][wm]overlay=x=(main_w-overlay_w)/2:y=main_h*0.18[outv]"
+        )
+        cmd = [
+            (ffmpeg or "ffmpeg"), "-y", "-i", str(vertical), "-i", str(_WATERMARK_PATH),
+            "-filter_complex", filtergraph, "-map", "[outv]", "-map", "0:a?",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
+            "-pix_fmt", "yuv420p", "-c:a", "copy", str(final),
+        ]
+    else:
+        cmd = [
+            (ffmpeg or "ffmpeg"), "-y", "-i", str(vertical),
+            "-vf", subs,
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
+            "-pix_fmt", "yuv420p", "-c:a", "copy", str(final),
+        ]
     cmd_str = " ".join(cmd)
 
     if ffmpeg and vertical.exists() and vertical.stat().st_size > 64:

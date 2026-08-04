@@ -641,6 +641,7 @@ export class PrismaStore implements DataStore {
       signupsEnabled: s?.signupsEnabled ?? DEFAULT_PLATFORM_SETTINGS.signupsEnabled,
       announcement: s?.announcement ?? DEFAULT_PLATFORM_SETTINGS.announcement,
       waitlistMode: s?.waitlistMode ?? DEFAULT_PLATFORM_SETTINGS.waitlistMode,
+      watermarkFreeClips: s?.watermarkFreeClips ?? DEFAULT_PLATFORM_SETTINGS.watermarkFreeClips,
       updatedAt: (s?.updatedAt ?? new Date()).toISOString?.() ?? new Date().toISOString(),
     };
   }

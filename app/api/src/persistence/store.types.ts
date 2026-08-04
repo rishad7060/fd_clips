@@ -204,6 +204,13 @@ export interface PlatformSettings {
    * hero for an email-capture form (exposed publicly via /platform/status).
    */
   waitlistMode: boolean;
+  /**
+   * When on, FREE-plan clips get the ClipsHQ logo watermark burned in (and the
+   * "Remove watermark" upgrade button shows on the clips page). When off, no
+   * watermark and the button is hidden. Paid plans are never watermarked.
+   * Exposed publicly via /platform/status so the web can show/hide the button.
+   */
+  watermarkFreeClips: boolean;
   /** ISO timestamp of the last change. */
   updatedAt: string;
 }
@@ -220,6 +227,8 @@ export const DEFAULT_PLATFORM_SETTINGS: Omit<PlatformSettings, 'updatedAt'> = {
   signupsEnabled: true,
   announcement: '',
   waitlistMode: false,
+  // Watermark free clips by default (Opus-style upsell); admin can turn it off.
+  watermarkFreeClips: true,
 };
 
 export interface CreditLedgerRecord {

@@ -21,6 +21,7 @@ export async function getPlatformStatus(): Promise<PlatformStatus> {
       announcement: s.announcement,
       signupsEnabled: s.signupsEnabled,
       waitlistMode: s.waitlistMode,
+      watermarkFreeClips: s.watermarkFreeClips,
       updatedAt: s.updatedAt,
     };
   }

@@ -276,6 +276,9 @@ model PlatformSetting {
   // creator hero for an email-capture form (see /platform/status + the web
   // WaitlistGate). Defaults off so the normal app shows.
   waitlistMode       Boolean  @default(false) @map("waitlist_mode")
+  // When on, FREE-plan clips get the ClipsHQ watermark + the "Remove watermark"
+  // upgrade button shows on the clips page. Paid plans are never watermarked.
+  watermarkFreeClips Boolean  @default(true) @map("watermark_free_clips")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
   @@map("platform_settings")

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Loader2, Megaphone, Pause, Rocket, UserPlus } from "lucide-react";
+import { AlertTriangle, Loader2, Megaphone, Pause, Rocket, Stamp, UserPlus } from "lucide-react";
 import { adminApi } from "@/lib/adminApi";
 import type { AdminSystemInfo, PlatformSettings } from "@/lib/adminTypes";
 import { cn } from "@/lib/cn";
@@ -121,7 +121,8 @@ function PlatformControls() {
     draft.newJobsEnabled !== saved.newJobsEnabled ||
     draft.signupsEnabled !== saved.signupsEnabled ||
     draft.announcement !== saved.announcement ||
-    draft.waitlistMode !== saved.waitlistMode;
+    draft.waitlistMode !== saved.waitlistMode ||
+    draft.watermarkFreeClips !== saved.watermarkFreeClips;
 
   const set = <K extends keyof PlatformSettings>(key: K, value: PlatformSettings[K]) => {
     setConfirmation(null);
@@ -142,6 +143,7 @@ function PlatformControls() {
         signupsEnabled: draft.signupsEnabled,
         announcement: draft.announcement,
         waitlistMode: draft.waitlistMode,
+        watermarkFreeClips: draft.watermarkFreeClips,
       });
       setSaved(next);
       setDraft(next);
@@ -232,6 +234,18 @@ function PlatformControls() {
             <Switch
               checked={draft.waitlistMode}
               onChange={(v) => set("waitlistMode", v)}
+              disabled={busy}
+            />
+          </ControlRow>
+
+          <ControlRow
+            icon={<Stamp className="h-4 w-4" />}
+            title="Watermark free clips"
+            description="Burn the ClipsHQ logo into FREE-plan clips and show a 'Remove watermark' upgrade button on the clips page. Paid plans are never watermarked. Turn off for clean free clips."
+          >
+            <Switch
+              checked={draft.watermarkFreeClips}
+              onChange={(v) => set("watermarkFreeClips", v)}
               disabled={busy}
             />
           </ControlRow>

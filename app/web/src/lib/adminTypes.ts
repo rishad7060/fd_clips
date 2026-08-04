@@ -187,6 +187,8 @@ export interface PlatformSettings {
   signupsEnabled: boolean;
   announcement: string;
   waitlistMode: boolean;
+  /** Watermark free-plan clips + show the "Remove watermark" upgrade button. */
+  watermarkFreeClips: boolean;
   updatedAt: string;
 }
 
@@ -200,6 +202,8 @@ export interface PlatformStatus {
   announcement: string;
   signupsEnabled: boolean;
   waitlistMode: boolean;
+  /** Whether free clips are watermarked (so the clips page shows the button). */
+  watermarkFreeClips: boolean;
   updatedAt: string;
 }
 

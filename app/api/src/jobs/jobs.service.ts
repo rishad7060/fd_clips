@@ -80,8 +80,15 @@ export class JobsService {
       clip_count: job.clipCount,
       style: job.style,
       // Opus-style config in run.py's SNAKE_CASE --config-json shape (null when
-      // none was set → run.py applies all defaults = current behavior).
-      config: toPipelineConfig(jobConfig),
+      // none was set → run.py applies all defaults). Watermark burns the ClipsHQ
+      // logo into clips when BOTH the org's plan says so (free=true, paid=false)
+      // AND the admin toggle is on (platform.watermarkFreeClips). Set here from
+      // the plan + platform, never from the client.
+      config: withWatermark(
+        toPipelineConfig(jobConfig),
+        (await this.billing.getPlanStatus(organizationId)).capabilities.watermark &&
+          platform.watermarkFreeClips,
+      ),
       // Carry the delivery email so the worker can email finished clips. Prefer
       // an explicit dto.email, else fall back to the signed-in account email.
       email: dto.email ?? accountEmail ?? null,
@@ -167,4 +174,18 @@ function toPipelineConfig(
   if (config.includeMoments !== undefined) out.include_moments = config.includeMoments;
   if (config.processRange !== undefined) out.process_range = config.processRange;
   return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * Inject the plan-derived `watermark` flag into the pipeline config. When
+ * watermark is true (free plan) the pipeline burns the ClipsHQ logo into clips.
+ * Always returns a config object when watermark is set (so the flag survives even
+ * if the user set no other options).
+ */
+function withWatermark(
+  config: Record<string, unknown> | null,
+  watermark: boolean,
+): Record<string, unknown> | null {
+  if (!watermark) return config; // paid plan: clean render, nothing to add
+  return { ...(config ?? {}), watermark: true };
 }

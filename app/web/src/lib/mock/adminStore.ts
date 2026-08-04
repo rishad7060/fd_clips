@@ -62,6 +62,7 @@ const DEFAULT_PLATFORM: PlatformSettings = {
   signupsEnabled: true,
   announcement: "",
   waitlistMode: false,
+  watermarkFreeClips: true,
   updatedAt: new Date().toISOString(),
 };
 
