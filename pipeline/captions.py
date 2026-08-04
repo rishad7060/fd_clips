@@ -909,43 +909,58 @@ def _burn_in(
 
     use_watermark = watermark and _WATERMARK_PATH.is_file()
     if use_watermark:
-        # TOP-LEFT vertical watermark (Opus-style): a BIGGER, brighter ClipsHQ
-        # logo + "clipshq.pro" running VERTICALLY, shown PROMINENTLY for the first
-        # few seconds then FADED OUT (like Opus/OpusClip's intro watermark) - not
-        # left over the whole clip. Timed via overlay enable + a fade on the logo.
-        #   [0:v] captions -> [v]
-        #   [1:v] logo scaled bigger (~84px), fade-out near the end of the window,
-        #         overlaid top-left ONLY between t=0..WM_SECONDS -> [vl]
-        #   transparent strip + drawtext (bigger), rotated 270 -> vertical text,
-        #         same timed enable -> [outv]
-        # drawtext needs an explicit fontfile (no fontconfig on Windows); if none
-        # is found we drop to a LOGO-ONLY (still timed) watermark.
+        # TOP-LEFT watermark (Opus-style), in TWO phases:
+        #   1) INTRO (t=0..WM_SECONDS): a big, bright ClipsHQ logo + "clipshq.pro"
+        #      running vertically, fades in then out - prominent branding up front.
+        #   2) PERSISTENT: after the intro fades, a SMALL, subtle logo stays in the
+        #      corner for the REST of the clip (like Opus's little residual mark).
+        # The single logo input [1:v] is split into two copies: one scaled big for
+        # the intro (timed), one scaled small at low opacity for the persistent
+        # mark (whole clip). drawtext needs an explicit fontfile (no fontconfig on
+        # Windows); if none is found we skip the vertical text but KEEP both logos.
         end = _WATERMARK_SECONDS
-        fade_start = max(0.0, end - 0.6)  # 0.6s fade-out at the end of the window
-        enable = f"enable='between(t,0,{end})'"
-        # Logo: fade in quickly, hold, fade out; overlay only within the window.
-        logo_layer = (
-            f"[1:v]scale=84:-1,format=rgba,"
+        fade_start = max(0.0, end - 0.6)  # 0.6s fade-out at the end of the intro
+        intro_enable = f"enable='between(t,0,{end})'"
+        # persistent small logo shows once the intro has faded out (t >= end).
+        persist_enable = f"enable='gte(t,{fade_start:.2f})'"
+
+        # Split the logo: [wmbig] intro (big, fading, timed), [wmsm] persistent small.
+        split_logo = (
+            "[1:v]split=2[lg1][lg2];"
+            "[lg1]scale=84:-1,format=rgba,"
             f"fade=t=in:st=0:d=0.3:alpha=1,fade=t=out:st={fade_start:.2f}:d=0.6:alpha=1,"
-            "colorchannelmixer=aa=0.95[wm];"
-            f"[v][wm]overlay=x=24:y=26:{enable}[vl]"
+            "colorchannelmixer=aa=0.95[wmbig];"
+            "[lg2]scale=40:-1,format=rgba,colorchannelmixer=aa=0.55[wmsm]"
         )
+        # Persistent small logo, top-left, from just as the intro fades onward.
+        persist_layer = f"[pre][wmsm]overlay=x=24:y=26:{persist_enable}[outv]"
+
         font = _resolve_watermark_font()
         if font:
             font_arg = _escape_subtitles_path(Path(font))  # escape the drive colon
             filtergraph = (
                 f"[0:v]{subs}[v];"
-                f"{logo_layer};"
+                f"{split_logo};"
+                # intro big logo (timed)
+                f"[v][wmbig]overlay=x=24:y=26:{intro_enable}[vl];"
+                # intro vertical text (timed)
                 "color=black@0:size=340x56:d=1,format=rgba[bg];"
                 f"[bg]drawtext=fontfile='{font_arg}':text='{_WATERMARK_TEXT}':"
                 "fontcolor=white:fontsize=36:x=8:y=8:"
                 "shadowcolor=black@0.6:shadowx=2:shadowy=2,"
                 "rotate=3*PI/2:c=none:ow=56:oh=340[vt];"
-                f"[vl][vt]overlay=x=20:y=118:{enable}[outv]"
+                f"[vl][vt]overlay=x=20:y=118:{intro_enable}[pre];"
+                # persistent small logo (rest of clip)
+                f"{persist_layer}"
             )
         else:
-            # No usable font: logo-only timed corner watermark (still burns fine).
-            filtergraph = f"[0:v]{subs}[v];{logo_layer.replace('[vl]', '[outv]')}"
+            # No usable font: big intro logo + persistent small logo, no vertical text.
+            filtergraph = (
+                f"[0:v]{subs}[v];"
+                f"{split_logo};"
+                f"[v][wmbig]overlay=x=24:y=26:{intro_enable}[pre];"
+                f"{persist_layer}"
+            )
         cmd = [
             (ffmpeg or "ffmpeg"), "-y", "-i", str(vertical), "-i", str(_WATERMARK_PATH),
             "-filter_complex", filtergraph, "-map", "[outv]", "-map", "0:a?",
