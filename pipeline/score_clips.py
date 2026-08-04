@@ -161,19 +161,18 @@ def score_clips(
     transcript = json.loads((ws / "transcript.json").read_text(encoding="utf-8"))
 
     provider = settings.resolved_scoring_provider()
-    if provider == "gemini":
-        # If Gemini is down (all models 503-overloaded on the free tier, a dead
-        # model, a transient network error), DON'T fail the whole job with 0
-        # clips - fall back to the deterministic heuristic scorer so the user
-        # still gets clips. The LLM gives better ranking, but "some good clips"
-        # beats "No clips found" every time.
+    if provider == "groq":
+        # If Groq is down (both keys rate-limited/429, a transient network error),
+        # DON'T fail the whole job with 0 clips - fall back to the deterministic
+        # heuristic scorer so the user still gets clips. The LLM gives better
+        # ranking, but "some good clips" beats "No clips found" every time.
         try:
-            result = _score_gemini(job_id, transcript, bias=bias)
+            result = _score_groq(job_id, transcript, bias=bias)
             if not result.get("candidates"):
-                print("  [score] Gemini returned 0 candidates; using heuristic fallback.")
+                print("  [score] Groq returned 0 candidates; using heuristic fallback.")
                 result = _score_mock(job_id, transcript)
         except Exception as e:  # noqa: BLE001
-            print(f"  [score] Gemini scoring failed ({str(e)[:120]}); using heuristic fallback.")
+            print(f"  [score] Groq scoring failed ({str(e)[:120]}); using heuristic fallback.")
             result = _score_mock(job_id, transcript)
     elif provider == "openai":
         try:
@@ -953,91 +952,79 @@ def _loads_llm_json(raw: str) -> dict[str, Any]:
     return {}
 
 
-# ── Real Gemini scorer (free tier) ───────────────────────────────────────────
+# ── Groq scorer (default: text LLM via OpenAI-compatible chat API) ────────────
 
-def _score_gemini(
+def _score_groq(
     job_id: str, transcript: dict[str, Any], *, bias: str = ""
 ) -> dict[str, Any]:
-    """Score with Google Gemini in JSON mode against the rubric file.
+    """Score with a Groq text LLM (llama-3.3-70b-versatile) in JSON mode.
 
-    Uses the new google-genai SDK. Builds the SAME prompt as ``_score_real``
-    (rubric as the system instruction + the compact transcript), asks for a JSON
-    response, parses it, and returns the same {job_id, model, candidates} shape.
-    ``bias`` is an optional GENRE/FOCUS instruction appended to the user prompt.
+    Groq exposes an OpenAI-compatible chat API, so we reuse the OpenAI SDK
+    pointed at GROQ_BASE_URL. Builds the SAME prompt as the other scorers (rubric
+    as the system message + the indexed sentence list), asks for a JSON object,
+    parses it (tolerant of the usual LLM JSON slips), and returns the standard
+    {job_id, model, candidates} shape. ``bias`` is an optional GENRE/FOCUS hint.
+
+    Resilience: on 429 (rate limit) or a transient 5xx, it RETRIES with backoff
+    and ROTATES to the second Groq key (GROQ_API_KEY_2) if one is configured -
+    so one throttled key never fails the job. A truly fatal error propagates to
+    the caller, which then falls back to the heuristic scorer.
     """
     import time
 
-    from google import genai  # lazy import; never needed in MOCK_MODE
+    from openai import OpenAI  # lazy import; never needed in MOCK_MODE
 
     settings = get_settings()
     rubric = _load_rubric()
-    # Index-based selection: feed an indexed SENTENCE list and get back sentence
-    # indices we resolve to exact times (no mid-sentence cuts, no hallucinated
-    # timestamps). Fall back to the old segment prompt only if reconstruction
-    # yields nothing (e.g. a wordless transcript).
     sentences = _reconstruct_sentences(transcript)
     user_payload = (
         _build_sentence_prompt(transcript, sentences) if sentences
         else _build_transcript_prompt(transcript)
     ) + bias
-    client = genai.Client(api_key=settings.gemini_api_key)
+    model = settings.scoring_model
 
-    config = {
-        "system_instruction": rubric,
-        "response_mime_type": "application/json",
-        "temperature": 0.4,
-    }
-
-    # The free tier returns transient 503 UNAVAILABLE ("high demand") and 429
-    # spikes. Retry with backoff, and fall back to lighter models that share a
-    # different capacity pool. The configured model is tried first.
-    # NOTE: do NOT list deprecated models here - e.g. "gemini-2.5-flash" now
-    # returns 404 NOT_FOUND ("no longer available to new users"), which used to
-    # kill the whole scorer (0 clips) when the ladder reached it. Current, live
-    # lite models only.
-    fallback_models = [
-        settings.gemini_model,
-        "gemini-2.5-flash-lite",
-        "gemini-flash-lite-latest",
-    ]
-    # De-dupe while preserving order.
-    models: list[str] = list(dict.fromkeys(fallback_models))
+    # Key rotation: primary first, then the optional second key. Each key gets a
+    # few retries for transient 429/5xx before we move to the next.
+    keys = [k for k in (settings.groq_api_key, settings.groq_api_key_2) if k]
+    if not keys:
+        raise RuntimeError("Groq scoring requested but no GROQ_API_KEY is set.")
 
     last_err: Exception | None = None
-    used_model = settings.gemini_model
-    resp = None
-    for model in models:
+    content: Optional[str] = None
+    for key_i, key in enumerate(keys):
+        client = OpenAI(api_key=key, base_url=settings.groq_base_url)
         for attempt in range(3):
             try:
-                resp = client.models.generate_content(
-                    model=model, contents=user_payload, config=config
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": rubric},
+                        {"role": "user", "content": user_payload},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.4,
                 )
-                used_model = model
+                content = resp.choices[0].message.content or "{}"
                 break
-            except Exception as e:  # noqa: BLE001 - inspect status to decide retry
+            except Exception as e:  # noqa: BLE001 - inspect to decide retry/rotate
                 last_err = e
-                msg = str(e)
-                # A dead/unknown model (404 NOT_FOUND) or permission (403) can't be
-                # retried - but it MUST NOT kill scoring: skip to the NEXT model in
-                # the ladder instead of raising. Only truly fatal-for-all-models
-                # errors (bad request/auth key) should abort.
-                model_gone = any(
-                    s in msg for s in ("404", "NOT_FOUND", "not found", "no longer available", "is not supported")
-                )
-                if model_gone:
-                    break  # try the next model in the ladder
-                transient = any(s in msg for s in ("503", "UNAVAILABLE", "429", "overloaded"))
+                msg = str(e).lower()
+                transient = any(s in msg for s in ("429", "rate limit", "503", "500", "502", "overloaded", "timeout", "unavailable"))
                 if not transient:
-                    raise
+                    # A non-transient error (bad model/auth) won't improve with a
+                    # retry on this key; try the next key, else give up.
+                    break
                 time.sleep(2 * (attempt + 1))  # 2s, 4s, 6s
-        if resp is not None:
+        if content is not None:
+            if key_i > 0:
+                print(f"  [score] Groq scoring succeeded on rotated key #{key_i + 1}.")
             break
-    if resp is None:
-        raise RuntimeError(
-            f"Gemini scoring failed after retries across {models}: {last_err}"
-        )
+        print(f"  [score] Groq key #{key_i + 1} exhausted ({str(last_err)[:80]}); rotating.")
 
-    parsed = _loads_llm_json(resp.text or "{}")
+    if content is None:
+        raise RuntimeError(f"Groq scoring failed across {len(keys)} key(s): {last_err}")
+
+    parsed = _loads_llm_json(content)
     candidates = parsed.get("candidates", [])
 
     # Resolve sentence indices → real word-level times (sentence-aligned, orphan
@@ -1045,7 +1032,7 @@ def _score_gemini(
     if sentences:
         candidates = _resolve_index_candidates(candidates, sentences)
     candidates = _enforce_length_bounds(candidates)
-    return {"job_id": job_id, "model": used_model, "candidates": candidates}
+    return {"job_id": job_id, "model": model, "candidates": candidates}
 
 
 def _main() -> None:

@@ -89,12 +89,14 @@ services:
       # Real auth by default now (Auth.js + Google). Set MOCK_AUTH=true in .env
       # to fall back to the injected dev org.
       MOCK_AUTH: ${MOCK_AUTH:-false}
-      # ── Pipeline AI keys (free CPU path) ──
+      # ── Pipeline AI keys (Groq only: Whisper transcribe + Llama scoring) ──
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      # Optional second Groq key: rotated to on 429/rate-limit for resilience.
+      GROQ_API_KEY_2: ${GROQ_API_KEY_2:-}
       GROQ_MODEL: ${GROQ_MODEL:-whisper-large-v3}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
-      SCORING_PROVIDER: ${SCORING_PROVIDER:-gemini}
+      GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
+      SCORING_PROVIDER: ${SCORING_PROVIDER:-groq}
+      SCORING_MODEL: ${SCORING_MODEL:-llama-3.3-70b-versatile}
       TRANSCRIBE_BACKEND: ${TRANSCRIBE_BACKEND:-groq}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # ── yt-dlp YouTube auth (bot-check fix) ──

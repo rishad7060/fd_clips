@@ -16,7 +16,6 @@ numpy>=1.26.0
 
 # Scoring
 openai>=1.30.0
-google-genai>=0.3.0
 
 # MVP ($0) path
 groq>=1.4.0            # free-tier whisper-large-v3 transcription (no GPU)

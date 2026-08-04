@@ -42,7 +42,6 @@ def _env(name: str, default: str = "") -> str:
 def _resolve_mock_mode(
     raw: str,
     openai_api_key: str,
-    gemini_api_key: str = "",
     scoring_provider: str = "auto",
     transcribe_backend: str = "auto",
     groq_api_key: str = "",
@@ -50,7 +49,7 @@ def _resolve_mock_mode(
     """Resolve the tri-state MOCK_MODE setting into a concrete bool.
 
     `auto` => real (not mocked) as soon as ANY real capability is configured:
-    a scoring key (Gemini or OpenAI), or an explicit non-mock backend choice.
+    a scoring key (Groq or OpenAI), or an explicit non-mock backend choice.
     Otherwise mock - the keyless local-dev default. `true`/`false` are explicit.
     """
     raw = (raw or "auto").strip().lower()
@@ -58,11 +57,13 @@ def _resolve_mock_mode(
         return True
     if raw in ("false", "0", "no", "off"):
         return False
-    # "auto": leave mock unless something real is configured.
-    has_scoring_key = bool(openai_api_key or gemini_api_key)
+    # "auto": leave mock unless something real is configured. Groq's key powers
+    # BOTH scoring (text LLM) and transcription (Whisper), so it counts as a
+    # scoring key too.
+    has_scoring_key = bool(openai_api_key or groq_api_key)
     has_transcribe_key = bool(groq_api_key)
     explicit_backend = transcribe_backend.lower() in ("groq", "whisperx", "faster-whisper")
-    explicit_provider = scoring_provider.lower() in ("gemini", "openai")
+    explicit_provider = scoring_provider.lower() in ("groq", "openai")
     real_configured = (
         has_scoring_key or has_transcribe_key or explicit_backend or explicit_provider
     )
@@ -82,14 +83,24 @@ class Settings(BaseModel):
     repo_root: Path = Field(..., description="Repository root directory")
     workspace_root: Path = Field(..., description="Root dir holding per-job artifact folders")
 
-    # ── Scoring (LLM brain - OpenAI or Gemini) ──────────────────────────
+    # ── Scoring (LLM brain - Groq text LLM, or OpenAI) ──────────────────
+    # Groq is the default: its OpenAI-compatible chat API runs a strong text LLM
+    # (llama-3.3-70b-versatile) for clip scoring. Uses the SAME GROQ_API_KEY as
+    # transcription; a second GROQ_API_KEY_2 lets us rotate when a key is rate-
+    # limited (429) or a model is momentarily unavailable.
     openai_api_key: str = Field("", description="OpenAI key; empty => no OpenAI scoring")
-    scoring_model: str = Field("gpt-4o-mini", description="OpenAI model for clip scoring")
-    gemini_api_key: str = Field("", description="Google AI Studio (Gemini) key; free tier")
-    gemini_model: str = Field("gemini-2.0-flash", description="Gemini model for clip scoring")
+    scoring_model: str = Field(
+        "llama-3.3-70b-versatile",
+        description="Groq text model for clip scoring (OpenAI-compatible chat API)",
+    )
+    groq_api_key_2: str = Field("", description="Second Groq key for rotation on 429/unavailable")
+    groq_base_url: str = Field(
+        "https://api.groq.com/openai/v1",
+        description="Groq OpenAI-compatible base URL (chat completions for scoring)",
+    )
     scoring_provider: str = Field(
         "auto",
-        description="auto | gemini | openai | mock. 'auto' => gemini if its key is set, "
+        description="auto | groq | openai | mock. 'auto' => groq if GROQ_API_KEY is set, "
         "else openai if its key is set, else mock heuristic.",
     )
 
@@ -143,24 +154,25 @@ class Settings(BaseModel):
         return path
 
     def resolved_scoring_provider(self) -> str:
-        """Resolve the scoring provider: 'gemini' | 'openai' | 'mock'.
+        """Resolve the scoring provider: 'groq' | 'openai' | 'mock'.
 
-        Explicit SCORING_PROVIDER wins. 'auto' prefers Gemini (free tier) when its
-        key is set, then OpenAI, else the deterministic mock heuristic. mock_mode
-        forces 'mock' regardless, so a fully-mocked run never calls a paid API.
+        Explicit SCORING_PROVIDER wins. 'auto' prefers Groq (its text LLM via the
+        OpenAI-compatible API) when GROQ_API_KEY is set, then OpenAI, else the
+        deterministic mock heuristic. mock_mode forces 'mock' so a fully-mocked
+        run never calls a paid API.
         """
         if self.mock_mode:
             return "mock"
         choice = (self.scoring_provider or "auto").lower()
-        if choice == "gemini":
-            return "gemini" if self.gemini_api_key else "mock"
+        if choice == "groq":
+            return "groq" if self.groq_api_key else "mock"
         if choice == "openai":
             return "openai" if self.openai_api_key else "mock"
         if choice == "mock":
             return "mock"
         # auto
-        if self.gemini_api_key:
-            return "gemini"
+        if self.groq_api_key:
+            return "groq"
         if self.openai_api_key:
             return "openai"
         return "mock"
@@ -201,7 +213,6 @@ class Settings(BaseModel):
 def get_settings() -> Settings:
     """Build the singleton Settings object from the current environment."""
     openai_api_key = _env("OPENAI_API_KEY")
-    gemini_api_key = _env("GEMINI_API_KEY")
     scoring_provider = (_env("SCORING_PROVIDER", "auto") or "auto").lower()
     transcribe_backend = (_env("TRANSCRIBE_BACKEND", "auto") or "auto").lower()
     groq_api_key = _env("GROQ_API_KEY")
@@ -213,18 +224,18 @@ def get_settings() -> Settings:
 
     return Settings(
         mock_mode=_resolve_mock_mode(
-            raw_mock, openai_api_key, gemini_api_key, scoring_provider,
+            raw_mock, openai_api_key, scoring_provider,
             transcribe_backend, groq_api_key,
         ),
         raw_mock_mode=raw_mock,  # type: ignore[arg-type]
         repo_root=REPO_ROOT,
         workspace_root=workspace_root,
         openai_api_key=openai_api_key,
-        scoring_model=_env("SCORING_MODEL", "gpt-4o-mini") or "gpt-4o-mini",
-        gemini_api_key=_env("GEMINI_API_KEY"),
-        gemini_model=_env("GEMINI_MODEL", "gemini-2.0-flash") or "gemini-2.0-flash",
+        scoring_model=_env("SCORING_MODEL", "llama-3.3-70b-versatile") or "llama-3.3-70b-versatile",
         scoring_provider=(_env("SCORING_PROVIDER", "auto") or "auto").lower(),
         groq_api_key=groq_api_key,
+        groq_api_key_2=_env("GROQ_API_KEY_2"),
+        groq_base_url=_env("GROQ_BASE_URL", "https://api.groq.com/openai/v1") or "https://api.groq.com/openai/v1",
         groq_model=_env("GROQ_MODEL", "whisper-large-v3") or "whisper-large-v3",
         huggingface_token=_env("HUGGINGFACE_TOKEN"),
         whisperx_model=_env("WHISPERX_MODEL", "large-v3") or "large-v3",
@@ -267,7 +278,7 @@ if __name__ == "__main__":
     print(f"  workspace_root    : {s.workspace_root}")
     print(f"  scoring_provider  : {s.scoring_provider} -> resolved={s.resolved_scoring_provider()}")
     print(f"  openai_api_key set: {bool(s.openai_api_key)}  (model {s.scoring_model})")
-    print(f"  gemini_api_key set: {bool(s.gemini_api_key)}  (model {s.gemini_model})")
+    print(f"  groq scoring key  : {bool(s.groq_api_key)} (2nd: {bool(s.groq_api_key_2)}) model {s.scoring_model}")
     print(f"  transcribe_backend: {s.transcribe_backend} -> resolved={s.resolved_transcribe_backend()}")
     print(f"  faster_whisper    : {s.faster_whisper_model}")
     print(f"  whisperx_model    : {s.whisperx_model}  device={s.whisperx_device}")
