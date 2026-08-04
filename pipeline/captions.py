@@ -859,6 +859,28 @@ def _escape_subtitles_path(path: Path) -> str:
 
 # ClipsHQ watermark logo (1024x1024 RGBA), burned into FREE-plan clips.
 _WATERMARK_PATH = Path(__file__).resolve().parent / "assets" / "watermark.png"
+# Text shown vertically beside the corner logo.
+_WATERMARK_TEXT = "clipshq.pro"
+
+# Candidate font files for the vertical watermark text (drawtext needs an
+# explicit fontfile - there's no fontconfig on Windows). Covers Windows (Arial),
+# Debian/Docker (DejaVu, which requires fonts-dejavu-core), and macOS.
+_WATERMARK_FONT_CANDIDATES = (
+    "C:/Windows/Fonts/arialbd.ttf",
+    "C:/Windows/Fonts/arial.ttf",
+    "C:/Windows/Fonts/segoeui.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+)
+
+
+def _resolve_watermark_font() -> Optional[str]:
+    """First existing font file from the candidates, or None (logo-only fallback)."""
+    for f in _WATERMARK_FONT_CANDIDATES:
+        if Path(f).is_file():
+            return f
+    return None
 
 
 def _burn_in(
@@ -884,15 +906,36 @@ def _burn_in(
 
     use_watermark = watermark and _WATERMARK_PATH.is_file()
     if use_watermark:
-        # Two inputs (clip + logo). Scale the logo to a modest ~180px width and
-        # ~70% opacity, then overlay it CENTERED at ~18% down - clear of the top
-        # hook caption but still prominent branding. It stays the whole clip.
-        # Captions are burned first (on the clip stream), then the logo overlaid.
-        filtergraph = (
-            f"[0:v]{subs}[v];"
-            "[1:v]scale=180:-1,format=rgba,colorchannelmixer=aa=0.70[wm];"
-            "[v][wm]overlay=x=(main_w-overlay_w)/2:y=main_h*0.18[outv]"
+        # TOP-LEFT vertical watermark (Opus-style, stays the whole clip):
+        #   - a small ClipsHQ logo tucked in the top-left corner, and
+        #   - "clipshq.pro" running VERTICALLY (reading bottom-to-top) below it.
+        # One ffmpeg pass after the caption burn:
+        #   [0:v] captions -> [v]
+        #   [1:v] logo scaled ~56px, overlaid top-left -> [vl]
+        #   a transparent strip + drawtext, rotated 270deg -> vertical text [vt]
+        #   overlay [vt] on the left edge -> [outv]
+        # drawtext needs an explicit fontfile (no fontconfig on Windows); we
+        # resolve a system font and, if none is found, drop to a LOGO-ONLY
+        # watermark so the render never fails over a missing font.
+        logo_layer = (
+            "[1:v]scale=56:-1,format=rgba,colorchannelmixer=aa=0.9[wm];"
+            "[v][wm]overlay=x=20:y=22[vl]"
         )
+        font = _resolve_watermark_font()
+        if font:
+            font_arg = _escape_subtitles_path(Path(font))  # escape the drive colon
+            filtergraph = (
+                f"[0:v]{subs}[v];"
+                f"{logo_layer};"
+                "color=black@0:size=300x44:d=1,format=rgba[bg];"
+                f"[bg]drawtext=fontfile='{font_arg}':text='{_WATERMARK_TEXT}':"
+                "fontcolor=white@0.85:fontsize=28:x=8:y=6,"
+                "rotate=3*PI/2:c=none:ow=44:oh=300[vt];"
+                "[vl][vt]overlay=x=16:y=86[outv]"
+            )
+        else:
+            # No usable font: logo-only corner watermark (still burns fine).
+            filtergraph = f"[0:v]{subs}[v];{logo_layer.replace('[vl]', '[outv]')}"
         cmd = [
             (ffmpeg or "ffmpeg"), "-y", "-i", str(vertical), "-i", str(_WATERMARK_PATH),
             "-filter_complex", filtergraph, "-map", "[outv]", "-map", "0:a?",

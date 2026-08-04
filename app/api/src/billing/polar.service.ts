@@ -211,14 +211,23 @@ export class PolarService {
       throw new BadRequestException('No active subscription to cancel.');
     }
 
+    // CANCEL = "won't renew", NOT "downgrade now". The user PAID for the current
+    // month, so they KEEP their paid plan (and no watermark) until the period
+    // ends. We mark the subscription CANCELLED (a will-not-renew flag) but leave
+    // org.plan on the paid tier. The actual downgrade to free happens later, when
+    // Polar fires subscription.revoked at period end (see dispatch()).
     if (this.config.flags.mockBilling) {
-      await this.store.setOrganizationSubscription(organizationId, null, 'CANCELLED');
-      const downgraded = await this.store.setOrganizationPlan(organizationId, 'free');
-      return { ok: true, plan: downgraded.plan };
+      // Mock: no real Polar period, so record CANCELLED but keep the paid plan.
+      // (No webhook will ever revoke locally; the user keeps paid access, which
+      // is the correct "paid through the month" behavior for offline testing.)
+      await this.store.setOrganizationSubscription(
+        organizationId, org.subscriptionId, 'CANCELLED',
+      );
+      return { ok: true, plan: org.plan };
     }
 
     // Best-effort: tell Polar to cancel at period end. Wrapped in try/catch so a
-    // stale/checkout-id or transient failure still lets us reflect the cancel.
+    // stale sub id or transient failure still lets us reflect the cancel intent.
     const subId = org.subscriptionId;
     const token = this.requireToken();
     try {
@@ -229,10 +238,13 @@ export class PolarService {
     } catch (err) {
       this.logger.warn(`Polar cancel call failed for ${subId}: ${(err as Error).message}`);
     }
-    // Reflect the cancellation locally now (see method doc) - mark CANCELLED and
-    // downgrade to Free so the UI updates without depending on a webhook.
-    await this.downgradeToFree(organizationId, 'CANCELLED');
-    return { ok: true, plan: 'free' };
+    // Record CANCELLED (won't renew) but KEEP the paid plan until Polar's
+    // subscription.revoked webhook fires at period end and downgrades to free.
+    await this.store.setOrganizationSubscription(organizationId, subId, 'CANCELLED');
+    this.logger.log(
+      `Org ${organizationId} canceled ${org.plan} (won't renew); paid access kept until period end.`,
+    );
+    return { ok: true, plan: org.plan };
   }
 
   /**
@@ -285,27 +297,49 @@ export class PolarService {
         const subId: string | undefined = data.id;
         if (!parsed || !subId) return `${type}: missing org/tier/id; ignored`;
         const status = (data.status as string) ?? '';
-        if (status === 'active') {
+        // If the user has flagged cancel-at-period-end, the sub is still "active"
+        // but must NOT be re-activated (that would re-grant + wipe CANCELLED).
+        // Keep the paid plan, record CANCELLED, and wait for revoked at period end.
+        const willNotRenew =
+          data.cancel_at_period_end === true || data.cancelAtPeriodEnd === true;
+        if (status === 'active' && !willNotRenew) {
           await this.activate(parsed.orgId, parsed.tier, subId, `polar-sub:${subId}:active`, {
             period: parsed.period,
             quantity: parsed.quantity,
           });
           return `Activated ${parsed.tier} subscription for org ${parsed.orgId}`;
         }
-        // Non-active updates (e.g. canceled flag set) just record the id.
+        if (status === 'active' && willNotRenew) {
+          await this.store.setOrganizationSubscription(parsed.orgId, subId, 'CANCELLED');
+          return `Org ${parsed.orgId} set to CANCELLED (won't renew; paid access kept)`;
+        }
+        // Non-active updates just record the mapped status.
         await this.store.setOrganizationSubscription(parsed.orgId, subId, this.mapStatus(status));
         return `Recorded subscription ${subId} status=${status} for org ${parsed.orgId}`;
       }
 
-      case 'subscription.canceled':
+      // subscription.canceled = the user asked to cancel = "won't renew". Polar
+      // still keeps the sub ACTIVE until period end, so we DO NOT downgrade here -
+      // just record CANCELLED so they keep paid access (no watermark) for the
+      // rest of the month they paid for.
+      case 'subscription.canceled': {
+        const subId: string | undefined = data.id;
+        if (!subId) return `${type}: no subscription id; ignored`;
+        const org = await this.store.getOrganizationBySubscriptionId(subId);
+        if (!org) return `${type}: unknown subscription ${subId}; ignored`;
+        await this.store.setOrganizationSubscription(org.id, subId, 'CANCELLED');
+        return `Marked org ${org.id} CANCELLED (won't renew; paid access kept to period end)`;
+      }
+
+      // subscription.revoked = the paid period ACTUALLY ended. NOW downgrade to
+      // free (watermark returns on future clips). This is the real end of access.
       case 'subscription.revoked': {
         const subId: string | undefined = data.id;
         if (!subId) return `${type}: no subscription id; ignored`;
         const org = await this.store.getOrganizationBySubscriptionId(subId);
         if (!org) return `${type}: unknown subscription ${subId}; ignored`;
-        const status: SubscriptionStatus = type === 'subscription.revoked' ? 'EXPIRED' : 'CANCELLED';
-        await this.downgradeToFree(org.id, status);
-        return `Downgraded org ${org.id} to free (${status})`;
+        await this.downgradeToFree(org.id, 'EXPIRED');
+        return `Downgraded org ${org.id} to free (period ended / EXPIRED)`;
       }
 
       default:

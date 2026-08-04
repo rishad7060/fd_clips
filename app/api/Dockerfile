@@ -53,9 +53,13 @@ RUN apt-get update && \
         libgles2 \
         libsm6 \
         libxext6 \
-        libxrender1 && \
-    # unzip - needed to unpack the Deno release archive installed below.
-    unzip \
+        libxrender1 \
+        # DejaVu font: the watermark's vertical "clipshq.pro" text is drawn with
+        # ffmpeg drawtext, which needs a real font file (captions.py looks for
+        # DejaVuSans here). Without it the watermark falls back to logo-only.
+        fonts-dejavu-core \
+        # unzip - needed to unpack the Deno release archive installed below.
+        unzip \
         curl && \
     # Symlink python → python3 so existing code that calls 'python' (e.g.
     # real-pipeline.worker.ts const PYTHON_BIN = 'python') works unchanged.
