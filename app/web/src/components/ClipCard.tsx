@@ -18,6 +18,19 @@ import { downloadFile } from "@/lib/download";
  * nested interactive controls - thumbs, the play overlay - which can't be
  * nested inside a button). Play/pause is driven by an explicit overlay button.
  */
+
+/**
+ * Shared style for the small clip-action icon buttons (copy / download / edit).
+ * Polished per the design system: a hairline chip that lifts + brightens on
+ * hover, presses on click (active:scale-95), and shows a focus-visible ring.
+ * 32px target (a11y floor), consistent stroke-1.8 icons.
+ */
+const ICON_BTN =
+  "grid h-8 w-8 place-items-center rounded-lg text-ink-300 ring-1 ring-transparent " +
+  "transition duration-200 ease-premium hover:-translate-y-px hover:bg-ink-800 " +
+  "hover:text-white hover:ring-white/10 active:scale-95 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60";
+
 export function ClipCard({ clip, recommended = false }: { clip: Clip; recommended?: boolean }) {
   const duration = clip.end - clip.start;
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -248,22 +261,22 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
       {/* Score + actions row - compact for the dense grid */}
       <div className="mt-2 flex items-center justify-between">
         <span
-          className={`font-mono text-xl font-semibold leading-none tabular-nums ${scoreTextColor(clip.virality_score)}`}
+          className={`font-mono text-xl font-semibold leading-none tabular-nums ${scoreTextColor(clip.virality_score)} ${
+            clip.virality_score >= 85 ? "[text-shadow:0_0_12px_rgba(251,191,36,0.45)]" : ""
+          }`}
           aria-label={`Virality score ${clip.virality_score} out of 100`}
           title={`Virality score ${clip.virality_score}/100`}
         >
           {clip.virality_score}
         </span>
-        <div className="flex items-center gap-0.5 text-ink-300">
+        <div className="flex items-center gap-1 text-ink-300">
           {hasVideo && (
             <button
               type="button"
               onClick={copyLink}
               title={copied ? "Copied!" : "Copy link"}
               aria-label={copied ? "Link copied" : "Copy clip link"}
-              className={`grid h-7 w-7 place-items-center rounded-lg transition hover:bg-ink-800 hover:text-white ${
-                copied ? "text-brand-300" : ""
-              }`}
+              className={`${ICON_BTN} ${copied ? "!bg-success/15 !text-success ring-success/30" : ""}`}
             >
               {copied ? (
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -283,7 +296,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
               onClick={() => void downloadFile(clip.final_url, safeName)}
               title="Download"
               aria-label="Download clip"
-              className="grid h-7 w-7 place-items-center rounded-lg transition hover:bg-ink-800 hover:text-white"
+              className={`${ICON_BTN} hover:!bg-brand/15 hover:!text-brand-300 hover:ring-brand/30`}
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
@@ -293,7 +306,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
             <span
               title="Download unavailable"
               aria-label="Download unavailable"
-              className="grid h-7 w-7 cursor-not-allowed place-items-center rounded-lg text-ink-500"
+              className="grid h-8 w-8 cursor-not-allowed place-items-center rounded-lg text-ink-600"
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
@@ -304,7 +317,7 @@ export function ClipCard({ clip, recommended = false }: { clip: Clip; recommende
             href={`/jobs/${clip.job_id}/clips/${clip.rank}`}
             title="Edit (trim / captions)"
             aria-label="Edit clip"
-            className="grid h-7 w-7 place-items-center rounded-lg transition hover:bg-ink-800 hover:text-white"
+            className={ICON_BTN}
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" />

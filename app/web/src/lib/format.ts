@@ -29,18 +29,22 @@ export function formatRelative(iso: string): string {
   return `${days}d ago`;
 }
 
-/** Tailwind color band for a virality score badge. */
+/** Tailwind color band for a virality score badge (chip form). Only the top
+ * clips (85+) get the premium GOLD band; strong clips are green, the rest are a
+ * neutral slate so gold reads as "exceptional", not "everything". */
 export function scoreColor(score: number): string {
-  if (score >= 85) return "bg-emerald-500/20 text-emerald-300 ring-emerald-500/40";
-  if (score >= 70) return "bg-amber-500/20 text-amber-300 ring-amber-500/40";
-  return "bg-sky-500/20 text-sky-300 ring-sky-500/40";
+  if (score >= 85) return "bg-amber-400/15 text-amber-300 ring-amber-400/40";
+  if (score >= 70) return "bg-emerald-500/15 text-emerald-300 ring-emerald-500/40";
+  return "bg-white/5 text-ink-200 ring-white/10";
 }
 
-/** Text-only colour for the big virality number (Opus-style bright green=high).
- * Green threshold (80) matches the gallery's "Recommended" cutoff so a
- * recommended clip always shows the bright-green winning score. */
+/** Text-only colour for the big virality number on a clip card.
+ * GOLD is reserved for exceptional clips (85+) - matching Opus, where only the
+ * very best score glows gold. 70-84 = green (strong), 50-69 = white (fine),
+ * below 50 = muted. This is the fix for "66 was showing gold". */
 export function scoreTextColor(score: number): string {
-  if (score >= 80) return "text-green-400";
-  if (score >= 65) return "text-amber-400";
-  return "text-sky-400";
+  if (score >= 85) return "text-amber-300";   // gold - exceptional
+  if (score >= 70) return "text-emerald-400";  // green - strong
+  if (score >= 50) return "text-white";        // neutral - fine
+  return "text-ink-400";                       // muted - weak
 }

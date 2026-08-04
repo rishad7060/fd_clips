@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CaptionLine, Clip } from "@/lib/types";
 import { api } from "@/lib/api";
+import { downloadFile } from "@/lib/download";
 import { STYLE_TEMPLATES } from "@/lib/templates";
 import { CaptionSwatch } from "@/components/config/CaptionSwatch";
 import { formatTimecode } from "@/lib/format";
@@ -340,9 +341,9 @@ export function InlineClipEditor({ clip }: { clip: Clip }) {
           Reset edits
         </Button>
         {hasVideo && (
-          <a href={clip.final_url} download={safeName}>
-            <Button variant="secondary">Download current render</Button>
-          </a>
+          <Button variant="secondary" onClick={() => void downloadFile(clip.final_url, safeName)}>
+            Download current render
+          </Button>
         )}
         <Button variant="ghost" onClick={() => router.push(`/jobs/${clip.job_id}/clips`)}>
           Done
