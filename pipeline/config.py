@@ -235,7 +235,10 @@ def get_settings() -> Settings:
         scoring_provider=(_env("SCORING_PROVIDER", "auto") or "auto").lower(),
         groq_api_key=groq_api_key,
         groq_api_key_2=_env("GROQ_API_KEY_2"),
-        groq_base_url=_env("GROQ_BASE_URL", "https://api.groq.com/openai/v1") or "https://api.groq.com/openai/v1",
+        # Hardcoded (NOT read from GROQ_BASE_URL env): the Groq transcription SDK
+        # ALSO reads GROQ_BASE_URL and would double the path to /openai/v1/openai/v1.
+        # So the scoring base URL is a fixed constant, and GROQ_BASE_URL is never set.
+        groq_base_url="https://api.groq.com/openai/v1",
         groq_model=_env("GROQ_MODEL", "whisper-large-v3") or "whisper-large-v3",
         huggingface_token=_env("HUGGINGFACE_TOKEN"),
         whisperx_model=_env("WHISPERX_MODEL", "large-v3") or "large-v3",

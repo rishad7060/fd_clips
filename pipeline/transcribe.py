@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import subprocess
 import time
 from pathlib import Path
@@ -184,10 +185,16 @@ def _transcribe_real(job_id: str, source_path: Path) -> dict[str, Any]:
     }
 
 
-# Groq's audio API rejects uploads above ~25MB and wants audio, not video.
-# A mono 16kHz mp3 is tiny (~1MB/min) and is exactly what whisper-large-v3
-# consumes, so even hour-long talking-head videos stay comfortably under the cap.
-_GROQ_MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # ~25 MB Groq free/standard upload limit
+# Groq's audio API rejects large uploads. Its free tier is the tightest and has
+# been seen to 413 ("request_too_large") on files well under a nominal 25MB (the
+# multipart request overhead + a lower real cap), so we chunk conservatively: any
+# audio over ~18MB OR longer than ~15 min is split into time-based chunks,
+# transcribed separately, and merged with time offsets. A mono 16kHz 64kbps mp3
+# is ~0.5MB/min, so an 18MB threshold is ~35 min - we also cap by DURATION so a
+# long low-bitrate file still chunks.
+_GROQ_MAX_UPLOAD_BYTES = 18 * 1024 * 1024  # conservative Groq upload ceiling
+_GROQ_CHUNK_SECONDS = 600                  # 10-min chunks (comfortably small)
+_GROQ_CHUNK_OVER_SECONDS = 15 * 60         # chunk anything longer than 15 min
 _GROQ_RETRY_BACKOFFS = (2, 4, 8)  # seconds; 3 tries total on 429 / rate-limit errors
 
 
@@ -214,6 +221,122 @@ def _extract_audio_for_groq(source_path: Path, out_path: Path) -> Path:
     return out_path
 
 
+def _probe_audio_duration(audio_path: Path) -> float:
+    """Duration (seconds) of an audio file via ffprobe; 0.0 if it can't be read."""
+    try:
+        settings = get_settings()
+        ffprobe = _resolve_tool(settings.ffprobe_path, "ffprobe") or "ffprobe"
+        out = subprocess.check_output(
+            [ffprobe, "-v", "quiet", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(audio_path)],
+            text=True,
+        )
+        return float(out.strip())
+    except (subprocess.CalledProcessError, ValueError, OSError):
+        return 0.0
+
+
+def _extract_audio_chunk(
+    source_path: Path, out_path: Path, start: float, dur: float
+) -> Path:
+    """Extract a mono 16kHz 64kbps mp3 slice [start, start+dur] for Groq."""
+    ffmpeg = _ffmpeg_bin()
+    cmd = [
+        ffmpeg, "-y", "-ss", f"{start:.3f}", "-t", f"{dur:.3f}",
+        "-i", str(source_path),
+        "-vn", "-ac", "1", "-ar", "16000", "-c:a", "libmp3lame", "-b:a", "64k",
+        str(out_path),
+    ]
+    subprocess.run(cmd, check=True)
+    return out_path
+
+
+def _groq_transcribe_file(client: Any, audio_path: Path, model: str) -> Any:
+    """POST one audio file to Groq (verbose_json, word+segment ts), retrying on
+    429 rate limits with backoff. Raises on non-retryable errors / exhaustion."""
+    for _attempt, backoff in enumerate((*_GROQ_RETRY_BACKOFFS, None)):
+        try:
+            with audio_path.open("rb") as fh:
+                return client.audio.transcriptions.create(
+                    file=(audio_path.name, fh.read()),
+                    model=model,
+                    response_format="verbose_json",
+                    timestamp_granularities=["word", "segment"],
+                )
+        except Exception as exc:  # noqa: BLE001 - narrow to rate limits
+            if not _is_rate_limit_error(exc) or backoff is None:
+                if _is_rate_limit_error(exc):
+                    raise RuntimeError(
+                        "Groq rate limit hit and retries exhausted "
+                        f"({len(_GROQ_RETRY_BACKOFFS) + 1} attempts). Free daily "
+                        "quota may be spent - queue jobs (fd_clips_v2.md Part 2)."
+                    ) from exc
+                raise
+            time.sleep(backoff)
+    return None  # pragma: no cover - defensive
+
+
+def _transcribe_groq_chunked(
+    job_id: str,
+    source_path: Path,
+    audio_path: Path,
+    duration: float,
+    client: Any,
+    settings: Any,
+) -> dict[str, Any]:
+    """Transcribe a long source by splitting the audio into fixed-length chunks,
+    transcribing each, and merging segments/words with per-chunk time offsets.
+
+    Each chunk's Groq response has chunk-relative timestamps; we add the chunk's
+    absolute start time so the merged transcript is on the ORIGINAL timeline
+    (score/extract/reframe all depend on absolute times).
+    """
+    ws = settings.workspace(job_id)
+    chunk_len = float(_GROQ_CHUNK_SECONDS)
+    n_chunks = max(1, math.ceil(duration / chunk_len))
+    merged_words: list[dict[str, Any]] = []
+    merged_segments: list[dict[str, Any]] = []
+    language = "en"
+
+    for i in range(n_chunks):
+        start = i * chunk_len
+        dur = min(chunk_len, duration - start)
+        if dur <= 0.1:
+            break
+        chunk_path = ws / f"audio_chunk_{i:03d}.mp3"
+        _extract_audio_chunk(source_path, chunk_path, start, dur)
+        print(f"  [transcribe] chunk {i + 1}/{n_chunks} ({start / 60:.1f}-{(start + dur) / 60:.1f}min)…")
+        result = _groq_transcribe_file(client, chunk_path, settings.groq_model)
+        # Map to our shape (chunk-relative), then OFFSET onto the absolute timeline.
+        part = _map_groq_response(job_id, result, source_path)
+        language = part.get("language") or language
+        for seg in part.get("segments", []):
+            seg["start"] = float(seg.get("start", 0.0)) + start
+            seg["end"] = float(seg.get("end", 0.0)) + start
+            for w in seg.get("words", []):
+                w["start"] = float(w.get("start", 0.0)) + start
+                w["end"] = float(w.get("end", 0.0)) + start
+            merged_segments.append(seg)
+        # Clean up the chunk file to save disk on long videos.
+        try:
+            chunk_path.unlink()
+        except OSError:
+            pass
+
+    # Rebuild the flat word list from the (offset) segment words for consistency.
+    for seg in merged_segments:
+        merged_words.extend(seg.get("words", []))
+
+    return {
+        "job_id": job_id,
+        "language": language,
+        "duration": duration,
+        "source": str(source_path),
+        "segments": merged_segments,
+        "words": merged_words,
+    }
+
+
 def _transcribe_groq(job_id: str, source_path: Path) -> dict[str, Any]:
     """Transcribe via Groq's hosted whisper-large-v3 - the v2 $0 MVP default.
 
@@ -237,48 +360,26 @@ def _transcribe_groq(job_id: str, source_path: Path) -> dict[str, Any]:
     # 1. Extract a small audio file (video is rejected / too large otherwise).
     audio_path = _extract_audio_for_groq(source_path, ws / "audio.mp3")
     size = audio_path.stat().st_size
-    if size > _GROQ_MAX_UPLOAD_BYTES:
-        # PHASE 2: for very long sources, chunk the audio into <25MB segments,
-        # transcribe each, and merge with time offsets (mirrors the WhisperX
-        # 20-min-chunk strategy). MVP scope is short talking-head videos, so a
-        # clear error is sufficient here.
-        raise RuntimeError(
-            f"audio.mp3 is {size / 1_048_576:.1f}MB, over Groq's "
-            f"~{_GROQ_MAX_UPLOAD_BYTES // 1_048_576}MB limit - chunking is a "
-            "Phase-2 upgrade (see fd_clips_v2.md Part 2)."
+    duration = _probe_audio_duration(audio_path)
+
+    # Pin the Groq SDK base URL explicitly. The SDK otherwise READS GROQ_BASE_URL
+    # from the env - and if that's set to ".../openai/v1" (for the OpenAI-compatible
+    # SCORING client) the SDK doubles it to ".../openai/v1/openai/v1/..." → 404.
+    # The transcription API lives under the SDK's own default path from the root.
+    client = Groq(api_key=settings.groq_api_key, base_url="https://api.groq.com")
+
+    # 1b. Long / large audio: CHUNK it. Groq's endpoint 413s on big uploads (a
+    # 26-min mp3 is enough), so split into ~10-min pieces, transcribe each, and
+    # merge with time offsets. Short files take the single-shot path below.
+    if size > _GROQ_MAX_UPLOAD_BYTES or duration > _GROQ_CHUNK_OVER_SECONDS:
+        print(
+            f"  [transcribe] audio is {size / 1_048_576:.1f}MB / {duration / 60:.1f}min "
+            f"- chunking into {_GROQ_CHUNK_SECONDS // 60}-min pieces for Groq."
         )
+        return _transcribe_groq_chunked(job_id, source_path, audio_path, duration, client, settings)
 
-    client = Groq(api_key=settings.groq_api_key)
-
-    # 2. Call Groq with word + segment granularities, retrying on rate limits.
-    #
-    # PHASE 2: the production approach is to QUEUE jobs (BullMQ) so we never burst
-    # past Groq's free daily quota - backoff only covers transient 429s within a
-    # single job. See fd_clips_v2.md Part 2 caveat ("queue jobs to stay inside it").
-    result: Any = None
-    last_exc: Optional[BaseException] = None
-    for attempt, backoff in enumerate((*_GROQ_RETRY_BACKOFFS, None)):
-        try:
-            with audio_path.open("rb") as fh:
-                result = client.audio.transcriptions.create(
-                    file=(audio_path.name, fh.read()),
-                    model=settings.groq_model,
-                    response_format="verbose_json",
-                    timestamp_granularities=["word", "segment"],
-                )
-            break
-        except Exception as exc:  # noqa: BLE001 - narrow to rate limits below
-            if not _is_rate_limit_error(exc) or backoff is None:
-                # Non-retryable, or we've exhausted the retry budget.
-                if _is_rate_limit_error(exc):
-                    raise RuntimeError(
-                        "Groq rate limit hit and retries exhausted "
-                        f"({len(_GROQ_RETRY_BACKOFFS) + 1} attempts). Free daily "
-                        "quota may be spent - queue jobs (fd_clips_v2.md Part 2)."
-                    ) from exc
-                raise
-            last_exc = exc
-            time.sleep(backoff)
+    # 2. Single-shot transcription (short file). Retries on rate limits inside.
+    result = _groq_transcribe_file(client, audio_path, settings.groq_model)
     if result is None:  # pragma: no cover - defensive
         raise RuntimeError("Groq transcription failed") from last_exc
 

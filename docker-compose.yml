@@ -94,7 +94,6 @@ services:
       # Optional second Groq key: rotated to on 429/rate-limit for resilience.
       GROQ_API_KEY_2: ${GROQ_API_KEY_2:-}
       GROQ_MODEL: ${GROQ_MODEL:-whisper-large-v3}
-      GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
       SCORING_PROVIDER: ${SCORING_PROVIDER:-groq}
       SCORING_MODEL: ${SCORING_MODEL:-llama-3.3-70b-versatile}
       TRANSCRIBE_BACKEND: ${TRANSCRIBE_BACKEND:-groq}

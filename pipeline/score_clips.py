@@ -768,10 +768,35 @@ def _indices_to_clip(
     return sentences[start_idx].start, sentences[end_idx].end, text
 
 
+# Max sentences to send to the scoring LLM in one request. Groq's free tier caps
+# a single request's tokens (a ~26-min video's 300+ sentences = ~10k tokens →
+# 413 "request too large"). ~180 sentences (~6k tokens) stays under the cap while
+# still covering long videos - we evenly SAMPLE across the whole timeline (their
+# real indices are preserved, so index→time resolution still works). The heuristic
+# scorer remains the fallback if even this trips a limit.
+_MAX_SCORING_SENTENCES = 180
+
+
+def _cap_sentences(sentences: list["_Sentence"]) -> list["_Sentence"]:
+    """Evenly sample sentences down to the LLM request budget (preserves order +
+    real indices). Short videos pass through unchanged."""
+    n = len(sentences)
+    if n <= _MAX_SCORING_SENTENCES:
+        return sentences
+    step = n / _MAX_SCORING_SENTENCES
+    picked = [sentences[int(i * step)] for i in range(_MAX_SCORING_SENTENCES)]
+    print(
+        f"  [score] long transcript ({n} sentences) - sampling {len(picked)} "
+        "evenly across the video to fit the LLM request budget."
+    )
+    return picked
+
+
 def _build_sentence_prompt(
     transcript: dict[str, Any], sentences: list["_Sentence"],
 ) -> str:
     """Indexed sentence list for the LLM (returns indices, not timestamps)."""
+    sentences = _cap_sentences(sentences)
     lines = [
         f"[{s.idx}] ({s.start:.1f}-{s.end:.1f}s) {s.text}"
         for s in sentences
