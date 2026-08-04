@@ -94,6 +94,11 @@ export interface MockWorkerDeps {
   onFailure: (organizationId: string, jobId: string, creditsCharged: number) => Promise<void>;
   /** Delay between stage ticks (ms). Small so local runs finish quickly. */
   stepDelayMs?: number;
+  /** Optional mailer: sends the "clips ready" / "job failed" emails (no-op if unset). */
+  mail?: {
+    sendClipsReady: (args: { to: string | null | undefined; clipsCount: number; jobId: string; expiresAt?: string | null }) => Promise<boolean>;
+    sendJobFailed: (args: { to: string | null | undefined; jobId: string; reason?: string | null }) => Promise<boolean>;
+  };
 }
 
 /**
@@ -177,6 +182,7 @@ export class MockWorker {
       await store.updateJob(orgId, jobId, { status: 'completed', stage: 'done', progress: 100 });
       this.emit(payload, 'completed', 'done', 100, `${clipsReady} clips ready`, clipsReady);
       this.logger.log(`Mock job ${jobId} completed with ${clipsReady} clips.`);
+      await this.sendReadyEmail(payload, clipsReady);
     } catch (err) {
       const message = (err as Error).message;
       await store.updateJob(orgId, jobId, { status: 'failed', stage: 'ingest', progress: 0, error: message });
@@ -186,6 +192,48 @@ export class MockWorker {
         await this.deps.onFailure(orgId, jobId, job.creditsCharged);
       }
       this.logger.error(`Mock job ${jobId} failed: ${message}`);
+      await this.sendFailureEmail(payload, message);
+    }
+  }
+
+  /** "Clips ready" email, mirroring RealPipelineWorker's wiring (best-effort). */
+  private async sendReadyEmail(payload: JobQueuePayload, clipsReady: number): Promise<void> {
+    if (!this.deps.mail || clipsReady <= 0) return;
+    const to = payload.email ?? null;
+    if (!to) {
+      this.logger.warn(
+        `email: no recipient for job ${payload.job_id} - clips-ready email NOT sent ` +
+          `(payload.email was empty; the account email wasn't captured at submit time).`,
+      );
+      return;
+    }
+    try {
+      const sent = await this.deps.mail.sendClipsReady({ to, clipsCount: clipsReady, jobId: payload.job_id });
+      if (sent) this.logger.log(`email: sent clips-ready email to ${to} for job ${payload.job_id}.`);
+    } catch (err) {
+      this.logger.warn(`email: SMTP send failed for clips-ready email (${payload.job_id}): ${(err as Error).message}`);
+    }
+  }
+
+  /** "Job failed" email, mirroring RealPipelineWorker's wiring (best-effort). */
+  private async sendFailureEmail(payload: JobQueuePayload, reason: string): Promise<void> {
+    if (!this.deps.mail) {
+      this.logger.warn(`email: mail service not injected - job-failed email skipped for ${payload.job_id}.`);
+      return;
+    }
+    const to = payload.email ?? null;
+    if (!to) {
+      this.logger.warn(
+        `email: no recipient for job ${payload.job_id} - job-failed email NOT sent ` +
+          `(payload.email was empty; the account email wasn't captured at submit time).`,
+      );
+      return;
+    }
+    try {
+      const sent = await this.deps.mail.sendJobFailed({ to, jobId: payload.job_id, reason });
+      if (sent) this.logger.log(`email: sent job-failed email to ${to} for job ${payload.job_id}.`);
+    } catch (err) {
+      this.logger.warn(`email: SMTP send failed for job-failed email (${payload.job_id}): ${(err as Error).message}`);
     }
   }
 }

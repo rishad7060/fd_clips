@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, templateById } from "@/lib/templates";
 import type { AspectRatio, ClipLength, ClipStyle, CreateJobInput, Genre } from "@/lib/types";
-import { DEV_USER } from "@/lib/auth";
+import { AUTH_ENABLED, DEV_USER } from "@/lib/auth";
 import { ConfigPanel } from "@/components/config/ConfigPanel";
 import { CaptionPresets } from "@/components/config/CaptionPresets";
 import { MyTemplates, type SavedConfig } from "@/components/config/MyTemplates";
@@ -36,13 +37,27 @@ export function ClipBuilder({
   initialUrl?: string;
 }) {
   const router = useRouter();
+  // AUTH_ENABLED is false → SessionProvider isn't mounted in the tree, so
+  // useSession() would throw. Only call it when real auth is on.
+  const session = AUTH_ENABLED ? useSession().data : null;
   const [url, setUrl] = useState(initialUrl);
   const [fileName, setFileName] = useState<string | null>(null);
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [email, setEmail] = useState(DEV_USER.email);
+  // Delivery email: default to the signed-in account's real email (so "clips
+  // ready" notifications land in the right inbox without the user having to
+  // retype it). DEV_USER.email is only a placeholder for the no-auth/mock
+  // dev mode - it must NEVER be sent for a real signed-in user. Track whether
+  // the user manually edited the field so we don't clobber their typing once
+  // the session email resolves asynchronously after mount.
+  const sessionEmail = session?.user?.email ?? null;
+  const [email, setEmail] = useState(sessionEmail ?? (AUTH_ENABLED ? "" : DEV_USER.email));
+  const [emailTouched, setEmailTouched] = useState(false);
+  useEffect(() => {
+    if (!emailTouched && sessionEmail) setEmail(sessionEmail);
+  }, [sessionEmail, emailTouched]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedDefault, setSavedDefault] = useState(false);
@@ -310,7 +325,10 @@ export function ClipBuilder({
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmailTouched(true);
+                setEmail(e.target.value);
+              }}
               placeholder="you@example.com"
               className="mt-2.5 w-full rounded-xl border border-white/10 bg-ink-950 px-3 py-2.5 text-sm text-white transition placeholder:text-ink-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand/40"
             />

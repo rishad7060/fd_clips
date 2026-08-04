@@ -73,7 +73,7 @@ import { JobQueue, JobWorker, JOB_QUEUE } from './queue.types';
         };
         const worker: JobWorker = config.flags.useRealPipeline
           ? new RealPipelineWorker({ store, bus, onFailure, onIngestDuration, mail })
-          : new MockWorker({ store, bus, onFailure });
+          : new MockWorker({ store, bus, onFailure, mail });
         logger.log(
           `In-memory queue using ${config.flags.useRealPipeline ? 'RealPipelineWorker' : 'MockWorker'}.`,
         );

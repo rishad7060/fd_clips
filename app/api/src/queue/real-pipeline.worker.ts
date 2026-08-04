@@ -78,8 +78,11 @@ export interface RealPipelineWorkerDeps {
   repoRoot?: string;
   /** Python executable on PATH (defaults to 'python'). */
   pythonBin?: string;
-  /** Optional mailer: sends the "clips ready" email on completion (no-op if unset). */
-  mail?: { sendClipsReady: (args: { to: string | null | undefined; clipsCount: number; jobId: string; expiresAt?: string | null }) => Promise<boolean> };
+  /** Optional mailer: sends the "clips ready" / "job failed" emails (no-op if unset). */
+  mail?: {
+    sendClipsReady: (args: { to: string | null | undefined; clipsCount: number; jobId: string; expiresAt?: string | null }) => Promise<boolean>;
+    sendJobFailed: (args: { to: string | null | undefined; jobId: string; reason?: string | null }) => Promise<boolean>;
+  };
 }
 
 /**
@@ -175,6 +178,35 @@ export class RealPipelineWorker implements JobWorker {
         await this.deps.onFailure(orgId, jobId, job.creditsCharged);
       }
       this.logger.error(`Real pipeline job ${jobId} failed: ${message}`);
+      await this.sendFailureEmail(payload, message);
+    }
+  }
+
+  /**
+   * "Your job failed" email (best-effort; never throws - a mail error must not
+   * mask the real job failure). Logs at every decision point so a "no email
+   * arrived" report is diagnosable from the server logs alone.
+   */
+  private async sendFailureEmail(payload: JobQueuePayload, reason: string): Promise<void> {
+    if (!this.deps.mail) {
+      this.logger.warn(`email: mail service not injected - job-failed email skipped for ${payload.job_id}.`);
+      return;
+    }
+    const to = payload.email ?? null;
+    if (!to) {
+      this.logger.warn(
+        `email: no recipient for job ${payload.job_id} - job-failed email NOT sent ` +
+          `(payload.email was empty; the account email wasn't captured at submit time).`,
+      );
+      return;
+    }
+    try {
+      const sent = await this.deps.mail.sendJobFailed({ to, jobId: payload.job_id, reason });
+      if (sent) {
+        this.logger.log(`email: sent job-failed email to ${to} for job ${payload.job_id}.`);
+      }
+    } catch (err) {
+      this.logger.warn(`email: SMTP send failed for job-failed email (${payload.job_id}): ${(err as Error).message}`);
     }
   }
 
@@ -413,18 +445,23 @@ export class RealPipelineWorker implements JobWorker {
     // SMTP is unset and never throws). Recipient = the payload email captured at
     // submit time (dto.email, else the signed-in account email). Log loudly when
     // it's missing so a "no email arrived" report is diagnosable.
-    if (this.deps.mail && clipsReady > 0) {
+    if (!this.deps.mail) {
+      this.logger.warn(`email: mail service not injected - clips-ready email skipped for ${jobId}.`);
+    } else if (clipsReady > 0) {
       const to = payload.email ?? null;
       if (to) {
         try {
-          await this.deps.mail.sendClipsReady({ to, clipsCount: clipsReady, jobId });
+          const sent = await this.deps.mail.sendClipsReady({ to, clipsCount: clipsReady, jobId });
+          if (sent) {
+            this.logger.log(`email: sent clips-ready email to ${to} for job ${jobId}.`);
+          }
         } catch (err) {
-          this.logger.warn(`clips-ready email skipped for ${jobId}: ${(err as Error).message}`);
+          this.logger.warn(`email: SMTP send failed for clips-ready email (${jobId}): ${(err as Error).message}`);
         }
       } else {
         this.logger.warn(
-          `clips-ready email NOT sent for ${jobId}: no recipient on the job payload ` +
-            `(the account email wasn't captured at submit - is the user signed in with real auth?).`,
+          `email: no recipient for job ${jobId} - clips-ready email NOT sent ` +
+            `(payload.email was empty; the account email wasn't captured at submit time).`,
         );
       }
     }

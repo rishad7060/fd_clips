@@ -90,6 +90,85 @@ export class MailService {
     }
   }
 
+  /**
+   * Send the "your job failed" email (best-effort, mirrors sendClipsReady's
+   * never-throws contract). Sent from the worker's failure catch block so a
+   * failed job still notifies the user (credits are refunded separately).
+   */
+  async sendJobFailed(args: {
+    to: string | null | undefined;
+    jobId: string;
+    reason?: string | null;
+  }): Promise<boolean> {
+    const to = (args.to || '').trim();
+    if (!to) {
+      this.logger.warn(`Skipping job-failed email for job ${args.jobId}: no recipient email.`);
+      return false;
+    }
+
+    const subject = 'Your ClipsHQ job failed';
+    const { html, text } = this.renderJobFailed(args);
+
+    if (!this.enabled) {
+      this.logger.log(
+        `EMAIL (not sent - SMTP unset)\n  To: ${to}\n  From: ${this.config.mailFrom}\n  Subject: ${subject}\n  Reason: ${args.reason ?? '(none)'}`,
+      );
+      return false;
+    }
+
+    try {
+      const transport = this.getTransport();
+      if (!transport) return false;
+      await transport.sendMail({
+        from: this.config.mailFrom,
+        to,
+        subject,
+        text,
+        html,
+      });
+      this.logger.log(`Sent job-failed email to ${to} for job ${args.jobId}.`);
+      return true;
+    } catch (err) {
+      this.logger.error(`Failed to send job-failed email to ${to}: ${(err as Error).message}`);
+      return false;
+    }
+  }
+
+  private renderJobFailed(args: {
+    jobId: string;
+    reason?: string | null;
+  }): { html: string; text: string } {
+    const reasonLine = args.reason ? `Reason: ${args.reason}` : '';
+    const creditsLine = 'Any credits charged for this job have been refunded to your account.';
+
+    const text = [
+      'Your ClipsHQ job failed',
+      '',
+      `Unfortunately job ${args.jobId} could not be completed.`,
+      reasonLine,
+      '',
+      creditsLine,
+      '',
+      `${this.config.appBaseUrl}/dashboard`,
+      '',
+      '— ClipsHQ',
+    ]
+      .filter((line) => line !== '')
+      .join('\n');
+
+    const html = `
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#0b0e16">
+  <h1 style="font-size:20px;margin:0 0 8px">Your job failed</h1>
+  <p style="font-size:15px;line-height:1.55;color:#3a4256;margin:0 0 8px">Unfortunately job ${args.jobId} could not be completed.</p>
+  ${args.reason ? `<p style="font-size:14px;line-height:1.5;color:#8a90a2;margin:0 0 20px">${args.reason}</p>` : ''}
+  <p style="font-size:13px;line-height:1.5;color:#8a90a2;margin:0 0 20px">${creditsLine}</p>
+  <a href="${this.config.appBaseUrl}/dashboard" style="display:inline-block;background:#6d5efc;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 22px;border-radius:12px">Go to dashboard</a>
+  <p style="font-size:12px;color:#a3a8b8;margin:28px 0 0">— ClipsHQ</p>
+</div>`.trim();
+
+    return { html, text };
+  }
+
   private renderClipsReady(
     args: { clipsCount: number; expiresAt?: string | null },
     clipsUrl: string,
