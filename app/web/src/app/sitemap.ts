@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { TOOLS } from "@/lib/tools";
 import { HELP_ARTICLES } from "@/lib/help";
 import { COMPARE_PAGES } from "@/lib/compare";
+import { BLOG_POSTS } from "@/lib/blog";
 
 /**
  * Sitemap for search engines. Lists the public, indexable pages - the marketing
@@ -33,6 +34,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: "/compare", priority: 0.7, changeFrequency: "weekly" },
     ...COMPARE_PAGES.map((c) => ({
       path: `/compare/${c.slug}`,
+      priority: 0.7,
+      changeFrequency: "weekly" as Freq,
+    })),
+    // Blog hub + every post, driven by the shared registry so new posts
+    // appear here automatically.
+    { path: "/blog", priority: 0.7, changeFrequency: "weekly" },
+    ...BLOG_POSTS.map((p) => ({
+      path: `/blog/${p.slug}`,
       priority: 0.7,
       changeFrequency: "weekly" as Freq,
     })),

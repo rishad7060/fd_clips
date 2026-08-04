@@ -572,6 +572,7 @@ export default function LandingPage() {
               <Link href="/new" className="w-fit transition hover:text-brand-300">Create clips</Link>
               <Link href="/tools" className="w-fit transition hover:text-brand-300">Free tools</Link>
               <Link href="/compare" className="w-fit transition hover:text-brand-300">Compare</Link>
+              <Link href="/blog" className="w-fit transition hover:text-brand-300">Blog</Link>
               <Link href="/about" className="w-fit transition hover:text-brand-300">About</Link>
               <Link href="/help/free-trial-and-plans" className="w-fit transition hover:text-brand-300">Pricing</Link>
               <Link href="/help" className="w-fit transition hover:text-brand-300">Help center</Link>

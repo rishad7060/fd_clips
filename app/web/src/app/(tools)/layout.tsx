@@ -5,6 +5,7 @@ import { CookiePreferencesLink } from "@/components/consent/CookiePreferencesLin
 
 const FOOTER_LINKS = [
   ["All free tools", "/tools"],
+  ["Blog", "/blog"],
   ["Terms", "/terms"],
   ["Privacy", "/privacy"],
 ] as const;
