@@ -209,6 +209,14 @@ def transcript(url: str, want_lang: Optional[str] = None) -> dict[str, Any]:
         "socket_timeout": 20,
         "retries": 1,
     }
+    # YouTube nsig JS challenge: recent yt-dlp no longer auto-runs its bundled
+    # solver - it must be OPTED IN, else the cookie'd web/web_safari clients (the
+    # bot-check escalation) can't solve the challenge and YouTube "rejects the
+    # request even with cookies". Enable the EJS remote-components solver (Deno is
+    # on PATH in the Docker image); Python-API equivalent of the CLI
+    # --remote-components ejs:github. YouTube-only; other sites ignore it.
+    if _is_youtube(url):
+        base_opts["remote_components"] = ["ejs:github"]
     # Cookie seam (ingest/preview parity): private/age-gated captions AND the fix
     # for a bot-checked datacenter/VPS IP ("Sign in to confirm you're not a bot").
     #   YTDLP_COOKIES=/path/cookies.txt        - an exported cookies.txt, or
@@ -217,9 +225,30 @@ def transcript(url: str, want_lang: Optional[str] = None) -> dict[str, Any]:
     cookie_browser = (os.environ.get("YTDLP_COOKIES_FROM_BROWSER") or "").strip()
     have_cookies = bool((cookie_file and Path(cookie_file).is_file()) or cookie_browser)
 
+    # yt-dlp WRITES refreshed cookies back to the cookiefile after each request.
+    # In production the cookies file is a READ-ONLY bind mount
+    # (/secrets/cookies.txt:ro) - writing there raises
+    # "OSError: [Errno 30] Read-only file system" and kills the extract. Copy it
+    # once into a writable temp file and hand yt-dlp the copy. Computed once so
+    # every attempt reuses the same writable copy.
+    writable_cookie_file: Optional[str] = None
+    if cookie_file and Path(cookie_file).is_file():
+        try:
+            import shutil
+            import tempfile
+
+            fd, tmp = tempfile.mkstemp(prefix="ytc_", suffix=".txt")
+            os.close(fd)
+            shutil.copyfile(cookie_file, tmp)
+            writable_cookie_file = tmp
+        except OSError:
+            # Copy failed - fall back to the original path (may still be read-only,
+            # but better than crashing here).
+            writable_cookie_file = cookie_file
+
     def _apply_cookies(opts: dict[str, Any]) -> None:
-        if cookie_file and Path(cookie_file).is_file():
-            opts["cookiefile"] = cookie_file
+        if writable_cookie_file:
+            opts["cookiefile"] = writable_cookie_file
         elif cookie_browser:
             opts["cookiesfrombrowser"] = (cookie_browser,)
 

@@ -46,15 +46,34 @@ def extract_tags(url: str) -> dict[str, Any]:
         "socket_timeout": 20,
         "retries": 1,
     }
+    # YouTube nsig JS challenge: enable the EJS remote-components solver (Deno on
+    # PATH), else the cookie'd web escalation can't solve it. See transcript.py.
+    if _is_youtube(url):
+        base_opts["remote_components"] = ["ejs:github"]
     # Cookie seam - also the fix for a bot-checked datacenter/VPS IP ("Sign in to
     # confirm you're not a bot"). See transcript.py / ingest.py for details.
     cookie_file = (os.environ.get("YTDLP_COOKIES") or "").strip()
     cookie_browser = (os.environ.get("YTDLP_COOKIES_FROM_BROWSER") or "").strip()
     have_cookies = bool((cookie_file and Path(cookie_file).is_file()) or cookie_browser)
 
+    # yt-dlp writes cookies back to the cookiefile; the prod /secrets/cookies.txt
+    # is read-only. Copy to a writable temp file once. See transcript.py.
+    writable_cookie_file: Optional[str] = None
+    if cookie_file and Path(cookie_file).is_file():
+        try:
+            import shutil
+            import tempfile
+
+            fd, tmp = tempfile.mkstemp(prefix="ytc_", suffix=".txt")
+            os.close(fd)
+            shutil.copyfile(cookie_file, tmp)
+            writable_cookie_file = tmp
+        except OSError:
+            writable_cookie_file = cookie_file
+
     def _apply_cookies(opts: dict[str, Any]) -> None:
-        if cookie_file and Path(cookie_file).is_file():
-            opts["cookiefile"] = cookie_file
+        if writable_cookie_file:
+            opts["cookiefile"] = writable_cookie_file
         elif cookie_browser:
             opts["cookiesfrombrowser"] = (cookie_browser,)
 
