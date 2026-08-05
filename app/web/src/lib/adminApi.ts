@@ -215,9 +215,14 @@ export const adminApi = {
   },
 
   // ---- Blog (DB-backed posts, admin CRUD) ----------------------------------
-  listBlogPosts(): Promise<AdminBlogPost[]> {
+  async listBlogPosts(): Promise<AdminBlogPost[]> {
     if (USING_MOCK_ADMIN) return delay(adminMock.listBlogPosts());
-    return http(`/admin/blog`);
+    // GET /admin/blog returns { posts: [...] } (wrapped), not a bare array.
+    // Unwrap it - returning the object made the page do posts.filter(...) on an
+    // object -> "filter is not a function" client-side crash. Tolerate either
+    // shape defensively.
+    const res = await http<AdminBlogPost[] | { posts: AdminBlogPost[] }>(`/admin/blog`);
+    return Array.isArray(res) ? res : res?.posts ?? [];
   },
   getBlogPost(id: string): Promise<AdminBlogPost> {
     if (USING_MOCK_ADMIN) return delay(adminMock.getBlogPost(id));
