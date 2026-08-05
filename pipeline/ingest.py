@@ -328,6 +328,20 @@ def _ingest_real(
             "socket_timeout": 30,
             "retries": 2,
         }
+        # ── YouTube nsig JS challenge: enable the EJS remote-components solver ──
+        # Recent yt-dlp (late-2025+) no longer runs its bundled JS-challenge solver
+        # automatically - it must be OPTED IN, otherwise it prints
+        #   "[jsc] ... challenge solver script (deno) ... were skipped"
+        # and every real format URL is dropped -> "Requested format is not
+        # available" (exactly the production crash). The CLI opt-in is
+        # ``--remote-components ejs:github``; the Python-API equivalent is the
+        # ``remote_components`` option below. yt-dlp downloads/caches the solver
+        # script from GitHub on first use and runs it through Deno (already on PATH
+        # in the Docker image). Guarded by _is_youtube so non-YouTube sites are
+        # untouched. Wrapped so an older yt-dlp that doesn't know the key is a
+        # harmless no-op (it just ignores unknown top-level opts).
+        if _is_youtube(source):
+            ydl_opts["remote_components"] = ["ejs:github"]
         if ffmpeg_dir:
             ydl_opts["ffmpeg_location"] = ffmpeg_dir
         # YouTube increasingly requires cookies ("Sign in to confirm you're not a
@@ -340,7 +354,19 @@ def _ingest_real(
         cookie_file = (os.environ.get("YTDLP_COOKIES") or "").strip()
         cookie_browser = (os.environ.get("YTDLP_COOKIES_FROM_BROWSER") or "").strip()
         if cookie_file and Path(cookie_file).is_file():
-            ydl_opts["cookiefile"] = cookie_file
+            # yt-dlp WRITES refreshed cookies back to the cookiefile after each
+            # request. In production the file is often a READ-ONLY bind mount
+            # (e.g. /secrets/cookies.txt:ro) - writing there raises
+            # "OSError: [Errno 30] Read-only file system" and kills the download.
+            # Copy it into the writable workspace and hand yt-dlp the copy.
+            try:
+                writable_cookies = ws / "cookies.txt"
+                shutil.copyfile(cookie_file, writable_cookies)
+                ydl_opts["cookiefile"] = str(writable_cookies)
+            except OSError:
+                # Copy failed (odd perms) - fall back to the original path; if it's
+                # read-only yt-dlp will still error, but we shouldn't crash here.
+                ydl_opts["cookiefile"] = cookie_file
         elif cookie_browser:
             # yt-dlp expects a tuple: (browser, profile?, keyring?, container?)
             ydl_opts["cookiesfrombrowser"] = (cookie_browser,)
