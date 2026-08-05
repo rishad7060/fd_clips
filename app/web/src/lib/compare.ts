@@ -41,6 +41,27 @@ export const COMPARE_PAGES: CompareDef[] = [
       "Captions, clip generation and price compared - and why multilingual creators lean ClipsHQ.",
   },
   {
+    slug: "clipshq-vs-klap",
+    label: "ClipsHQ vs Klap",
+    title: "ClipsHQ vs Klap",
+    blurb:
+      "Pricing, captions and workflow compared - and why multilingual creators tend to pick ClipsHQ.",
+  },
+  {
+    slug: "clipshq-vs-munch",
+    label: "ClipsHQ vs Munch",
+    title: "ClipsHQ vs Munch",
+    blurb:
+      "How ClipsHQ's simple minute-based pricing compares to Munch's analytics-heavy, enterprise angle.",
+  },
+  {
+    slug: "clipshq-vs-vidyo-ai",
+    label: "ClipsHQ vs vidyo.ai",
+    title: "ClipsHQ vs vidyo.ai",
+    blurb:
+      "Clip quality, captions and price compared - with ClipsHQ leading on multilingual accuracy.",
+  },
+  {
     slug: "best-ai-clip-generator",
     label: "Best AI Clip Generator",
     title: "Best AI Clip Generator (2026)",
