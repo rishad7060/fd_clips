@@ -35,6 +35,8 @@ export interface LangDef {
 }
 
 export const HERO_LANGUAGES: LangDef[] = [
+  // Lead with the differentiator languages (multilingual + RTL) first, then the
+  // other top world languages. Order here is the on-page chip order.
   { name: "English", code: "en" },
   { name: "Arabic", code: "ar", rtl: true },
   { name: "Tamil", code: "ta" },
@@ -42,6 +44,12 @@ export const HERO_LANGUAGES: LangDef[] = [
   { name: "Hindi", code: "hi" },
   { name: "French", code: "fr" },
   { name: "Spanish", code: "es" },
+  { name: "Italian", code: "it" },
+  { name: "German", code: "de" },
+  { name: "Portuguese", code: "pt" },
+  { name: "Chinese", code: "zh" },
+  { name: "Japanese", code: "ja" },
+  { name: "Russian", code: "ru" },
 ];
 
 /** Comma-joined lead languages for inline prose, e.g. meta descriptions. */
