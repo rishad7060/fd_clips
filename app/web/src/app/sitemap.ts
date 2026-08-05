@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { TOOLS } from "@/lib/tools";
 import { HELP_ARTICLES } from "@/lib/help";
 import { COMPARE_PAGES } from "@/lib/compare";
+import { SEO_PAGES } from "@/lib/seoPages";
 import { fetchBlogPosts } from "@/lib/blog";
 
 /**
@@ -26,6 +27,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const blogPosts = await fetchBlogPosts();
   const routes: { path: string; priority: number; changeFrequency: Freq }[] = [
     { path: "/", priority: 1.0, changeFrequency: "weekly" },
+    // Keyword-targeted SEO landing pages (root-level /best-ai-video-clipper,
+    // /arabic-subtitle-generator, ...), driven by the shared registry so a new
+    // page appears here automatically. High priority - these are money pages.
+    ...SEO_PAGES.map((p) => ({
+      path: `/${p.slug}`,
+      priority: 0.9,
+      changeFrequency: "weekly" as Freq,
+    })),
     { path: "/tools", priority: 0.9, changeFrequency: "weekly" },
     // Every free tool, driven by the shared registry so new tools appear here
     // automatically.
