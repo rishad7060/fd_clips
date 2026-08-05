@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Download, Loader2, Subtitles } from "lucide-react";
 import { api } from "@/lib/api";
 import type { TranscriptResult, TranscriptSegment } from "@/lib/types";
@@ -124,8 +125,9 @@ export function SubtitleTool() {
         <div className="mt-6 rounded-2xl border border-white/10 bg-ink-850 p-5 shadow-rim">
           <div className="flex items-start gap-3">
             {result.thumbnail_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={result.thumbnail_url} alt="" className="h-12 w-20 shrink-0 rounded-md object-cover" />
+              <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded-md">
+                <Image src={result.thumbnail_url} alt="" fill sizes="80px" className="object-cover" />
+              </div>
             ) : null}
             <div className="min-w-0">
               <h2 className="truncate text-sm font-semibold text-white">{result.title}</h2>

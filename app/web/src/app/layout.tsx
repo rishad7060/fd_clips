@@ -15,8 +15,8 @@ const inter = Inter({
   variable: "--font-geist",       // alias so the tailwind `sans` var resolves
   display: "swap",
 });
-const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
-const interBody = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
+const interBody = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 // Display face for landing headlines - an editorial grotesque with character.
 // Body stays on Inter; only elements that opt into `font-display` use this.
 const display = Bricolage_Grotesque({
@@ -118,6 +118,28 @@ function SiteSchema() {
   );
 }
 
+// Preconnect to the real API origin only when one is actually configured
+// (NEXT_PUBLIC_API_URL) - in offline/mock mode there's no cross-origin fetch
+// to warm up, so this renders nothing. Fonts are self-hosted via next/font
+// (which emits its own preload/preconnect automatically), so no Google Fonts
+// origin needs to be preconnected here.
+function PreconnectLinks() {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (!apiUrl) return null;
+  let origin: string;
+  try {
+    origin = new URL(apiUrl).origin;
+  } catch {
+    return null;
+  }
+  return (
+    <>
+      <link rel="preconnect" href={origin} crossOrigin="anonymous" />
+      <link rel="dns-prefetch" href={origin} />
+    </>
+  );
+}
+
 export default async function RootLayout({
   children,
 }: {
@@ -130,6 +152,9 @@ export default async function RootLayout({
     const { AuthTokenBridge } = await import("@/components/AuthTokenBridge");
     return (
       <html lang="en">
+        <head>
+          <PreconnectLinks />
+        </head>
         <body className={bodyClass}>
           <SiteSchema />
           {/* refetchInterval re-fetches the session every ~10 min (and on window
@@ -149,6 +174,9 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
+      <head>
+        <PreconnectLinks />
+      </head>
       <body className={bodyClass}>
         <SiteSchema />
         <ReferralCapture />

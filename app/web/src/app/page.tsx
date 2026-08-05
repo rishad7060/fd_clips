@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Logo } from "@/components/Logo";
 import { HeroCta } from "@/components/home/HeroCta";
 import { NavCta } from "@/components/home/NavCta";
@@ -210,11 +211,12 @@ export default function LandingPage() {
                 key={p.label}
                 className="group inline-flex items-center gap-2 transition hover:text-white"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={p.icon}
                   alt=""
                   aria-hidden
+                  width={96}
+                  height={96}
                   className="h-5 w-5 opacity-80 transition group-hover:opacity-100 sm:h-6 sm:w-6"
                 />
                 {p.label}
@@ -249,14 +251,13 @@ export default function LandingPage() {
           {/* Brand image card */}
           <article className="group relative overflow-hidden rounded-2xl border border-white/10 bg-ink-850 shadow-rim transition duration-200 ease-premium hover:-translate-y-0.5 hover:border-white/15 sm:row-span-2">
             <div className="relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={DEMO_CLIPS[0]!.img}
                 alt="Podcaster recording at a microphone"
                 width={560}
                 height={420}
                 loading="lazy"
-                decoding="async"
+                sizes="(min-width: 640px) 25vw, 100vw"
                 className="aspect-[4/3] w-full object-cover object-top opacity-90 sm:aspect-auto sm:h-44"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-ink-850 via-ink-850/20 to-transparent" />
@@ -282,15 +283,13 @@ export default function LandingPage() {
             <div className="mt-6 flex items-center gap-3">
               <div className="flex -space-x-2">
                 {DEMO_CLIPS.slice(0, 4).map((c) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     key={c.rank}
                     src={c.img}
                     alt=""
                     width={32}
                     height={32}
                     loading="lazy"
-                    decoding="async"
                     className="h-8 w-8 rounded-full object-cover ring-2 ring-ink-850"
                   />
                 ))}
@@ -589,10 +588,12 @@ export default function LandingPage() {
 
           {/* Oversized brand wordmark - the actual ClipsHQ lockup */}
           <div className="mt-16">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src="/label-logo.svg"
               alt="ClipsHQ"
+              width={1762}
+              height={533}
+              sizes="100vw"
               className="w-full select-none opacity-95"
               draggable={false}
             />
@@ -631,19 +632,16 @@ function ClipPoster({
 }) {
   return (
     <div className="relative aspect-[9/16] w-full overflow-hidden">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      {/* Hero fan = the LCP element. `priority` loads it eagerly at high
+          fetch priority (never lazy) so LCP fires as early as possible;
+          `fill` + the parent's explicit aspect-ratio prevent CLS. */}
+      <Image
         src={clip.img}
         alt={`Clip ${clip.rank}: ${clip.hook} - virality ${clip.score}`}
-        width={560}
-        height={996}
-        // Hero fan = the LCP element. Load it eagerly at high priority (never
-        // lazy) so LCP fires as early as possible; explicit dims prevent CLS.
-        loading="eager"
-        // @ts-expect-error - fetchpriority is valid HTML, React types lag.
-        fetchpriority="high"
-        decoding="async"
-        className="h-full w-full object-cover"
+        fill
+        sizes="(min-width: 1024px) 240px, (min-width: 640px) 208px, 160px"
+        priority
+        className="object-cover"
       />
       {/* Bottom scrim so captions stay legible over any frame. */}
       <div

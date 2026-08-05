@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { api } from "@/lib/api";
 import type { Job } from "@/lib/types";
 import { formatRelative } from "@/lib/format";
@@ -133,8 +134,13 @@ function ProjectCard({ job }: { job: Job }) {
         {/* Poster / status surface */}
         <div className="relative aspect-video overflow-hidden bg-ink-950">
           {thumb ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={thumb} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+            <Image
+              src={thumb}
+              alt=""
+              fill
+              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+              className="object-cover transition duration-300 group-hover:scale-[1.03]"
+            />
           ) : (
             <div className="grid h-full w-full place-items-center text-ink-500">
               <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.5">

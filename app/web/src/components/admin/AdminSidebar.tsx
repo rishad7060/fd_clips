@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
@@ -50,8 +51,7 @@ export function AdminSidebar() {
         aria-label="FocalDive Clips - Admin"
         className="block h-11 w-11 overflow-hidden rounded-xl shadow-glow transition hover:opacity-90"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/label-logo.svg" alt="Clips" className="h-full w-auto max-w-none" draggable={false} />
+        <Image src="/label-logo.svg" alt="Clips" width={1762} height={533} priority className="h-full w-auto max-w-none" draggable={false} />
       </Link>
 
       <nav className="mt-6 flex flex-1 flex-col items-center gap-1.5">

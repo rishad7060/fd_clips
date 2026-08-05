@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import { Captions, Check, Copy, Download, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { TranscriptResult, TranscriptSegment } from "@/lib/types";
@@ -171,12 +172,15 @@ export function TranscriptTool() {
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.08] p-4">
             <div className="flex min-w-0 items-start gap-3">
               {result.thumbnail_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={result.thumbnail_url}
-                  alt=""
-                  className="h-12 w-20 shrink-0 rounded-md object-cover"
-                />
+                <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded-md">
+                  <Image
+                    src={result.thumbnail_url}
+                    alt=""
+                    fill
+                    sizes="80px"
+                    className="object-cover"
+                  />
+                </div>
               ) : null}
               <div className="min-w-0">
                 <h2 className="truncate text-sm font-semibold text-white">{result.title}</h2>

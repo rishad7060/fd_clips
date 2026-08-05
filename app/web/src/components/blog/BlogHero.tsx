@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import type { BlogPostView } from "@/lib/blog";
 
 // Category is admin-editable free text on the API, so key off a lookup with a
@@ -30,15 +31,13 @@ export function BlogHero({ post, priority = false }: { post: BlogPostView; prior
       className={`relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${CATEGORY_GRADIENT[post.category] ?? DEFAULT_GRADIENT} shadow-rim`}
     >
       {!imageFailed && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={`/blog/${post.slug}.webp`}
           alt={post.heroAlt}
-          width={1600}
-          height={900}
-          className="absolute inset-0 h-full w-full object-cover"
-          loading={priority ? "eager" : "lazy"}
-          fetchPriority={priority ? "high" : "auto"}
+          fill
+          sizes="(min-width: 1024px) 800px, 100vw"
+          priority={priority}
+          className="object-cover"
           onError={() => setImageFailed(true)}
         />
       )}

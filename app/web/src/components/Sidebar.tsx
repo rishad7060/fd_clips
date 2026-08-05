@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 /**
@@ -55,8 +56,7 @@ export function Sidebar() {
           aria-label="Home"
           className="mb-2 grid h-10 w-10 place-items-center rounded-xl shadow-glow transition hover:-translate-y-0.5"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/emblem.png" alt="Clips" className="h-10 w-10 rounded-xl" />
+          <Image src="/emblem.png" alt="Clips" width={40} height={40} priority className="h-10 w-10 rounded-xl" />
         </Link>
 
         <nav className="flex flex-1 flex-col items-center gap-1">

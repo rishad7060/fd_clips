@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 /**
  * Brand lockup - the real "Clips" wordmark (emblem + label) shipped in
@@ -7,10 +8,12 @@ import Link from "next/link";
 export function Logo({ href = "/" }: { href?: string }) {
   return (
     <Link href={href} className="flex items-center group" aria-label="ClipsHQ - home">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src="/label-logo.svg"
         alt="ClipsHQ"
+        width={1762}
+        height={533}
+        priority
         className="h-7 w-auto transition group-hover:opacity-90"
       />
     </Link>
