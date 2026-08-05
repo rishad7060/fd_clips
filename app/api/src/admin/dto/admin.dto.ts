@@ -206,6 +206,14 @@ export class SetPlatformSettingsDto {
   @IsOptional()
   @IsBoolean()
   waitlistMode?: boolean;
+
+  // Global toggle: when on, free-plan clips carry the watermark and the clips
+  // page shows the "Remove watermark" upsell. The admin System settings form
+  // sends this; without it NestJS's forbidNonWhitelisted rejected the PATCH with
+  // "property watermarkFreeClips should not exist".
+  @IsOptional()
+  @IsBoolean()
+  watermarkFreeClips?: boolean;
 }
 
 // ── Waitlist ───────────────────────────────────────────────────────────────────
