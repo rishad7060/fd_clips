@@ -5,6 +5,7 @@ import { HeroCta } from "@/components/home/HeroCta";
 import { NavCta } from "@/components/home/NavCta";
 import { PricingPlans } from "@/components/home/PricingPlans";
 import { StickyLinkBar } from "@/components/home/StickyLinkBar";
+import { MobileNav } from "@/components/home/MobileNav";
 import { CookiePreferencesLink } from "@/components/consent/CookiePreferencesLink";
 import { PROOF_STATS, HERO_LANGUAGES } from "@/lib/proof";
 
@@ -169,6 +170,7 @@ export default function LandingPage() {
           </nav>
           <div className="flex items-center justify-end gap-2">
             <NavCta />
+            <MobileNav />
           </div>
         </div>
       </header>
