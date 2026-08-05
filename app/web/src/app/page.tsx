@@ -690,12 +690,14 @@ export default function LandingPage() {
 
           {/* Oversized brand wordmark - the actual ClipsHQ lockup */}
           <div className="mt-16">
+            {/* Vector wordmark served as-is (unoptimized) - see Logo.tsx note. */}
             <Image
               src="/label-logo.svg"
               alt="ClipsHQ"
               width={1762}
               height={533}
               sizes="100vw"
+              unoptimized
               className="w-full select-none opacity-95"
               draggable={false}
             />

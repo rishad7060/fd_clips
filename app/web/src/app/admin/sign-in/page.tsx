@@ -85,7 +85,7 @@ export default function AdminSignInPage() {
     <div className="admin-theme flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
-          <Image src="/label-logo.svg" alt="Clips" width={1762} height={533} priority className="mx-auto mb-3 h-9 w-auto" draggable={false} />
+          <Image src="/label-logo.svg" alt="Clips" width={1762} height={533} priority unoptimized className="mx-auto mb-3 h-9 w-auto" draggable={false} />
           <CardTitle>Admin sign in</CardTitle>
           <p className="text-sm text-muted-foreground">FocalDive system administration</p>
         </CardHeader>

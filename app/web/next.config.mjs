@@ -8,14 +8,12 @@ const nextConfig = {
     // Serve modern formats (smaller payloads -> faster LCP) with automatic
     // fallback to the original format for browsers that don't support them.
     formats: ["image/avif", "image/webp"],
-    // The brand wordmark/emblem ship as local /public SVGs and are rendered
-    // through next/image (Logo, AdminSidebar, admin sign-in). Next.js refuses
-    // to serve SVG through the optimizer unless explicitly allowed; the CSP
-    // below is Next's own recommended mitigation (no inline scripts in the
-    // optimized SVG response) since these are same-origin, build-time-known
-    // assets, not user-uploaded content.
-    dangerouslyAllowSVG: true,
-    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    // NOTE: SVG brand assets (Logo, AdminSidebar, admin sign-in, footer
+    // wordmark) render with `unoptimized` so they bypass the /_next/image
+    // optimizer entirely - a vector logo gains nothing from optimization and
+    // the optimizer's sandbox CSP was breaking SVG rendering (broken-image
+    // icon) on the standalone Docker server. Because nothing routes SVG through
+    // the optimizer anymore, dangerouslyAllowSVG + its CSP are not needed.
   },
   // Long-term immutable caching for static assets served out of /public.
   // /_next/static (JS/CSS chunks) is already immutable-cached by Next itself;
