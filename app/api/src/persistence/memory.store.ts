@@ -76,8 +76,12 @@ export class MemoryStore implements DataStore {
 
   /** Seed the 5 legacy hardcoded posts on first boot (empty table only). */
   private seedBlogPosts(): void {
-    if (this.blogPosts.size > 0) return;
+    // Per-slug idempotent (mirrors PrismaStore): insert seed posts whose slug
+    // isn't present, skip existing ones. Lets new seed posts appear without
+    // wiping the store.
+    let created = 0;
     for (const seed of BLOG_POST_SEED) {
+      if (this.blogPostsBySlug.has(seed.slug)) continue;
       const record: BlogPostRecord = {
         id: id(),
         ...seed,
@@ -87,8 +91,9 @@ export class MemoryStore implements DataStore {
       };
       this.blogPosts.set(record.id, record);
       this.blogPostsBySlug.set(record.slug, record.id);
+      created += 1;
     }
-    this.logger.log(`Seeded ${BLOG_POST_SEED.length} blog posts.`);
+    if (created > 0) this.logger.log(`Seeded ${created} new blog post(s).`);
   }
 
   /**

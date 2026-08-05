@@ -104,9 +104,14 @@ export class PrismaStore implements DataStore {
 
   /** Seed the 5 legacy hardcoded posts on first boot (empty table only). */
   private async seedBlogPosts(): Promise<void> {
-    const count = await this.prisma.blogPost.count();
-    if (count > 0) return;
+    // Per-slug idempotent (NOT skip-on-non-empty): insert any seed post whose
+    // slug isn't already in the DB, and never touch existing rows. This lets us
+    // ship NEW seed posts on a server that already has the earlier ones, while
+    // preserving any admin edits to existing posts (their slugs are skipped).
+    let created = 0;
     for (const seed of BLOG_POST_SEED) {
+      const existing = await this.prisma.blogPost.findUnique({ where: { slug: seed.slug } });
+      if (existing) continue;
       await this.prisma.blogPost.create({
         data: {
           slug: seed.slug,
@@ -122,8 +127,9 @@ export class PrismaStore implements DataStore {
           publishedAt: new Date(seed.publishedAt ?? Date.now()),
         },
       });
+      created += 1;
     }
-    this.logger.log(`Seeded ${BLOG_POST_SEED.length} blog posts.`);
+    if (created > 0) this.logger.log(`Seeded ${created} new blog post(s).`);
   }
 
   async shutdown(): Promise<void> {

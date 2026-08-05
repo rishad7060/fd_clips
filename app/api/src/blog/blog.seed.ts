@@ -620,4 +620,256 @@ Opus Clip is a strong, more established tool with a broader enterprise feature s
 Best value is a narrower claim than best overall, and it is the honest one. ClipsHQ wins on the things that decide value for a solo creator or a small team: you can predict what a job costs, you start free without a card, paid plans land well under typical competitor pricing, your paid clips are clean, and the caption engine reaches languages the cheap tools skip. It does not have every enterprise bell an incumbent offers, and for the people it is built for, that is a feature. If that sounds like your setup, [run a video through it](/new) and compare the result, and the cost, against whatever you use now.
 `,
   },
+  {
+    slug: 'youtube-shorts-growth-guide-2026',
+    title: 'How to Grow on YouTube Shorts in 2026 (Without Burning Out)',
+    description:
+      'A practical 2026 guide to growing a YouTube Shorts channel: hooks, posting cadence, retention, and repurposing long videos into Shorts that actually get views.',
+    excerpt:
+      'The habits and mechanics that actually move a YouTube Shorts channel in 2026 - and how to feed the format without burning out.',
+    category: 'Playbooks',
+    tags: ['youtube shorts', 'shorts growth', 'short form strategy'],
+    author: 'ClipsHQ Team',
+    heroAlt: 'A phone showing a vertical YouTube Shorts feed with rising view counts',
+    published: true,
+    publishedAt: '2026-04-08',
+    bodyMarkdown: `The single most reliable way to grow on YouTube Shorts in 2026 is to post good Shorts consistently, and the fastest way to do that without burning out is to repurpose long-form video you have already made instead of filming something new every day. Everything else - hooks, length, captions, cadence - matters, but it only matters once you have a sustainable supply of clips. Most channels stall not because their Shorts are bad, but because they cannot keep making them.
+
+This guide is about both halves: the mechanics that make an individual Short perform, and the system that lets you keep shipping them week after week. It is written for creators who already have a channel or a back catalog of long videos and want more reach without turning content into a second full-time job.
+
+> **Key Takeaways**
+> - Consistency beats perfection. A steady cadence of decent Shorts outperforms occasional great ones, because the algorithm rewards accounts that keep showing up.
+> - The first two to three seconds decide the view. Open on the interesting part, not the setup.
+> - Most Shorts are watched muted, so burned-in captions are not optional.
+> - Repurpose long videos into Shorts instead of filming daily. One good long video can feed a week or two of Shorts.
+> - Read retention data after each batch and make more of what held attention.
+
+## Why consistency matters more than any single Short
+
+It is tempting to obsess over making one perfect Short. The data - and the experience of almost every creator who has grown on the format - points the other way. Short-form platforms reward accounts that publish steadily, because a regular supply of content gives the recommendation system more chances to find the audience for each video and more signal about who your channel is for.
+
+Practically, that means a channel posting one solid Short every day will almost always outgrow one posting a brilliant Short once a week. The daily channel gets more shots on goal, more retention data to learn from, and more surface area in the feed. Perfection is a trap when it slows you down. Aim for good and frequent, not perfect and rare.
+
+The catch is obvious: daily posting is exhausting if every Short is a fresh production. That is the burnout trap, and it is why the back half of this guide is about supply, not just craft.
+
+## The anatomy of a Short that performs
+
+Every Short that does well shares the same shape, and you can feel when one is missing a piece.
+
+The **hook** is the first two to three seconds. It is the whole ballgame. Feeds are built so leaving costs nothing, so if your opening line does not create a question, a promise, or a jolt, viewers swipe before the video has a chance. Open on the interesting part. If your best line is thirty seconds in, that line is your opening frame - cut everything before it or restate it up top.
+
+The **build** is the short middle where you develop the tension you opened with. Keep it lean. Every second that does not push toward the payoff is a second where viewers leak away.
+
+The **payoff** is the resolution - the answer, the punchline, the turn. End *on* it. A Short that keeps rolling for three seconds after the point has landed bleeds the completion rate that YouTube rewards.
+
+The most common mistake is starting mid-thought, so the clip opens on a reference the viewer cannot resolve. Cut on complete thoughts. A Short should make sense to someone who has never seen your channel.
+
+## Captions: the cheapest win available
+
+A large share of Shorts viewing happens with the sound off. An uncaptioned Short is, to those viewers, a silent one. Burned-in captions fix that, and animated word-by-word captions - the karaoke style where each word lights up as it is spoken - measurably hold attention because the motion keeps the eye on the screen.
+
+Keep captions large, high-contrast, and in the middle third of the frame so the platform's own UI does not cover them. If you publish for audiences beyond English, this is also where reach compounds: once you have accurate per-word timing, captioning in another language opens a whole new audience with no re-recording. For a deeper walkthrough of the craft, see the [playbook on repurposing long videos into shorts](/blog/repurpose-long-videos-into-shorts).
+
+## Posting cadence without burning out
+
+Here is the honest tension: the algorithm wants frequency, and frequency is what exhausts people. The resolution is not superhuman discipline - it is a supply system.
+
+The system is repurposing. One speech-heavy long video - a podcast episode, an interview, a livestream, a tutorial - usually hides eight to fifteen moments strong enough to stand alone as a Short. If you cut those, you have a week or two of daily posts from a single recording you already made. Film once, post many times.
+
+Doing that by hand is slow: logging timestamps, cutting, reframing to vertical, captioning, and exporting each clip is most of a day. The fast path is to hand the mechanical work to software. Paste a long video into [ClipsHQ](/new) and it transcribes the whole thing, scores the most viral moments, cuts them into self-contained clips, reframes each to vertical 9:16 with the speaker tracked, and burns in captions - then ranks them so you know which to post first. You keep the judgment; the tool removes the labor. That is the difference between meaning to post daily and actually doing it.
+
+## Repurpose long videos into Shorts (the supply engine)
+
+If you take one thing from this guide, take this: your long-form content is your Shorts pipeline. A 40-minute podcast is not one video, it is one video plus a dozen Shorts.
+
+The workflow is simple. Pick a speech-heavy source with clear, quotable moments. Skim the transcript to confirm it is dense enough - a [free YouTube transcript](/tools/youtube-to-transcript) makes this a two-minute check. Pull the strongest self-contained moments. Cut each to a clean start and a payoff ending, roughly 21 to 45 seconds. Reframe to vertical, caption, and schedule across the week.
+
+Because you are drawing from work you already did, the marginal cost of each Short collapses. That is what makes daily posting survivable. For the full step-by-step, the [repurposing playbook](/blog/repurpose-long-videos-into-shorts) goes deep, and if you want to compare the tools that automate it, the [best AI shorts tools roundup](/blog/best-ai-shorts-tools-2026-2027) lays out the field.
+
+## Read the data, then make more of what worked
+
+Growth on Shorts is a loop: post, read retention, adjust, repeat. After each batch, look at which hooks and topics held attention past the first three seconds and which died on the open. Make more of what worked. This is unglamorous and it is exactly how ordinary channels get good - but it only works if you are posting enough to have data to read, which brings you back to supply.
+
+Do not over-rotate on a single viral hit or a single flop. Look at patterns across ten or twenty Shorts. The signal is in the trend, not the outlier.
+
+## Frequently asked questions
+
+### How often should I post YouTube Shorts?
+
+Once a day is a strong target if you can sustain it, and consistency matters more than the exact number. A steady three-a-week beats an erratic daily-then-nothing pattern. The real constraint is supply, which is why repurposing long video into Shorts is the key to keeping a daily cadence without burning out.
+
+### How long should a YouTube Short be?
+
+Most well-performing Shorts land between 21 and 45 seconds - long enough for a hook, a build, and a payoff, short enough to rewatch. Go shorter for a single punchy line and longer only when a story genuinely needs the room.
+
+### Do I need captions on every Short?
+
+Yes. A large share of viewing is muted, so an uncaptioned Short is silent to many viewers. Animated word-by-word captions also hold attention and make translating into other languages easy once the timing exists.
+
+### What is the fastest way to make Shorts from long videos?
+
+Paste the long video into an AI clipper that finds the best moments, cuts them, reframes to vertical, and captions them automatically. [Start a job on ClipsHQ](/new) to turn one long video into a batch of ranked, captioned Shorts in minutes rather than hours.
+`,
+  },
+  {
+    slug: 'podcast-marketing-with-clips',
+    title: 'Podcast Marketing in 2026: Turn Episodes Into Clips That Grow Your Show',
+    description:
+      'How to market a podcast in 2026 by turning every episode into short, captioned video clips - the highest-leverage growth channel for shows today.',
+    excerpt:
+      'Your best podcast marketing channel is the episode you already recorded. Here is how to turn each one into clips that grow the show.',
+    category: 'Playbooks',
+    tags: ['podcast marketing', 'podcast clips', 'audiogram'],
+    author: 'ClipsHQ Team',
+    heroAlt: 'A podcast microphone beside several vertical video clips of the episode',
+    published: true,
+    publishedAt: '2026-04-24',
+    bodyMarkdown: `The most effective podcast marketing in 2026 is not a new ad budget or a clever guest-swap scheme - it is turning every episode you record into a handful of short, captioned video clips and posting them where new listeners actually are. Podcasts are hard to discover by nature: the audio lives inside an app people have to already open. Short video clips break the episode out of that app and put it in the feeds where discovery happens. If you record a show and do nothing else, clipping it is the single highest-leverage change you can make.
+
+This guide lays out why clips beat the usual podcast-marketing advice, which moments to pull, and how to produce clips consistently without adding hours to every episode.
+
+> **Key Takeaways**
+> - Podcasts have a discovery problem: the audio is trapped in an app. Short video clips are how you reach people who have never opened it.
+> - Video podcasts clip best because you can reframe the speaker. Audio-only shows can still use captioned clips over a static or waveform visual.
+> - Pull three to five self-contained moments per episode: hot takes, stories, and clear answers.
+> - Captions are essential - most feed viewing is muted - and they let you reach non-English audiences from the same recording.
+> - Clip every episode consistently. The compounding effect of steady clips is what grows a show.
+
+## Why clips beat most podcast-marketing advice
+
+A lot of podcast growth advice is about squeezing your existing audience: ask for reviews, run a referral loop, cross-promote with another show. Those help at the margins, but they mostly move people who already know you exist. The hard part of podcasting is the top of the funnel - being discovered by people who have never heard of you - and audio is uniquely bad at that. Nothing about an audio file surfaces in a scrolling feed.
+
+Short video clips solve exactly that. A 30-second captioned clip of a sharp moment from your episode can live on TikTok, Reels, and YouTube Shorts, where the recommendation systems will show it to people who have never opened a podcast app in their life. Some fraction of them will follow the trail back to the full show. That is net-new audience, which is the thing podcasts struggle most to get.
+
+This is why "clip your episodes" has quietly become the default growth channel for shows that grow. It is not glamorous, but it works, and it uses content you have already produced.
+
+## Video podcasts clip best - but audio can work too
+
+If you are recording video, you are in the best position: clips can reframe to vertical and keep whoever is speaking centered, which reads as native short-form content. If you record two people, the ideal clip follows whoever is talking. That kind of active-speaker framing by hand is tedious, which is where automation earns its place - a tool that tracks the speaker and holds a steady vertical crop turns a slow editing job into a review job.
+
+Audio-only shows are not shut out. You can pair captioned clips with a simple static visual, a waveform animation, or a branded card. The captions do the heavy lifting: they carry the words, and the words are what stop the scroll. If you have been recording audio-only and growth has plateaued, adding video to your recording setup is worth considering precisely because it unlocks better clips.
+
+Either way, the transcript is your map. Pulling a [free transcript of the episode](/tools/youtube-to-transcript) first lets you scan for clip-worthy moments in a couple of minutes instead of relistening to an hour.
+
+## Which moments to pull from an episode
+
+Not every minute of a great conversation makes a great clip. You are hunting for moments that survive being lifted out of context - passages a stranger would understand and want to repeat. A few reliable shapes:
+
+- **The hot take**: a guest says something slightly against consensus, with conviction.
+- **The story beat**: a short, concrete anecdote with a turn in it.
+- **The clear answer**: a crisp response to a question your audience already has.
+- **The surprising number or fact**: something specific enough to make someone stop.
+
+Aim for three to five per episode. Mark them as you scan the transcript, and be a little greedy - it is normal to flag more than you keep. What disqualifies a moment is usually that it needs too much setup, or that it trails off without landing. The [full moment-finding method is in the repurposing playbook](/blog/repurpose-long-videos-into-shorts), which applies directly to podcasts.
+
+## Captions, and the multilingual opportunity
+
+Because most feed viewing happens muted, captions are non-negotiable for podcast clips. Word-by-word animated captions keep the eye on the screen and make a talking-head clip feel alive rather than static.
+
+There is a second, underused payoff. Once a clip has accurate per-word caption timing, you can caption it in another language and reach an entirely new audience from the same recording. For shows targeting or including Arabic, Urdu, Hindi, or Tamil audiences, this is one of the cheapest ways to grow - provided your tooling renders those scripts correctly, including right-to-left text. If multilingual reach is part of your strategy, the [guide to creating Arabic content](/blog/arabic-content-creation-guide) goes deeper on that specifically.
+
+## Make clipping every episode sustainable
+
+The reason most shows do not clip consistently is the same reason most creators do not post Shorts daily: doing it by hand is slow. Logging moments, cutting, reframing, captioning, and exporting three to five clips per episode is hours of work on top of recording and editing the show itself. It falls off the to-do list within a month.
+
+The way to make it stick is to remove the manual labor. Paste the episode into [ClipsHQ](/new) and it transcribes the recording, scores the strongest moments, cuts them into self-contained clips, reframes to vertical with the speaker tracked, burns in captions, and emails you the finished clips ranked by a virality score. What was an afternoon becomes a few minutes of review. When clipping is that cheap per episode, you actually keep doing it - and consistency is the whole game. If you want to weigh the tools first, the [best AI shorts tools roundup](/blog/best-ai-shorts-tools-2026-2027) compares the options.
+
+## Frequently asked questions
+
+### How many clips should I make per podcast episode?
+
+Three to five self-contained clips per episode is a sustainable, effective target. The limit is the number of genuinely quotable, stand-alone moments, not the episode length. A dense episode might give you more; a quieter one, fewer.
+
+### Can I make clips from an audio-only podcast?
+
+Yes. You cannot reframe a speaker who was never on camera, but you can pair captioned clips with a static image or waveform visual. The captions carry the content. That said, recording video going forward unlocks noticeably better clips.
+
+### Where should I post podcast clips?
+
+TikTok, Instagram Reels, and YouTube Shorts are the primary discovery feeds. Post consistently across them and link back to the full episode. The goal is to reach people who would never have found the show inside a podcast app.
+
+### What is the fastest way to clip a podcast?
+
+Paste the episode link or file into an AI clipper that finds the best moments, reframes, and captions automatically. [Start a job on ClipsHQ](/new) to turn one episode into a batch of ranked, captioned clips in minutes.
+`,
+  },
+  {
+    slug: 'arabic-content-creation-guide',
+    title: 'Arabic Content Creation: A Guide to Captioned Shorts That Work',
+    description:
+      'A practical guide to creating Arabic short-form video: right-to-left captions that render correctly, the moments that travel, and how to produce clips at scale.',
+    excerpt:
+      'Arabic short-form is a huge, underserved opportunity - if your captions render right-to-left correctly. Here is how to create clips that actually work.',
+    category: 'Guides',
+    tags: ['arabic content', 'rtl captions', 'multilingual video'],
+    author: 'ClipsHQ Team',
+    heroAlt: 'A vertical video clip with Arabic right-to-left captions on screen',
+    published: true,
+    publishedAt: '2026-05-10',
+    bodyMarkdown: `Arabic short-form video is one of the largest and least-served opportunities in content right now, and the biggest technical obstacle to seizing it is embarrassingly basic: most clipping tools cannot render Arabic captions correctly. Arabic is written right-to-left in a connected script, and tools built English-first tend to reverse the text, break the letter joins, or run the word-by-word highlight in the wrong direction. Fix the captions and the rest of the playbook is the same as any short-form: strong hooks, self-contained moments, consistent posting. This guide covers both - the Arabic-specific pitfalls and the general craft.
+
+> **Key Takeaways**
+> - Arabic audiences are large and hungry for short-form, but caption quality is the gate: right-to-left rendering has to be correct.
+> - Test captions on a real clip before committing to a tool. Broken RTL text is the most common failure, and it is disqualifying.
+> - The moment-finding and hook rules are universal: open on the interesting part, keep clips self-contained, end on the payoff.
+> - Captions must be legible and correctly placed; RTL text has its own alignment considerations.
+> - You can reach Arabic feeds from content you already make by captioning existing clips accurately in Arabic.
+
+## Why Arabic short-form is a real opportunity
+
+Arabic is spoken across a wide, young, mobile-first region - the Gulf, the Levant, North Africa - plus a large global diaspora. Short-form video consumption there is heavy, and the supply of well-produced, well-captioned Arabic clips has not caught up with the demand. That gap is the opportunity: creators who publish clean Arabic short-form face less competition for attention than they would in the saturated English feed.
+
+The demand side is not the hard part. The hard part is production quality, and specifically captions, because that is where most tools quietly fail Arabic creators.
+
+## The right-to-left caption problem (and how to avoid it)
+
+This is the section that matters most, because it is where the opportunity is usually lost. Arabic is written right-to-left, and its letters connect and change shape depending on their position in a word. A caption engine that was only ever tested on English will mishandle this in visible, disqualifying ways: the text renders left-to-right, letters lose their joins and appear as isolated forms, punctuation lands on the wrong side, and karaoke-style word highlighting sweeps in the wrong direction.
+
+None of that is a minor cosmetic issue. To an Arabic-speaking viewer it reads as broken and unprofessional, and it undercuts the credibility of everything else in the clip. The fix is simple to state and important to enforce: use a tool that handles right-to-left rendering natively, and test it on a real Arabic clip before you commit. Generate one clip, watch the captions, and confirm the text flows right-to-left, the letters connect, punctuation sits correctly, and the highlight tracks the spoken word in the right direction.
+
+ClipsHQ was built with right-to-left scripts in mind rather than patched for them afterward, which is why we point Arabic (and Urdu) creators to it specifically. You can see the details on the [Arabic subtitle generator page](/arabic-subtitle-generator), and the same engine handles [Urdu](/urdu-subtitle-generator) and [Tamil](/tamil-subtitle-generator).
+
+## The moments that travel (the universal part)
+
+Once captions are handled, creating Arabic short-form follows the same craft as any short-form. You are looking for moments that stand on their own - passages a viewer would understand and want to share even without the surrounding context. Hot takes stated with conviction, short stories with a turn, clear answers to questions the audience already has, and surprising specifics all travel well.
+
+Pull three to five of these from any longer source - an interview, a lecture, a khutbah-style talk, a podcast - and cut each to a clean beginning and a payoff ending. The [repurposing playbook](/blog/repurpose-long-videos-into-shorts) covers the moment-finding method in depth, and it applies identically in Arabic.
+
+## Hooks and structure
+
+The first two to three seconds decide the view in any language. Open on the interesting part, not the throat-clearing. In Arabic, as in English, the opening line should create a question, a promise, or a jolt - a strong claim, a surprising number, a contradiction. If your best line is buried thirty seconds into the source, that line is your opening frame.
+
+Keep the clip a complete thought: hook, a lean build, and a payoff you end on. A clip that starts mid-sentence or runs past its point loses viewers the same way in every language.
+
+## Captions: legibility and placement
+
+Beyond correct rendering, Arabic captions need to be readable at a glance: large, high-contrast text placed in the middle third of the frame so platform UI does not cover it. Match the caption cadence to the speech rather than dumping full sentences at once. With right-to-left text, pay attention to alignment so the captions sit naturally for a reader whose eye starts on the right.
+
+The payoff of getting this right is not only reach into Arabic feeds. If you also publish in English, accurate per-word timing means you can caption the same clip in both languages and serve two audiences from one recording.
+
+## Producing Arabic clips at scale
+
+The consistency problem is universal: making three to five well-cut, correctly-captioned clips per source by hand is slow, and it is slower still if you are also fighting your tool's broken Arabic rendering. The way to make Arabic clipping sustainable is to use a tool that (a) renders RTL captions correctly and (b) automates the mechanical work of cutting, reframing, and captioning.
+
+That is the workflow we built for. Paste a video into [ClipsHQ](/new) and it transcribes the speech, finds the strongest moments, reframes to vertical, and burns in Arabic captions that render right-to-left correctly - then hands you a ranked set of clips. Removing both the manual labor and the caption-quality problem is what makes publishing Arabic short-form consistently realistic rather than aspirational.
+
+## Frequently asked questions
+
+### Why do my Arabic captions look broken in most tools?
+
+Because those tools were built English-first and do not handle right-to-left rendering natively. The result is reversed text, broken letter joins, and misplaced punctuation. Use a tool that supports RTL properly, and test it on a real Arabic clip before committing - see the [Arabic subtitle generator](/arabic-subtitle-generator).
+
+### Is Arabic short-form actually worth the effort?
+
+Yes. Arabic-speaking audiences are large and heavily engaged with short-form video, and the supply of well-produced, correctly-captioned Arabic clips lags the demand. That gap means less competition for attention than in the crowded English feed.
+
+### Can I make Arabic clips from English videos, or vice versa?
+
+You can caption a clip in whichever language the tool supports once it has accurate timing. If your source is Arabic speech, you get Arabic captions; if you want to reach both audiences, you can caption the same moment in more than one language from a single recording.
+
+### What is the fastest way to make captioned Arabic clips?
+
+Use an AI clipper with correct right-to-left rendering that automates cutting, reframing, and captioning. [Start a job on ClipsHQ](/new) to turn a long video into a batch of Arabic-captioned vertical clips in minutes.
+`,
+  },
 ];
