@@ -6,6 +6,7 @@ import { NavCta } from "@/components/home/NavCta";
 import { PricingPlans } from "@/components/home/PricingPlans";
 import { StickyLinkBar } from "@/components/home/StickyLinkBar";
 import { CookiePreferencesLink } from "@/components/consent/CookiePreferencesLink";
+import { PROOF_STATS, HERO_LANGUAGES } from "@/lib/proof";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Landing page - layout adapted from the "Aeline" reference (centered nav,
@@ -44,9 +45,44 @@ const NAV_LINKS = [
   ["Features", "#features"],
   ["How it works", "#how"],
   ["Pricing", "#pricing"],
+  ["Compare", "/compare"],
   ["Free Tools", "/tools"],
-  ["FAQ", "#faq"],
 ] as const;
+
+// Homepage benefits grid (spec: 6 icon benefits directly below the hero).
+// Icons are single lucide-style stroke paths drawn inline (no extra imports).
+const BENEFITS = [
+  {
+    title: "AI Finds the Best Moments",
+    body: "Automatically detects the most engaging segments from long videos.",
+    icon: "M13 2 3 14h7l-1 8 10-12h-7z",
+  },
+  {
+    title: "Auto Captions",
+    body: "Generate highly accurate word-by-word captions instantly.",
+    icon: "M4 6h16M4 12h10M4 18h7",
+  },
+  {
+    title: "Multilingual Captions",
+    body: "English, Arabic, Tamil, Urdu, Hindi, French, Spanish and more.",
+    icon: "M12 3a9 9 0 100 18 9 9 0 000-18zM3 12h18M12 3c2.5 2.5 3.8 5.7 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.7-3.8-9S9.5 5.5 12 3z",
+  },
+  {
+    title: "9:16 Auto Reframe",
+    body: "Perfect vertical framing for Shorts, Reels and TikTok.",
+    icon: "M9 3v18M15 3v18M3 9h18M3 15h18",
+  },
+  {
+    title: "Export Without Watermark",
+    body: "Clean, logo-free exports available on paid plans.",
+    icon: "M20 6 9 17l-5-5",
+  },
+  {
+    title: "One-Click Download",
+    body: "Instant export and a hands-off publishing workflow.",
+    icon: "M12 3v12m0 0 4-4m-4 4-4-4M4 19h16",
+  },
+];
 
 // The two flagship capabilities - our real pipeline.
 const CAPABILITIES = [
@@ -146,20 +182,21 @@ export default function LandingPage() {
         />
         <div className="relative mx-auto max-w-5xl px-6 pb-4 pt-20 text-center sm:pt-28">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-300">
-            AI clips, delivered to your inbox
+            The fastest AI video clipper for global creators
           </p>
           <h1 className="mx-auto mt-5 max-w-4xl text-balance text-5xl font-semibold leading-[1.04] tracking-tighter sm:text-7xl">
-            One long video,
+            Turn Long Videos Into
             <br />
             <span className="mt-2 inline-flex items-baseline rounded-2xl bg-white/[0.04] px-4 py-1 ring-1 ring-white/10">
               <span className="bg-gradient-to-r from-brand-300 via-brand to-brand-400 bg-clip-text text-transparent">
-                10 viral clips.
+                Viral Shorts in Minutes
               </span>
             </span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base text-ink-300 sm:text-lg">
-            ClipsHQ turns any podcast, interview or long video into ranked, captioned,
-            vertical shorts - and emails your best moments in about 30 minutes.
+            AI automatically finds the best moments, generates accurate multilingual
+            captions in English, Arabic, Tamil, Urdu, Hindi, French, Spanish and more,
+            reframes for vertical video, and exports ready-to-post content - in minutes.
           </p>
 
           {/* CTAs (or the waitlist email-capture when waitlist mode is on). */}
@@ -196,6 +233,58 @@ export default function LandingPage() {
           <p className="text-sm text-ink-300">
             Now in beta — <span className="font-semibold text-white">built by creators, for creators</span>
           </p>
+        </div>
+      </section>
+
+      {/* ── Benefits grid (6 icon benefits, directly below the hero) ─────── */}
+      <section className="mx-auto max-w-6xl px-6 pb-8">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {BENEFITS.map((b) => (
+            <article
+              key={b.title}
+              className="rounded-2xl border border-white/10 bg-ink-850 p-6 shadow-rim transition duration-200 ease-premium hover:-translate-y-0.5 hover:border-white/15 hover:bg-ink-800"
+            >
+              <span className="grid h-11 w-11 place-items-center rounded-xl bg-brand/15 text-brand-300 ring-1 ring-brand/25">
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d={b.icon} />
+                </svg>
+              </span>
+              <h3 className="mt-4 text-base font-semibold text-white">{b.title}</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-ink-300">{b.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Social proof band (stats + language chips) ──────────────────── */}
+      <section className="mx-auto max-w-6xl px-6 py-12 sm:py-16">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {PROOF_STATS.map((s) => (
+            <div
+              key={s.label}
+              className="rounded-2xl border border-white/10 bg-ink-900 p-6 text-center shadow-rim"
+            >
+              <div className="font-display text-3xl font-semibold tracking-tighter text-white sm:text-4xl">
+                {s.value}
+              </div>
+              <div className="mt-1 text-xs text-ink-400">{s.label}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+          {HERO_LANGUAGES.map((l) => (
+            <span
+              key={l.code}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-ink-850 px-3 py-1.5 text-xs font-medium text-ink-200"
+            >
+              {l.name}
+              {l.rtl ? (
+                <span className="rounded bg-brand/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-300">
+                  RTL
+                </span>
+              ) : null}
+            </span>
+          ))}
         </div>
       </section>
 
@@ -321,7 +410,7 @@ export default function LandingPage() {
               Languages
             </p>
             <p className="mt-3 flex items-baseline gap-1 font-display text-5xl font-semibold tracking-tighter text-white">
-              40<span className="text-brand-300">+</span>
+              50<span className="text-brand-300">+</span>
             </p>
             <p className="mt-2 text-sm text-ink-300">
               Karaoke captions, including right-to-left scripts.
@@ -571,10 +660,21 @@ export default function LandingPage() {
               <Link href="/new" className="w-fit transition hover:text-brand-300">Create clips</Link>
               <Link href="/tools" className="w-fit transition hover:text-brand-300">Free tools</Link>
               <Link href="/compare" className="w-fit transition hover:text-brand-300">Compare</Link>
+              <Link href="/opus-clip-alternative" className="w-fit transition hover:text-brand-300">Alternatives</Link>
               <Link href="/blog" className="w-fit transition hover:text-brand-300">Blog</Link>
               <Link href="/about" className="w-fit transition hover:text-brand-300">About</Link>
-              <Link href="/help/free-trial-and-plans" className="w-fit transition hover:text-brand-300">Pricing</Link>
               <Link href="/help" className="w-fit transition hover:text-brand-300">Help center</Link>
+            </nav>
+
+            {/* Compact SEO internal-link column - subtitle generators + top pages */}
+            <nav className="hidden flex-col gap-1.5 text-sm text-ink-400 sm:flex">
+              <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">Popular</span>
+              <Link href="/best-ai-video-clipper" className="w-fit transition hover:text-white">Best AI video clipper</Link>
+              <Link href="/ai-shorts-generator" className="w-fit transition hover:text-white">AI shorts generator</Link>
+              <Link href="/youtube-shorts-maker" className="w-fit transition hover:text-white">YouTube Shorts maker</Link>
+              <Link href="/arabic-subtitle-generator" className="w-fit transition hover:text-white">Arabic subtitles</Link>
+              <Link href="/tamil-subtitle-generator" className="w-fit transition hover:text-white">Tamil subtitles</Link>
+              <Link href="/urdu-subtitle-generator" className="w-fit transition hover:text-white">Urdu subtitles</Link>
             </nav>
             <div className="sm:text-right">
               <h3 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Delivery</h3>
