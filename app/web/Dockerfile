@@ -23,6 +23,10 @@ ENV NEXT_PUBLIC_AUTH_ENABLED=$NEXT_PUBLIC_AUTH_ENABLED
 # llms.txt, JSON-LD). Inlined at build time, so it MUST be a build arg.
 ARG NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+# Google Tag Manager container ID (e.g. GTM-XXXXXXX). Inlined at build time, so
+# it MUST be a build arg; unset => GTM never loads (dev/mock builds stay clean).
+ARG NEXT_PUBLIC_GTM_ID
+ENV NEXT_PUBLIC_GTM_ID=$NEXT_PUBLIC_GTM_ID
 
 # Bring in installed node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules

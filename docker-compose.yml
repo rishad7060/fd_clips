@@ -170,6 +170,9 @@ services:
         # Canonical public origin for SEO (canonical/OG/sitemap/robots/llms.txt).
         # Falls back to localhost for local dev; set to https://clipshq.pro in prod.
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+        # Google Tag Manager container ID. Empty by default => GTM doesn't load;
+        # set NEXT_PUBLIC_GTM_ID=GTM-KCPJ76T6 in the server .env to enable it.
+        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}
     restart: unless-stopped
     depends_on:
       api:

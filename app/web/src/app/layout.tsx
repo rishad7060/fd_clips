@@ -5,6 +5,10 @@ import { AUTH_ENABLED } from "@/lib/auth";
 import { ReferralCapture } from "@/components/ReferralCapture";
 import { SmoothScroll } from "@/components/SmoothScroll";
 import { ConsentManager } from "@/components/consent/ConsentManager";
+import {
+  GoogleTagManager,
+  GoogleTagManagerNoScript,
+} from "@/components/analytics/GoogleTagManager";
 import type { ReactNode } from "react";
 
 // Inter (display + body) with tight tracking, plus a mono for scores/durations/
@@ -154,8 +158,10 @@ export default async function RootLayout({
       <html lang="en">
         <head>
           <PreconnectLinks />
+          <GoogleTagManager />
         </head>
         <body className={bodyClass}>
+          <GoogleTagManagerNoScript />
           <SiteSchema />
           {/* refetchInterval re-fetches the session every ~10 min (and on window
               focus), re-minting the app API token before it can go stale - so
@@ -176,8 +182,10 @@ export default async function RootLayout({
     <html lang="en">
       <head>
         <PreconnectLinks />
+        <GoogleTagManager />
       </head>
       <body className={bodyClass}>
+        <GoogleTagManagerNoScript />
         <SiteSchema />
         <ReferralCapture />
         <SmoothScroll>{children}</SmoothScroll>
